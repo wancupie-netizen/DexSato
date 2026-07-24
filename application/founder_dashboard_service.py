@@ -2,17 +2,31 @@
 AlphaRadar Founder Dashboard Service.
 
 Runs the existing AlphaRadar engine sequentially for the
-current CoinMarketCap Top 100 universe.
+approved V1 active market universe.
+
+V1 Active Markets
+-----------------
+- BTC
+- ETH
+- BNB
+- XRP
+- SOL
+- DOGE
+- ADA
+- SUI
+- LINK
+- AVAX
 
 Responsibilities
 ----------------
-- Load the daily Top 100 CoinMarketCap universe
+- Define the stable V1 production universe
 - Run one production scan per valid token
-- Preserve market-cap ranking order
+- Preserve token ordering
 - Preserve failed or unsupported-token information
 - Continue scanning after individual token failures
 
 This module does NOT:
+- fetch the CoinMarketCap Top 100
 - render HTML
 - start FastAPI
 - use threading
@@ -28,10 +42,6 @@ from collections.abc import (
     Iterable,
 )
 
-from application.coinmarketcap_universe import (
-    load_top_100_universe,
-)
-
 from presentation.live_dashboard import (
     extract_dashboard,
     normalize_token,
@@ -42,35 +52,52 @@ from scanner.runner import (
 )
 
 
-FOUNDER_TOKENS = (
+# ==========================================================
+# V1 Active Production Universe
+# ==========================================================
+
+V1_ACTIVE_TOKENS = (
     "BTC",
     "ETH",
-    "SOL",
+    "BNB",
     "XRP",
+    "SOL",
+    "DOGE",
+    "ADA",
     "SUI",
+    "LINK",
+    "AVAX",
 )
 
+
+# Backward-compatible Founder MVP reference.
+# Existing Founder acceptance tests may still import this name.
+FOUNDER_TOKENS = V1_ACTIVE_TOKENS
+
+
+# ==========================================================
+# Dashboard Results
+# ==========================================================
 
 def build_founder_dashboard_results(
     *,
     tokens: Iterable[str] | None = None,
     scan: Callable[[str], dict] = run_scan,
-    universe_loader: Callable[
-        [],
-        Iterable[str],
-    ] = load_top_100_universe,
 ) -> list[dict[str, object]]:
     """
     Run sequential AlphaRadar scans.
 
+    When no explicit token collection is supplied, the
+    approved V1 ten-coin universe is used.
+
     Invalid or failed tokens remain in the output as
-    unavailable entries and do not stop the remaining scans.
+    unavailable entries and do not stop subsequent scans.
     """
 
     resolved_tokens = (
         tokens
         if tokens is not None
-        else universe_loader()
+        else V1_ACTIVE_TOKENS
     )
 
     results: list[dict[str, object]] = []

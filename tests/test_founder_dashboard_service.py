@@ -13,6 +13,7 @@ from adaptive.dashboard.dashboard_card import (
 
 from application.founder_dashboard_service import (
     FOUNDER_TOKENS,
+    V1_ACTIVE_TOKENS,
     build_founder_dashboard_results,
 )
 
@@ -42,34 +43,39 @@ def build_test_card(
     )
 
 
-def test_should_keep_founder_fallback_tokens():
+def test_should_define_v1_active_tokens():
     """
-    Existing five-token reference remains available.
+    V1 production universe must contain ten approved coins.
     """
 
-    assert FOUNDER_TOKENS == (
+    assert V1_ACTIVE_TOKENS == (
         "BTC",
         "ETH",
-        "SOL",
+        "BNB",
         "XRP",
+        "SOL",
+        "DOGE",
+        "ADA",
         "SUI",
+        "LINK",
+        "AVAX",
+    )
+
+    assert len(
+        V1_ACTIVE_TOKENS,
+    ) == 10
+
+    assert FOUNDER_TOKENS == (
+        V1_ACTIVE_TOKENS
     )
 
 
-def test_should_load_ranked_universe_by_default():
+def test_should_scan_v1_tokens_by_default():
     """
-    Default service should use the universe loader.
+    Default service should scan the ten-coin V1 universe.
     """
 
     scanned_tokens: list[str] = []
-
-    def fake_universe_loader():
-
-        return (
-            "BTC",
-            "ETH",
-            "SOL",
-        )
 
     def fake_scan(
         token: str,
@@ -88,35 +94,28 @@ def test_should_load_ranked_universe_by_default():
 
     results = build_founder_dashboard_results(
         scan=fake_scan,
-        universe_loader=fake_universe_loader,
     )
 
-    assert scanned_tokens == [
-        "BTC",
-        "ETH",
-        "SOL",
-    ]
+    assert scanned_tokens == list(
+        V1_ACTIVE_TOKENS,
+    )
 
     assert [
         result["token"]
         for result in results
-    ] == [
-        "BTC",
-        "ETH",
-        "SOL",
-    ]
+    ] == list(
+        V1_ACTIVE_TOKENS,
+    )
+
+    assert len(
+        results,
+    ) == 10
 
 
 def test_should_accept_explicit_token_collection():
     """
-    Explicit tokens should bypass universe loading.
+    Explicit tokens should override the V1 default universe.
     """
-
-    def failing_universe_loader():
-
-        raise AssertionError(
-            "Universe loader should not be called."
-        )
 
     def fake_scan(
         token: str,
@@ -134,7 +133,6 @@ def test_should_accept_explicit_token_collection():
             "btc",
         ],
         scan=fake_scan,
-        universe_loader=failing_universe_loader,
     )
 
     assert results[0]["token"] == "BTC"
@@ -195,7 +193,7 @@ def test_should_preserve_failed_coin_and_continue():
 
 def test_should_preserve_unsupported_symbol_and_continue():
     """
-    Unsupported CoinMarketCap symbols must not stop scanning.
+    Unsupported symbols must not stop subsequent scans.
     """
 
     scanned_tokens: list[str] = []

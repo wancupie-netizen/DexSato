@@ -1,10 +1,13 @@
 """
-Tests for AlphaRadar Founder MVP FastAPI Application.
+Tests for AlphaRadar V1 FastAPI Application.
 """
 
 from unittest.mock import patch
 
-from fastapi import FastAPI
+from fastapi import (
+    FastAPI,
+    HTTPException,
+)
 
 from app.main import (
     APP_TITLE,
@@ -18,6 +21,22 @@ from app.main import (
     health_check,
     telegram_send,
 )
+
+
+SNAPSHOT = {
+    "generated_at": (
+        "2026-07-24T08:00:00+00:00"
+    ),
+    "total_coins": 1,
+    "available_coins": 1,
+    "unavailable_coins": 0,
+    "coins": [
+        {
+            "token": "BTC",
+            "available": True,
+        }
+    ],
+}
 
 
 def test_should_create_fastapi_application():
@@ -36,99 +55,64 @@ def test_should_create_fastapi_application():
 
 
 @patch(
-    "app.main.render_founder_dashboard"
+    "app.main.render_founder_snapshot_dashboard"
 )
 @patch(
-    "app.main.build_founder_dashboard_results"
+    "app.main.load_current_snapshot"
 )
-def test_should_render_founder_dashboard(
-    mock_build_results,
-    mock_render_dashboard,
+def test_should_render_snapshot_dashboard(
+    mock_load,
+    mock_render,
 ):
     """
-    Root route should connect service and presenter.
+    Root route should read and render the snapshot.
     """
 
-    results = [
-        {
-            "token": "BTC",
-            "card": None,
-            "error": "Test state.",
-        }
-    ]
+    mock_load.return_value = SNAPSHOT
 
-    mock_build_results.return_value = results
-
-    mock_render_dashboard.return_value = (
-        "<html>Founder Dashboard</html>"
+    mock_render.return_value = (
+        "<html>Snapshot Dashboard</html>"
     )
 
     assert founder_home() == (
-        "<html>Founder Dashboard</html>"
+        "<html>Snapshot Dashboard</html>"
     )
 
-    mock_render_dashboard.assert_called_once_with(
-        results,
+    mock_render.assert_called_once_with(
+        SNAPSHOT,
     )
 
 
 @patch(
-    "app.main.serialize_founder_dashboard_results"
+    "app.main.load_current_snapshot"
 )
-@patch(
-    "app.main.build_founder_dashboard_results"
-)
-def test_should_build_shared_dashboard_data(
-    mock_build_results,
-    mock_serialize,
+def test_should_build_current_dashboard_data(
+    mock_load,
 ):
     """
-    API and Telegram should use shared data.
+    Telegram should receive snapshot coin data.
     """
 
-    results = [
-        {
-            "token": "BTC",
-        }
-    ]
+    mock_load.return_value = SNAPSHOT
 
-    data = [
-        {
-            "token": "BTC",
-            "available": True,
-        }
-    ]
-
-    mock_build_results.return_value = results
-
-    mock_serialize.return_value = data
-
-    assert build_current_dashboard_data() == data
-
-    mock_serialize.assert_called_once_with(
-        results,
+    assert build_current_dashboard_data() == (
+        SNAPSHOT["coins"]
     )
 
 
 @patch(
-    "app.main.build_current_dashboard_data"
+    "app.main.load_current_snapshot"
 )
-def test_should_return_dashboard_api(
-    mock_build_data,
+def test_should_return_snapshot_api(
+    mock_load,
 ):
     """
-    Dashboard API should return shared data.
+    API should return the complete snapshot.
     """
 
-    data = [
-        {
-            "token": "BTC",
-        }
-    ]
+    mock_load.return_value = SNAPSHOT
 
-    mock_build_data.return_value = data
-
-    assert dashboard_api() == data
+    assert dashboard_api() == SNAPSHOT
 
 
 @patch(
@@ -137,21 +121,17 @@ def test_should_return_dashboard_api(
 @patch(
     "app.main.build_current_dashboard_data"
 )
-def test_should_send_current_snapshot(
+def test_should_send_snapshot_to_telegram(
     mock_build_data,
     mock_send,
 ):
     """
-    Telegram should receive current shared data.
+    Manual Telegram endpoint should use snapshot data.
     """
 
-    data = [
-        {
-            "token": "BTC",
-        }
-    ]
-
-    mock_build_data.return_value = data
+    mock_build_data.return_value = (
+        SNAPSHOT["coins"]
+    )
 
     mock_send.return_value = {
         "success": True,
@@ -163,8 +143,42 @@ def test_should_send_current_snapshot(
     assert result["success"] is True
 
     mock_send.assert_called_once_with(
-        dashboard_data=data,
+        dashboard_data=SNAPSHOT["coins"],
     )
+
+
+@patch(
+    "app.main.load_current_snapshot"
+)
+def test_should_reject_missing_snapshot(
+    mock_load,
+):
+    """
+    Missing snapshot should return service unavailable.
+    """
+
+    mock_load.side_effect = FileNotFoundError(
+        "Latest AlphaRadar snapshot is not available."
+    )
+
+    try:
+
+        founder_home()
+
+    except HTTPException as error:
+
+        assert error.status_code == 503
+
+        assert (
+            "snapshot is not available"
+            in error.detail
+        )
+
+    else:
+
+        raise AssertionError(
+            "HTTPException was not raised."
+        )
 
 
 def test_should_return_healthy_status():
@@ -181,7 +195,7 @@ def test_should_return_healthy_status():
 
 def test_should_use_local_server_defaults():
     """
-    Founder launch contract remains simple.
+    Local launch settings should remain stable.
     """
 
     assert HOST == "127.0.0.1"

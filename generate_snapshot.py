@@ -1,12 +1,12 @@
 """
-AlphaRadar Latest Snapshot Command.
+AlphaRadar V1 Snapshot Command.
 
 Run from the project root:
 
     python generate_snapshot.py
 
-The command scans the current CoinMarketCap Top 100 universe
-and replaces the latest shared snapshot.
+The command scans the approved ten-coin V1 universe and
+replaces the latest shared snapshot.
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ from application.founder_snapshot_service import (
 
 def main() -> int:
     """
-    Generate and report the latest AlphaRadar snapshot.
+    Generate and report the latest AlphaRadar V1 snapshot.
     """
 
     print()
 
     print("=" * 60)
-    print("AlphaRadar Top 100 Snapshot")
+    print("AlphaRadar V1 — 10 Coin Snapshot")
     print("=" * 60)
 
     try:

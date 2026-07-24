@@ -1,28 +1,26 @@
 """
-AlphaRadar Founder MVP FastAPI Application.
+AlphaRadar V1 FastAPI Application.
 
-Official launcher from the project root:
+Official launcher:
 
     python main.py
 
-Then open:
+Dashboard:
 
     http://127.0.0.1:8000
 
 Responsibilities
 ----------------
-- Display the Founder multi-coin dashboard
-- Expose shared dashboard data as JSON
-- Send the current dashboard snapshot to Telegram
+- Read the latest stored Top 100 snapshot
+- Display the snapshot dashboard
+- Expose snapshot JSON
+- Send snapshot data to Telegram
 - Expose application health
-- Start the local Uvicorn server
 
 This module does NOT:
+- run scans when pages are opened
+- schedule scans
 - calculate market decisions
-- access persistence directly
-- poll Telegram
-- schedule alerts
-- use background workers
 """
 
 from __future__ import annotations
@@ -37,35 +35,27 @@ from fastapi.responses import (
     HTMLResponse,
 )
 
-from application.founder_dashboard_data import (
-    serialize_founder_dashboard_results,
-)
-
-from application.founder_dashboard_service import (
-    build_founder_dashboard_results,
+from application.founder_snapshot_service import (
+    read_latest_snapshot,
 )
 
 from application.telegram_notifier import (
     send_telegram_alert,
 )
 
-from presentation.founder_dashboard_presenter import (
-    render_founder_dashboard,
+from presentation.founder_snapshot_presenter import (
+    render_founder_snapshot_dashboard,
 )
 
 
-APP_TITLE = "AlphaRadar Founder MVP"
+APP_TITLE = "AlphaRadar V1"
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "1.0.0"
 
 HOST = "127.0.0.1"
 
 PORT = 8000
 
-
-# ==========================================================
-# Application
-# ==========================================================
 
 app = FastAPI(
     title=APP_TITLE,
@@ -75,30 +65,36 @@ app = FastAPI(
 )
 
 
-# ==========================================================
-# Shared Dashboard Data
-# ==========================================================
+def load_current_snapshot() -> dict[str, object]:
+    """
+    Read the latest generated AlphaRadar snapshot.
+    """
+
+    return read_latest_snapshot()
+
 
 def build_current_dashboard_data() -> list[dict[str, object]]:
     """
-    Run the engine and return one shared dashboard snapshot.
-
-    The same serialized structure is used by:
-
-    - Dashboard JSON API
-    - Telegram alert
+    Return serialized coin data from the latest snapshot.
     """
 
-    results = build_founder_dashboard_results()
+    snapshot = load_current_snapshot()
 
-    return serialize_founder_dashboard_results(
-        results,
+    coins = snapshot.get(
+        "coins",
     )
 
+    if not isinstance(
+        coins,
+        list,
+    ):
 
-# ==========================================================
-# Routes
-# ==========================================================
+        raise RuntimeError(
+            "Latest AlphaRadar snapshot coin data is invalid."
+        )
+
+    return coins
+
 
 @app.get(
     "/",
@@ -106,25 +102,53 @@ def build_current_dashboard_data() -> list[dict[str, object]]:
 )
 def founder_home() -> str:
     """
-    Run sequential Founder scans and display five coins.
+    Display the latest Top 100 snapshot.
     """
 
-    results = build_founder_dashboard_results()
+    try:
 
-    return render_founder_dashboard(
-        results,
+        snapshot = load_current_snapshot()
+
+    except (
+        FileNotFoundError,
+        RuntimeError,
+    ) as error:
+
+        raise HTTPException(
+            status_code=503,
+            detail=str(
+                error,
+            ),
+        ) from error
+
+    return render_founder_snapshot_dashboard(
+        snapshot,
     )
 
 
 @app.get(
     "/api/dashboard",
 )
-def dashboard_api() -> list[dict[str, object]]:
+def dashboard_api() -> dict[str, object]:
     """
-    Return the current five-coin engine snapshot as JSON.
+    Return the complete latest snapshot.
     """
 
-    return build_current_dashboard_data()
+    try:
+
+        return load_current_snapshot()
+
+    except (
+        FileNotFoundError,
+        RuntimeError,
+    ) as error:
+
+        raise HTTPException(
+            status_code=503,
+            detail=str(
+                error,
+            ),
+        ) from error
 
 
 @app.post(
@@ -132,42 +156,41 @@ def dashboard_api() -> list[dict[str, object]]:
 )
 def telegram_send() -> dict[str, object]:
     """
-    Send the current five-coin engine snapshot to Telegram.
-    """
+    Send the latest stored snapshot to Telegram.
 
-    dashboard_data = build_current_dashboard_data()
+    Digest filtering will be added in V1-04.
+    """
 
     try:
 
-        return send_telegram_alert(
-
-            dashboard_data=dashboard_data,
-
+        dashboard_data = (
+            build_current_dashboard_data()
         )
 
-    except RuntimeError as error:
+        return send_telegram_alert(
+            dashboard_data=dashboard_data,
+        )
+
+    except (
+        FileNotFoundError,
+        RuntimeError,
+    ) as error:
 
         raise HTTPException(
-
             status_code=503,
-
             detail=str(
                 error,
             ),
-
         ) from error
 
     except requests.RequestException as error:
 
         raise HTTPException(
-
             status_code=502,
-
             detail=(
                 "Telegram API request failed: "
                 f"{error}"
             ),
-
         ) from error
 
 
@@ -176,7 +199,7 @@ def telegram_send() -> dict[str, object]:
 )
 def health_check() -> dict[str, str]:
     """
-    Return a minimal application health response.
+    Return application readiness.
     """
 
     return {
@@ -186,13 +209,9 @@ def health_check() -> dict[str, str]:
     }
 
 
-# ==========================================================
-# Local Entry Point
-# ==========================================================
-
 def run() -> None:
     """
-    Start the local Founder MVP server.
+    Start the AlphaRadar V1 server.
     """
 
     import uvicorn
@@ -205,4 +224,5 @@ def run() -> None:
 
 
 if __name__ == "__main__":
+
     run()
