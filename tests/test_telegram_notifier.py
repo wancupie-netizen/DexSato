@@ -102,6 +102,10 @@ def test_should_humanize_evidence():
     )
 
     assert humanize_evidence(
+        "WEAK_BREAKOUT",
+    ) == "Weak breakout"
+
+    assert humanize_evidence(
         "CUSTOM_SIGNAL",
     ) == "Custom signal"
 
@@ -112,21 +116,25 @@ def test_should_humanize_evidence():
 
 def test_should_build_single_change_digest():
     """
-    One change should create one focused alert.
+    One change should create one focused notification.
     """
 
     message = build_change_digest_message(
         [
             SINGLE_CHANGE,
         ],
-        dashboard_url=(
-            "https://alpha.example/dashboard"
-        ),
     )
 
     assert "📡 AlphaRadar" in message
 
-    assert "BTC moved to WATCH" in message
+    assert (
+        "Radar detected a market shift."
+        in message
+    )
+
+    assert "🔵 BTC" in message
+
+    assert "Status" in message
 
     assert "IGNORE → WATCH" in message
 
@@ -142,26 +150,41 @@ def test_should_build_single_change_digest():
         in message
     )
 
-    assert "Confidence\nHIGH" in message
+    assert (
+        "Confidence\n\n🟢 HIGH"
+        in message
+    )
 
-    assert "Seen before\nYes (82%)" in message
-
-    assert "Open dashboard" in message
+    assert "History" in message
 
     assert (
-        "https://alpha.example/dashboard"
+        "📚 Seen before · "
+        "82% historical success"
+        in message
+    )
+
+    assert "Radar Activity" in message
+
+    assert (
+        "🟡 1 market changed"
         in message
     )
 
 
 def test_should_build_new_pattern_message():
     """
-    New market behaviour should be described naturally.
+    New market behaviour should use the V1 history label.
     """
 
     change = {
         **SINGLE_CHANGE,
         "token": "ETH",
+        "old_decision": "IGNORE",
+        "new_decision": "REVIEW",
+        "new_confidence": "MEDIUM",
+        "reasons_added": [
+            "WEAK_BREAKOUT",
+        ],
         "seen_before": False,
         "historical_success": 0.0,
     }
@@ -172,10 +195,18 @@ def test_should_build_new_pattern_message():
         ],
     )
 
+    assert "🟡 ETH" in message
+
+    assert "IGNORE → REVIEW" in message
+
+    assert "• Weak breakout" in message
+
     assert (
-        "No — new market behaviour"
+        "Confidence\n\n🟡 MEDIUM"
         in message
     )
+
+    assert "🆕 New pattern" in message
 
 
 def test_should_build_multiple_change_digest():
@@ -187,11 +218,12 @@ def test_should_build_multiple_change_digest():
         **SINGLE_CHANGE,
         "token": "ETH",
         "old_decision": "REVIEW",
-        "new_decision": "WATCH",
+        "new_decision": "SELL",
         "new_confidence": "MEDIUM",
         "reasons_added": [
             "RISKY_ACTIVITY",
         ],
+        "seen_before": False,
     }
 
     message = build_change_digest_message(
@@ -201,13 +233,68 @@ def test_should_build_multiple_change_digest():
         ],
     )
 
-    assert "2 markets changed" in message
+    assert "🔵 BTC" in message
 
-    assert "BTC moved to WATCH" in message
+    assert "🔴 ETH" in message
 
-    assert "ETH moved to WATCH" in message
+    assert "IGNORE → WATCH" in message
 
-    assert "━━━━━━━━━━" in message
+    assert "REVIEW → SELL" in message
+
+    assert (
+        "🟡 2 markets changed"
+        in message
+    )
+
+    assert "━━━━━━━━━━━━━━━━━━" in message
+
+
+def test_should_use_higher_activity_indicator():
+    """
+    Larger digest activity should use stronger indicators.
+    """
+
+    medium_changes = [
+        {
+            **SINGLE_CHANGE,
+            "token": f"COIN{index}",
+        }
+        for index in range(
+            3,
+        )
+    ]
+
+    high_changes = [
+        {
+            **SINGLE_CHANGE,
+            "token": f"MARKET{index}",
+        }
+        for index in range(
+            6,
+        )
+    ]
+
+    medium_message = (
+        build_change_digest_message(
+            medium_changes,
+        )
+    )
+
+    high_message = (
+        build_change_digest_message(
+            high_changes,
+        )
+    )
+
+    assert (
+        "🟠 3 markets changed"
+        in medium_message
+    )
+
+    assert (
+        "🔴 6 markets changed"
+        in high_message
+    )
 
 
 def test_should_limit_digest_changes():
@@ -236,7 +323,100 @@ def test_should_limit_digest_changes():
 
     assert "COIN2" not in message
 
-    assert "+ 1 more market changes" in message
+    assert (
+        "+ 1 more market changes"
+        in message
+    )
+
+    assert (
+        "🟠 3 markets changed"
+        in message
+    )
+
+
+def test_should_hide_local_dashboard_url():
+    """
+    Loopback dashboard URLs must not appear in Telegram.
+    """
+
+    message = build_change_digest_message(
+        [
+            SINGLE_CHANGE,
+        ],
+        dashboard_url=(
+            "http://127.0.0.1:8000"
+        ),
+    )
+
+    assert "Open dashboard" not in message
+
+    assert "127.0.0.1" not in message
+
+
+def test_should_hide_localhost_dashboard_url():
+    """
+    Localhost dashboard URLs must not appear in Telegram.
+    """
+
+    message = build_change_digest_message(
+        [
+            SINGLE_CHANGE,
+        ],
+        dashboard_url=(
+            "http://localhost:8000"
+        ),
+    )
+
+    assert "Open dashboard" not in message
+
+    assert "localhost" not in message
+
+
+def test_should_include_public_dashboard_url():
+    """
+    Public dashboard URLs should remain future-ready.
+    """
+
+    message = build_change_digest_message(
+        [
+            SINGLE_CHANGE,
+        ],
+        dashboard_url=(
+            "https://app.alpharadar.ai/"
+        ),
+    )
+
+    assert "Open dashboard" in message
+
+    assert (
+        "https://app.alpharadar.ai"
+        in message
+    )
+
+    assert (
+        "https://app.alpharadar.ai/"
+        not in message
+    )
+
+
+def test_should_hide_invalid_dashboard_url():
+    """
+    Invalid dashboard values must not be shown.
+    """
+
+    message = build_change_digest_message(
+        [
+            SINGLE_CHANGE,
+        ],
+        dashboard_url="alpharadar-dashboard",
+    )
+
+    assert "Open dashboard" not in message
+
+    assert (
+        "alpharadar-dashboard"
+        not in message
+    )
 
 
 def test_should_return_empty_message_for_no_changes():
@@ -299,7 +479,9 @@ def test_should_send_change_digest():
     Meaningful digest should call Telegram once.
     """
 
-    calls: list[dict[str, object]] = []
+    calls: list[
+        dict[str, object]
+    ] = []
 
     def fake_post(
         url,
@@ -307,6 +489,7 @@ def test_should_send_change_digest():
         json,
         timeout,
     ):
+
         calls.append(
             {
                 "url": url,
@@ -337,10 +520,25 @@ def test_should_send_change_digest():
         calls,
     ) == 1
 
-    assert (
-        "BTC moved to WATCH"
-        in calls[0]["json"]["text"]
+    assert calls[0]["url"] == (
+        "https://api.telegram.org/"
+        "bottest-token/sendMessage"
     )
+
+    message = calls[0][
+        "json"
+    ][
+        "text"
+    ]
+
+    assert (
+        "Radar detected a market shift."
+        in message
+    )
+
+    assert "🔵 BTC" in message
+
+    assert "IGNORE → WATCH" in message
 
     assert (
         calls[0]["json"][
@@ -363,6 +561,7 @@ def test_should_remain_silent_without_changes():
         *args,
         **kwargs,
     ):
+
         nonlocal calls
 
         calls += 1
@@ -398,9 +597,15 @@ def test_should_build_legacy_telegram_message():
         DASHBOARD_DATA,
     )
 
-    assert "AlphaRadar Founder Alert" in message
+    assert (
+        "AlphaRadar Founder Alert"
+        in message
+    )
 
-    assert "2 markets. One engine." in message
+    assert (
+        "2 markets. One engine."
+        in message
+    )
 
     assert "BTC" in message
 
@@ -410,11 +615,34 @@ def test_should_build_legacy_telegram_message():
 
     assert "67%" in message
 
-    assert "Liquidity increasing" in message
+    assert (
+        "Liquidity increasing"
+        in message
+    )
 
     assert "ETH" in message
 
     assert "UNAVAILABLE" in message
+
+
+def test_should_reject_invalid_legacy_market_data():
+    """
+    Legacy dashboard items must remain dictionaries.
+    """
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Dashboard data contains "
+            "invalid market data"
+        ),
+    ):
+
+        build_telegram_message(
+            [
+                "invalid",
+            ],
+        )
 
 
 def test_should_send_legacy_telegram_alert():
@@ -422,7 +650,9 @@ def test_should_send_legacy_telegram_alert():
     Legacy notifier should call Telegram sendMessage once.
     """
 
-    calls: list[dict[str, object]] = []
+    calls: list[
+        dict[str, object]
+    ] = []
 
     def fake_post(
         url,
@@ -430,6 +660,7 @@ def test_should_send_legacy_telegram_alert():
         json,
         timeout,
     ):
+
         calls.append(
             {
                 "url": url,
@@ -462,11 +693,17 @@ def test_should_send_legacy_telegram_alert():
         "bottest-token/sendMessage"
     )
 
-    assert calls[0]["json"]["chat_id"] == (
-        "123456"
+    assert (
+        calls[0]["json"][
+            "chat_id"
+        ]
+        == "123456"
     )
 
-    assert "BTC" in calls[0]["json"]["text"]
+    assert (
+        "BTC"
+        in calls[0]["json"]["text"]
+    )
 
     assert calls[0]["timeout"] == 15
 
@@ -475,15 +712,23 @@ def test_should_send_legacy_telegram_alert():
 # Credentials
 # ==========================================================
 
-def test_should_reject_missing_bot_token():
+def test_should_reject_missing_bot_token(
+    monkeypatch,
+):
     """
     Bot token is required when a message is sent.
     """
 
+    monkeypatch.delenv(
+        "TELEGRAM_BOT_TOKEN",
+        raising=False,
+    )
+
     with pytest.raises(
         RuntimeError,
         match=(
-            "TELEGRAM_BOT_TOKEN is not configured"
+            "TELEGRAM_BOT_TOKEN "
+            "is not configured"
         ),
     ):
 
@@ -496,15 +741,23 @@ def test_should_reject_missing_bot_token():
         )
 
 
-def test_should_reject_missing_chat_id():
+def test_should_reject_missing_chat_id(
+    monkeypatch,
+):
     """
     Chat ID is required when a message is sent.
     """
 
+    monkeypatch.delenv(
+        "TELEGRAM_CHAT_ID",
+        raising=False,
+    )
+
     with pytest.raises(
         RuntimeError,
         match=(
-            "TELEGRAM_CHAT_ID is not configured"
+            "TELEGRAM_CHAT_ID "
+            "is not configured"
         ),
     ):
 

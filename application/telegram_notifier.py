@@ -4,19 +4,30 @@ AlphaRadar Telegram Notifier.
 Supports two notification modes:
 
 1. Legacy manual snapshot
-   - Used by the current Founder Daily/manual endpoint
+   - Used by Founder Daily and the manual API endpoint
    - Sends the full supplied dashboard collection
 
 2. Meaningful change digest
    - Used by Founder Automation
    - Sends only useful market changes
    - Remains silent when no meaningful changes exist
+   - Uses AlphaRadar Notification V1 format
 
 Environment variables
 ---------------------
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
 ALPHARADAR_DASHBOARD_URL
+
+Dashboard URL policy
+--------------------
+Local addresses such as 127.0.0.1 and localhost are not
+included in Telegram notifications because they cannot be
+opened from another device.
+
+A public dashboard URL may be added later through:
+
+    ALPHARADAR_DASHBOARD_URL
 
 This module does NOT:
 - run market scans
@@ -31,6 +42,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from urllib.parse import urlparse
 
 import requests
 
@@ -39,50 +51,43 @@ import requests
 # Configuration
 # ==========================================================
 
-DEFAULT_DASHBOARD_URL = (
-    "http://127.0.0.1:8000"
-)
-
 MAX_DIGEST_CHANGES = 10
+
+DIVIDER = "━━━━━━━━━━━━━━━━━━"
 
 
 EVIDENCE_LABELS = {
-    "ACCUMULATION": (
-        "Buying pressure increasing"
-    ),
-    "DISTRIBUTION": (
-        "Selling pressure increasing"
-    ),
-    "HIGH_VOLUME": (
-        "Market volume increasing"
-    ),
-    "LIQUIDITY_UP": (
-        "Liquidity increasing"
-    ),
-    "MOMENTUM": (
-        "Momentum improving"
-    ),
-    "PRICE_BREAKOUT": (
-        "Price breakout detected"
-    ),
-    "PRICE_MOMENTUM": (
-        "Momentum improving"
-    ),
-    "PRICE_UP": (
-        "Price momentum improving"
-    ),
-    "RISKY_ACTIVITY": (
-        "Risky market activity detected"
-    ),
-    "STRONG_LIQUIDITY": (
-        "Liquidity increasing"
-    ),
-    "VOLUME_UP": (
-        "Trading activity increasing"
-    ),
-    "WEAK_MOMENTUM": (
-        "Market momentum weakening"
-    ),
+    "ACCUMULATION": "Buying pressure increasing",
+    "DISTRIBUTION": "Selling pressure increasing",
+    "HIGH_VOLUME": "Market volume increasing",
+    "LIQUIDITY_UP": "Liquidity increasing",
+    "MOMENTUM": "Momentum improving",
+    "PRICE_BREAKOUT": "Price breakout detected",
+    "PRICE_MOMENTUM": "Momentum improving",
+    "PRICE_UP": "Price momentum improving",
+    "RISKY_ACTIVITY": "Risky market activity detected",
+    "STRONG_LIQUIDITY": "Liquidity increasing",
+    "VOLUME_UP": "Trading activity increasing",
+    "WEAK_BREAKOUT": "Weak breakout",
+    "WEAK_MOMENTUM": "Market momentum weakening",
+}
+
+
+DECISION_EMOJIS = {
+    "BUY": "🟢",
+    "WATCH": "🔵",
+    "REVIEW": "🟡",
+    "SELL": "🔴",
+    "IGNORE": "⚪",
+    "UNKNOWN": "⚪",
+}
+
+
+CONFIDENCE_EMOJIS = {
+    "HIGH": "🟢",
+    "MEDIUM": "🟡",
+    "LOW": "🟠",
+    "UNKNOWN": "⚪",
 }
 
 
@@ -108,24 +113,19 @@ def _normalize_text(
     return text or fallback
 
 
-def _resolve_dashboard_url(
-    dashboard_url: str | None,
+def _normalize_upper(
+    value: object,
+    *,
+    fallback: str = "UNKNOWN",
 ) -> str:
     """
-    Resolve the dashboard URL used in Telegram messages.
+    Normalize one value into uppercase display text.
     """
 
-    resolved = (
-        dashboard_url
-        or os.getenv(
-            "ALPHARADAR_DASHBOARD_URL",
-        )
-        or DEFAULT_DASHBOARD_URL
-    )
-
-    return resolved.rstrip(
-        "/",
-    )
+    return _normalize_text(
+        value,
+        fallback=fallback,
+    ).upper()
 
 
 def _resolve_credentials(
@@ -167,6 +167,65 @@ def _resolve_credentials(
         resolved_bot_token,
         resolved_chat_id,
     )
+
+
+def _resolve_public_dashboard_url(
+    dashboard_url: str | None,
+) -> str | None:
+    """
+    Return a usable public dashboard URL.
+
+    Localhost and loopback addresses are intentionally hidden
+    because Telegram users on other devices cannot open them.
+    """
+
+    configured = (
+        dashboard_url
+        or os.getenv(
+            "ALPHARADAR_DASHBOARD_URL",
+        )
+    )
+
+    if not configured:
+
+        return None
+
+    resolved = str(
+        configured,
+    ).strip().rstrip(
+        "/",
+    )
+
+    if not resolved:
+
+        return None
+
+    parsed = urlparse(
+        resolved,
+    )
+
+    hostname = (
+        parsed.hostname
+        or ""
+    ).strip().lower()
+
+    if hostname in {
+        "127.0.0.1",
+        "localhost",
+        "::1",
+        "0.0.0.0",
+    }:
+
+        return None
+
+    if parsed.scheme not in {
+        "http",
+        "https",
+    }:
+
+        return None
+
+    return resolved
 
 
 def _send_message(
@@ -232,10 +291,10 @@ def humanize_evidence(
     Convert technical evidence into natural language.
     """
 
-    normalized = _normalize_text(
+    normalized = _normalize_upper(
         reason,
         fallback="",
-    ).upper()
+    )
 
     if not normalized:
 
@@ -327,8 +386,74 @@ def _meaningful_reasons(
 
 
 # ==========================================================
-# Meaningful Change Digest
+# Notification Presentation
 # ==========================================================
+
+def _decision_emoji(
+    decision: object,
+) -> str:
+    """
+    Return the visual indicator for one decision.
+    """
+
+    normalized = _normalize_upper(
+        decision,
+    )
+
+    return DECISION_EMOJIS.get(
+        normalized,
+        "⚪",
+    )
+
+
+def _confidence_emoji(
+    confidence: object,
+) -> str:
+    """
+    Return the visual indicator for one confidence level.
+    """
+
+    normalized = _normalize_upper(
+        confidence,
+    )
+
+    return CONFIDENCE_EMOJIS.get(
+        normalized,
+        "⚪",
+    )
+
+
+def _activity_emoji(
+    change_count: int,
+) -> str:
+    """
+    Return the Radar Activity indicator.
+    """
+
+    if change_count >= 6:
+
+        return "🔴"
+
+    if change_count >= 3:
+
+        return "🟠"
+
+    return "🟡"
+
+
+def _market_label(
+    count: int,
+) -> str:
+    """
+    Return a correctly pluralized market-change label.
+    """
+
+    if count == 1:
+
+        return "1 market changed"
+
+    return f"{count} markets changed"
+
 
 def _format_historical_success(
     value: object,
@@ -355,71 +480,92 @@ def _format_historical_success(
     return f"{result:.0f}%"
 
 
+def _build_history_line(
+    change: dict[str, object],
+) -> str:
+    """
+    Build the human-readable history status.
+    """
+
+    if change.get(
+        "seen_before",
+        False,
+    ) is not True:
+
+        return "🆕 New pattern"
+
+    historical = _format_historical_success(
+        change.get(
+            "historical_success",
+        )
+    )
+
+    return (
+        "📚 Seen before"
+        f" · {historical} historical success"
+    )
+
+
 def _build_single_change_lines(
     change: dict[str, object],
 ) -> list[str]:
     """
-    Build one concise market-change section.
+    Build one AlphaRadar Notification V1 market section.
     """
 
-    token = _normalize_text(
+    token = _normalize_upper(
         change.get(
             "token",
         )
-    ).upper()
+    )
 
-    old_decision = _normalize_text(
+    old_decision = _normalize_upper(
         change.get(
             "old_decision",
         )
-    ).upper()
+    )
 
-    new_decision = _normalize_text(
+    new_decision = _normalize_upper(
         change.get(
             "new_decision",
         )
-    ).upper()
+    )
 
-    confidence = _normalize_text(
+    confidence = _normalize_upper(
         change.get(
             "new_confidence",
         )
-    ).upper()
+    )
 
     reasons = _meaningful_reasons(
         change,
     )
 
+    decision_icon = _decision_emoji(
+        new_decision,
+    )
+
+    confidence_icon = _confidence_emoji(
+        confidence,
+    )
+
     lines = [
-        f"{token} moved to {new_decision}",
+        f"{decision_icon} {token}",
+        "",
+        "Status",
+        "",
+        (
+            f"{old_decision} → "
+            f"{new_decision}"
+        ),
+        "",
+        DIVIDER,
+        "",
+        "Why?",
         "",
     ]
 
-    if (
-        old_decision
-        and old_decision != "UNKNOWN"
-        and old_decision != new_decision
-    ):
-
-        lines.extend(
-            [
-                (
-                    f"{old_decision} → "
-                    f"{new_decision}"
-                ),
-                "",
-            ]
-        )
-
     if reasons:
-
-        lines.append(
-            "Why?",
-        )
-
-        lines.append(
-            "",
-        )
 
         for reason in reasons:
 
@@ -427,44 +573,40 @@ def _build_single_change_lines(
                 f"• {reason}"
             )
 
+    else:
+
         lines.append(
-            "",
+            "• Market evidence changed"
         )
 
     lines.extend(
         [
-            "Confidence",
-            confidence,
             "",
-            "Seen before",
+            DIVIDER,
+            "",
+            "Confidence",
+            "",
+            (
+                f"{confidence_icon} "
+                f"{confidence}"
+            ),
+            "",
+            DIVIDER,
+            "",
+            "History",
+            "",
+            _build_history_line(
+                change,
+            ),
         ]
     )
 
-    if change.get(
-        "seen_before",
-        False,
-    ) is True:
-
-        historical = (
-            _format_historical_success(
-                change.get(
-                    "historical_success",
-                )
-            )
-        )
-
-        lines.append(
-            f"Yes ({historical})"
-        )
-
-    else:
-
-        lines.append(
-            "No — new market behaviour"
-        )
-
     return lines
 
+
+# ==========================================================
+# Meaningful Change Digest
+# ==========================================================
 
 def build_change_digest_message(
     changes: list[dict[str, object]],
@@ -473,9 +615,10 @@ def build_change_digest_message(
     max_changes: int = MAX_DIGEST_CHANGES,
 ) -> str:
     """
-    Build one actionable Telegram digest.
+    Build one actionable AlphaRadar Notification V1 digest.
 
     Returns an empty string when no meaningful changes exist.
+    Local dashboard URLs are intentionally omitted.
     """
 
     if not isinstance(
@@ -523,59 +666,34 @@ def build_change_digest_message(
         :max_changes
     ]
 
-    resolved_dashboard_url = (
-        _resolve_dashboard_url(
-            dashboard_url,
-        )
-    )
-
     lines = [
         "📡 AlphaRadar",
         "",
+        "Radar detected a market shift.",
+        "",
+        DIVIDER,
+        "",
     ]
 
-    if len(
+    for index, change in enumerate(
         selected,
-    ) == 1:
+    ):
+
+        if index > 0:
+
+            lines.extend(
+                [
+                    "",
+                    DIVIDER,
+                    "",
+                ]
+            )
 
         lines.extend(
             _build_single_change_lines(
-                selected[0],
+                change,
             )
         )
-
-    else:
-
-        lines.extend(
-            [
-                (
-                    f"{len(selected)} "
-                    "markets changed"
-                ),
-                "",
-            ]
-        )
-
-        for index, change in enumerate(
-            selected,
-            start=1,
-        ):
-
-            if index > 1:
-
-                lines.extend(
-                    [
-                        "",
-                        "━━━━━━━━━━",
-                        "",
-                    ]
-                )
-
-            lines.extend(
-                _build_single_change_lines(
-                    change,
-                )
-            )
 
     remaining = (
         len(validated)
@@ -587,6 +705,8 @@ def build_change_digest_message(
         lines.extend(
             [
                 "",
+                DIVIDER,
+                "",
                 (
                     f"+ {remaining} more "
                     "market changes"
@@ -594,13 +714,42 @@ def build_change_digest_message(
             ]
         )
 
+    change_count = len(
+        validated,
+    )
+
     lines.extend(
         [
             "",
-            "Open dashboard",
-            resolved_dashboard_url,
+            DIVIDER,
+            "",
+            "Radar Activity",
+            "",
+            (
+                f"{_activity_emoji(change_count)} "
+                f"{_market_label(change_count)}"
+            ),
         ]
     )
+
+    resolved_dashboard_url = (
+        _resolve_public_dashboard_url(
+            dashboard_url,
+        )
+    )
+
+    if resolved_dashboard_url:
+
+        lines.extend(
+            [
+                "",
+                DIVIDER,
+                "",
+                "Open dashboard",
+                "",
+                resolved_dashboard_url,
+            ]
+        )
 
     return "\n".join(
         lines,
@@ -686,6 +835,15 @@ def build_telegram_message(
 
     for item in dashboard_data:
 
+        if not isinstance(
+            item,
+            dict,
+        ):
+
+            raise ValueError(
+                "Dashboard data contains invalid market data."
+            )
+
         token = _normalize_text(
             item.get(
                 "token",
@@ -720,23 +878,21 @@ def build_telegram_message(
 
             continue
 
-        decision = _normalize_text(
+        decision = _normalize_upper(
             item.get(
                 "decision",
             )
-        ).upper()
+        )
 
-        confidence = _normalize_text(
+        confidence = _normalize_upper(
             item.get(
                 "confidence",
             )
-        ).upper()
+        )
 
-        historical = (
-            _format_historical_success(
-                item.get(
-                    "historical_success",
-                )
+        historical = _format_historical_success(
+            item.get(
+                "historical_success",
             )
         )
 
@@ -776,7 +932,9 @@ def build_telegram_message(
                 "Evidence:"
             )
 
-            for reason in reasons[:3]:
+            for reason in reasons[
+                :3
+            ]:
 
                 lines.append(
                     (
