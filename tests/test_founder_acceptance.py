@@ -108,8 +108,8 @@ def test_should_build_shared_dashboard_data():
 
 def test_should_build_founder_telegram_message():
     """
-    Telegram message should contain the current
-    AlphaRadar market intelligence.
+    Telegram message should contain readable AlphaRadar
+    market intelligence.
     """
 
     dashboard = [
@@ -138,9 +138,14 @@ def test_should_build_founder_telegram_message():
 
     assert "HIGH" in message
 
-    assert "66.67%" in message
+    # Telegram intentionally rounds percentages to keep
+    # notifications concise and easy to scan.
+    assert "67%" in message
 
-    assert "ACCUMULATION" in message
+    assert (
+        "Buying pressure increasing"
+        in message
+    )
 
 
 # ==========================================================
