@@ -399,6 +399,62 @@ def test_should_include_public_dashboard_url():
     )
 
 
+def test_should_read_public_dashboard_url_from_environment(
+    monkeypatch,
+):
+    """
+    Public dashboard URL should be read from the standardized
+    environment variable.
+    """
+
+    monkeypatch.setenv(
+        "PUBLIC_DASHBOARD_URL",
+        "https://app.alpharadar.ai/",
+    )
+
+    message = build_change_digest_message(
+        [
+            SINGLE_CHANGE,
+        ],
+    )
+
+    assert "Open dashboard" in message
+
+    assert (
+        "https://app.alpharadar.ai"
+        in message
+    )
+
+
+def test_should_ignore_legacy_dashboard_environment_variable(
+    monkeypatch,
+):
+    """
+    The retired AlphaRadar-specific dashboard variable should
+    no longer control Telegram messages.
+    """
+
+    monkeypatch.delenv(
+        "PUBLIC_DASHBOARD_URL",
+        raising=False,
+    )
+
+    monkeypatch.setenv(
+        "ALPHARADAR_DASHBOARD_URL",
+        "https://legacy.example",
+    )
+
+    message = build_change_digest_message(
+        [
+            SINGLE_CHANGE,
+        ],
+    )
+
+    assert "legacy.example" not in message
+
+    assert "Open dashboard" not in message
+
+
 def test_should_hide_invalid_dashboard_url():
     """
     Invalid dashboard values must not be shown.

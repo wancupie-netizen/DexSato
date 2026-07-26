@@ -7,21 +7,30 @@ Single-run automated V1 workflow:
 
 The command:
 
-1. Reads the previous stored snapshot when available.
-2. Generates a fresh ten-coin snapshot.
-3. Compares the previous and current snapshots.
-4. Sends a Telegram digest only for meaningful changes.
-5. Preserves a successful snapshot when Telegram is unavailable.
-6. Exits after one completed run.
+1. Loads Founder V1 configuration from the project .env file.
+2. Reads the previous stored snapshot when available.
+3. Generates a fresh ten-coin snapshot.
+4. Compares the previous and current snapshots.
+5. Sends a Telegram digest only for meaningful changes.
+6. Preserves a successful snapshot when Telegram is unavailable.
+7. Exits after one completed run.
 
 Windows Task Scheduler will invoke this command at the
 approved V1 scan times.
 
-Environment variables
----------------------
+Environment configuration
+-------------------------
+The project-level .env file may define:
+
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
-ALPHARADAR_DASHBOARD_URL
+PUBLIC_DASHBOARD_URL
+SCAN_TIME_1
+SCAN_TIME_2
+SCAN_TIME_3
+
+Existing operating-system environment variables take priority
+over values stored in .env.
 
 Failure policy
 --------------
@@ -47,6 +56,10 @@ from typing import Any
 
 from application.change_detector import (
     detect_meaningful_changes,
+)
+
+from application.environment_config import (
+    load_environment,
 )
 
 from application.founder_snapshot_service import (
@@ -614,8 +627,11 @@ def run_founder_scheduler(
 
 def main() -> int:
     """
-    Execute one AlphaRadar automated scan cycle.
+    Load Founder V1 configuration and execute one automated
+    scan cycle.
     """
+
+    load_environment()
 
     return run_founder_scheduler()
 

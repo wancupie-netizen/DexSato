@@ -17,7 +17,7 @@ Environment variables
 ---------------------
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
-ALPHARADAR_DASHBOARD_URL
+PUBLIC_DASHBOARD_URL
 
 Dashboard URL policy
 --------------------
@@ -27,7 +27,7 @@ opened from another device.
 
 A public dashboard URL may be added later through:
 
-    ALPHARADAR_DASHBOARD_URL
+    PUBLIC_DASHBOARD_URL
 
 This module does NOT:
 - run market scans
@@ -182,7 +182,7 @@ def _resolve_public_dashboard_url(
     configured = (
         dashboard_url
         or os.getenv(
-            "ALPHARADAR_DASHBOARD_URL",
+            "PUBLIC_DASHBOARD_URL",
         )
     )
 
