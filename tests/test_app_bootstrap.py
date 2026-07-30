@@ -19,6 +19,7 @@ from app.main import (
     dashboard_api,
     founder_home,
     health_check,
+    system_status_api,
     telegram_send,
 )
 
@@ -58,10 +59,14 @@ def test_should_create_fastapi_application():
     "app.main.render_founder_snapshot_dashboard"
 )
 @patch(
+    "app.main.collect_system_dashboard_status"
+)
+@patch(
     "app.main.load_current_snapshot"
 )
 def test_should_render_snapshot_dashboard(
     mock_load,
+    mock_system_status,
     mock_render,
 ):
     """
@@ -73,6 +78,9 @@ def test_should_render_snapshot_dashboard(
     mock_render.return_value = (
         "<html>Snapshot Dashboard</html>"
     )
+    mock_system_status.return_value = {
+        "overall_health": "HEALTHY",
+    }
 
     assert founder_home() == (
         "<html>Snapshot Dashboard</html>"
@@ -80,7 +88,31 @@ def test_should_render_snapshot_dashboard(
 
     mock_render.assert_called_once_with(
         SNAPSHOT,
+        system_status={
+            "overall_health": "HEALTHY",
+        },
     )
+
+
+@patch(
+    "app.main.collect_system_dashboard_status"
+)
+def test_should_return_system_status_api(
+    mock_collect,
+):
+    """
+    System endpoint should return operational health data.
+    """
+
+    expected = {
+        "overall_health": "HEALTHY",
+        "latest_run": {
+            "telegram_status": "SENT",
+        },
+    }
+    mock_collect.return_value = expected
+
+    assert system_status_api() == expected
 
 
 @patch(

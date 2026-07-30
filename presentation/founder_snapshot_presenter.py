@@ -24,6 +24,7 @@ This module does NOT:
 
 from __future__ import annotations
 
+import json
 from html import escape
 
 from presentation.dashboard_theme import (
@@ -325,6 +326,8 @@ def render_snapshot_coin(
 
 def render_founder_snapshot_dashboard(
     snapshot: dict[str, object],
+    *,
+    system_status: dict[str, object] | None = None,
 ) -> str:
     """
     Render the complete AlphaRadar V1 snapshot dashboard.
@@ -399,6 +402,96 @@ def render_founder_snapshot_dashboard(
     )
 
     shared_css = build_dashboard_css()
+
+    resolved_system_status = (
+        system_status
+        if isinstance(system_status, dict)
+        else {}
+    )
+    overall_health = _safe_text(
+        resolved_system_status.get(
+            "overall_health",
+            "UNKNOWN",
+        )
+    )
+    snapshot_health = resolved_system_status.get(
+        "snapshot",
+        {},
+    )
+    if not isinstance(snapshot_health, dict):
+        snapshot_health = {}
+    snapshot_status = _safe_text(
+        snapshot_health.get(
+            "status",
+            "UNKNOWN",
+        )
+    )
+    latest_run = resolved_system_status.get(
+        "latest_run",
+        {},
+    )
+    if not isinstance(latest_run, dict):
+        latest_run = {}
+    telegram_status = _safe_text(
+        latest_run.get(
+            "telegram_status",
+            "NOT RUN YET",
+        )
+    )
+    last_run_at = _safe_text(
+        latest_run.get(
+            "generated_at",
+            "Not available",
+        )
+    )
+    meaningful_changes = _safe_text(
+        latest_run.get(
+            "meaningful_changes",
+            0,
+        )
+    )
+    task_statuses = resolved_system_status.get(
+        "tasks",
+        [],
+    )
+    if not isinstance(task_statuses, list):
+        task_statuses = []
+    task_rows = "".join(
+        f"""
+        <tr>
+            <td>{_safe_text(task.get("task_name"))}</td>
+            <td>{_safe_text(task.get("status"))}</td>
+            <td>{_safe_text(task.get("last_run_time"), fallback="—")}</td>
+            <td>{_safe_text(task.get("next_run_time"), fallback="—")}</td>
+            <td>{_safe_text(task.get("last_result_status"))}</td>
+        </tr>
+        """
+        for task in task_statuses
+        if isinstance(task, dict)
+    )
+    if not task_rows:
+        task_rows = """
+        <tr>
+            <td colspan="5">Scheduler status is not available.</td>
+        </tr>
+        """
+    change_summaries = latest_run.get(
+        "change_summaries",
+        [],
+    )
+    if not isinstance(change_summaries, list):
+        change_summaries = []
+    changes_html = "".join(
+        f"<li>{_safe_text(change)}</li>"
+        for change in change_summaries
+    ) or "<li>No meaningful changes recorded.</li>"
+    status_json = escape(
+        json.dumps(
+            resolved_system_status,
+            ensure_ascii=False,
+        ),
+        quote=False,
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -688,6 +781,67 @@ def render_founder_snapshot_dashboard(
                 repeat(3, minmax(0, 1fr));
             gap: 14px;
             margin: 0 0 24px;
+        }}
+
+        .health-grid {{
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+            margin: 0 0 18px;
+        }}
+
+        .health-card {{
+            padding: 15px;
+            border: 1px solid {THEME["border_soft"]};
+            border-radius: 12px;
+            background: {THEME["surface"]};
+        }}
+
+        .health-card span {{
+            display: block;
+            margin-bottom: 7px;
+            color: {THEME["muted"]};
+            font-size: 0.68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }}
+
+        .health-card strong {{
+            overflow-wrap: anywhere;
+        }}
+
+        .health-detail {{
+            margin-bottom: 24px;
+            padding: 18px;
+            border: 1px solid {THEME["border_soft"]};
+            border-radius: 14px;
+            background: {THEME["surface"]};
+        }}
+
+        .health-detail h2 {{
+            margin-top: 0;
+        }}
+
+        .task-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }}
+
+        .task-table th,
+        .task-table td {{
+            padding: 10px;
+            border-bottom: 1px solid {THEME["border_soft"]};
+            text-align: left;
+        }}
+
+        .task-table th {{
+            color: {THEME["muted"]};
+        }}
+
+        .change-list {{
+            margin-bottom: 0;
+            color: {THEME["muted"]};
         }}
 
         .snapshot-stat {{
@@ -1010,6 +1164,7 @@ def render_founder_snapshot_dashboard(
             }}
 
             .system-panel,
+            .health-grid,
             .snapshot-stats,
             .snapshot-grid,
             .snapshot-controls {{
@@ -1128,6 +1283,51 @@ def render_founder_snapshot_dashboard(
                     Automatic scheduler is not active yet.
                 </p>
             </div>
+        </section>
+
+        <section class="health-grid" aria-label="System health">
+            <div class="health-card">
+                <span>System</span>
+                <strong>{overall_health}</strong>
+            </div>
+            <div class="health-card">
+                <span>Snapshot</span>
+                <strong>{snapshot_status}</strong>
+            </div>
+            <div class="health-card">
+                <span>Telegram</span>
+                <strong>{telegram_status}</strong>
+            </div>
+            <div class="health-card">
+                <span>Last Engine Run</span>
+                <strong>{last_run_at}</strong>
+            </div>
+            <div class="health-card">
+                <span>Meaningful Changes</span>
+                <strong>{meaningful_changes}</strong>
+            </div>
+        </section>
+
+        <section class="health-detail">
+            <h2>Founder Automation</h2>
+            <table class="task-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Status</th>
+                        <th>Last Run</th>
+                        <th>Next Run</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {task_rows}
+                </tbody>
+            </table>
+            <h3>Latest Market Changes</h3>
+            <ul class="change-list">
+                {changes_html}
+            </ul>
         </section>
 
         <section class="snapshot-stats">
@@ -1476,6 +1676,10 @@ def render_founder_snapshot_dashboard(
             30000
         );
     </script>
+    <script
+        id="system-status-data"
+        type="application/json"
+    >{status_json}</script>
 </body>
 </html>
 """

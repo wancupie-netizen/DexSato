@@ -42,6 +42,9 @@ from application.founder_snapshot_service import (
 from application.telegram_notifier import (
     send_telegram_alert,
 )
+from application.system_health_dashboard import (
+    collect_system_dashboard_status,
+)
 
 from presentation.founder_snapshot_presenter import (
     render_founder_snapshot_dashboard,
@@ -121,8 +124,11 @@ def founder_home() -> str:
             ),
         ) from error
 
+    system_status = collect_system_dashboard_status()
+
     return render_founder_snapshot_dashboard(
         snapshot,
+        system_status=system_status,
     )
 
 
@@ -149,6 +155,17 @@ def dashboard_api() -> dict[str, object]:
                 error,
             ),
         ) from error
+
+
+@app.get(
+    "/api/system-status",
+)
+def system_status_api() -> dict[str, object]:
+    """
+    Return operational health without running a market scan.
+    """
+
+    return collect_system_dashboard_status()
 
 
 @app.post(
