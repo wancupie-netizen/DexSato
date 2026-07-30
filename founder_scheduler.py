@@ -70,6 +70,9 @@ from application.founder_snapshot_service import (
 from application.telegram_notifier import (
     send_change_digest,
 )
+from application.system_health_dashboard import (
+    write_latest_run,
+)
 
 
 # ==========================================================
@@ -593,6 +596,10 @@ def run_founder_scheduler(
         [],
         dict[str, object],
     ] = execute_founder_scheduler,
+    persist_result: Callable[
+        [dict[str, object]],
+        object,
+    ] = write_latest_run,
 ) -> int:
     """
     Run one scheduler command and return an operating-system
@@ -609,6 +616,10 @@ def run_founder_scheduler(
     try:
 
         result = execute()
+
+        persist_result(
+            result,
+        )
 
     except Exception as error:
 

@@ -790,6 +790,29 @@ def test_should_return_zero_for_healthy_run():
     assert result == 0
 
 
+def test_should_persist_completed_run_for_dashboard():
+    """
+    A successful run should publish its status for the dashboard.
+    """
+
+    execution_result = {
+        "success": True,
+        "automation_status": "HEALTHY",
+        "telegram_status": "SKIPPED",
+    }
+    persisted = []
+
+    result = run_founder_scheduler(
+        execute=lambda: execution_result,
+        persist_result=persisted.append,
+    )
+
+    assert result == 0
+    assert persisted == [
+        execution_result,
+    ]
+
+
 def test_should_return_zero_for_degraded_telegram_run():
     """
     Telegram failure must still return exit code zero when the

@@ -284,6 +284,55 @@ def test_should_render_live_dashboard_elements():
     )
 
 
+def test_should_render_operational_system_status():
+    """
+    Dashboard should expose real automation health information.
+    """
+
+    html = render_founder_snapshot_dashboard(
+        build_snapshot(),
+        system_status={
+            "overall_health": "HEALTHY",
+            "snapshot": {
+                "status": "FRESH",
+            },
+            "latest_run": {
+                "generated_at": (
+                    "2026-07-30T12:36:48+00:00"
+                ),
+                "telegram_status": "SENT",
+                "meaningful_changes": 1,
+                "change_summaries": [
+                    "DOGE: REVIEW → ALERT",
+                ],
+            },
+            "tasks": [
+                {
+                    "task_name": (
+                        "AlphaRadar Founder Scan 1"
+                    ),
+                    "status": "READY",
+                    "last_run_time": (
+                        "30/07/2026 8:00:00 PM"
+                    ),
+                    "next_run_time": (
+                        "31/07/2026 8:00:00 AM"
+                    ),
+                    "last_result_status": "SUCCESS",
+                },
+            ],
+        },
+    )
+
+    assert "Founder Automation" in html
+    assert "HEALTHY" in html
+    assert "FRESH" in html
+    assert "SENT" in html
+    assert "DOGE: REVIEW → ALERT" in html
+    assert "AlphaRadar Founder Scan 1" in html
+    assert "/api/system-status" not in html
+
+
 def test_should_render_founder_footer():
     """
     Dashboard should preserve the founder dedication.
