@@ -1,6 +1,7 @@
 """Tests for the DexSato Founder V1 dashboard."""
 
 from presentation.dexsato_dashboard_presenter import (
+    build_intelligence_summary,
     render_decision_card,
     render_dexsato_dashboard,
 )
@@ -56,10 +57,12 @@ def test_should_render_real_decision_card():
 
     assert "BTC" in html
     assert "WATCH" in html
-    assert "Why It Changed" in html
+    assert "Decision Evidence" in html
     assert "Intelligence Summary" in html
     assert "View Decision" in html
     assert "/1.png" in html
+    assert "Historical" not in html
+    assert "decision-detail" in html
 
 
 def test_should_render_dexsato_north_star_ui():
@@ -88,4 +91,24 @@ def test_should_keep_dashboard_search_and_filters():
     assert 'id="token-search"' in html
     assert "function applyFilters()" in html
     assert 'data-filter="alert"' in html
+    assert 'data-filter="unavailable"' in html
     assert '"Asia/Kuala_Lumpur"' in html
+    assert "Search BTC, ETH, SUI..." in html
+    assert "formatMYT" in html
+
+
+def test_should_build_grounded_intelligence_summary():
+    summary = build_intelligence_summary(
+        token="ETH",
+        decision="ALERT",
+        confidence="HIGH",
+        reasons=[
+            "EARLY_MOMENTUM",
+            "STRONG_LIQUIDITY",
+        ],
+    )
+
+    assert "requires immediate founder attention" in summary
+    assert "Early Momentum" in summary
+    assert "Strong Liquidity" in summary
+    assert "Confidence is HIGH" in summary

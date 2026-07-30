@@ -42,6 +42,52 @@ def _reason_label(value: object) -> str:
     return _text(str(value).replace("_", " ").title())
 
 
+def build_intelligence_summary(
+    *,
+    token: str,
+    decision: str,
+    confidence: str,
+    reasons: list[object],
+) -> str:
+    """Build a deterministic explanation grounded in engine output."""
+
+    labels = [
+        str(reason).replace("_", " ").title()
+        for reason in reasons[:3]
+    ]
+    evidence = (
+        f" Current evidence includes {', '.join(labels)}."
+        if labels
+        else " No supporting evidence is currently recorded."
+    )
+    messages = {
+        "ALERT": (
+            f"{token} requires immediate founder attention."
+            f"{evidence} Confidence is {confidence}."
+        ),
+        "WATCH": (
+            f"{token} remains under active observation."
+            f"{evidence} Continue monitoring the next scan."
+        ),
+        "REVIEW": (
+            f"{token} requires further evidence review."
+            f"{evidence} Maintain REVIEW while conditions develop."
+        ),
+        "IGNORE": (
+            f"Current evidence does not justify further attention for {token}."
+            " Maintain IGNORE until a meaningful change is detected."
+        ),
+        "UNAVAILABLE": (
+            f"{token} could not be evaluated in the current snapshot."
+            " Wait for market data to become available."
+        ),
+    }
+    return messages.get(
+        decision,
+        f"{token} remains in the {decision} decision state.{evidence}",
+    )
+
+
 def render_coin_logo(token: object) -> str:
     normalized = _status(token)
     source = COIN_LOGOS.get(normalized)
@@ -63,21 +109,25 @@ def render_decision_card(coin: dict[str, object]) -> str:
         coin.get("decision") if available else "UNAVAILABLE"
     )
     confidence = _status(coin.get("confidence"))
-    summary = _text(
-        coin.get("summary"),
-        "Market intelligence is not available for this snapshot.",
-    )
     reasons = coin.get("reasons", [])
     if not isinstance(reasons, list):
         reasons = []
+    summary = _text(
+        build_intelligence_summary(
+            token=token,
+            decision=decision,
+            confidence=confidence,
+            reasons=reasons,
+        )
+    )
     reason_items = "".join(
         f"<li>{_reason_label(reason)}</li>" for reason in reasons[:3]
     ) or "<li>No supporting evidence recorded.</li>"
-    historical = coin.get("historical_success", 0)
-    try:
-        historical_label = f"{float(historical):.2f}%"
-    except (TypeError, ValueError):
-        historical_label = "0.00%"
+    memory = (
+        "Known pattern"
+        if coin.get("seen_before", False) is True
+        else "New pattern"
+    )
 
     return f"""
     <article class="decision-card tone-{decision.lower()}"
@@ -89,11 +139,10 @@ def render_decision_card(coin: dict[str, object]) -> str:
           <h3>{_text(token)}</h3>
           <span class="decision-pill">{_text(decision)}</span>
           <p class="confidence">Confidence <strong>{_text(confidence)}</strong></p>
-          <small>Historical {historical_label}</small>
         </div>
       </div>
       <div class="evidence-column">
-        <h4>Why It Changed</h4>
+        <h4>Decision Evidence</h4>
         <ul>{reason_items}</ul>
       </div>
       <div class="summary-column">
@@ -101,7 +150,16 @@ def render_decision_card(coin: dict[str, object]) -> str:
         <p>{summary}</p>
       </div>
       <button class="decision-button" type="button"
-          data-open-token="{_text(token)}">View Decision</button>
+          data-open-token="{_text(token)}" aria-expanded="false">
+        View Decision
+      </button>
+      <div class="decision-detail" hidden>
+        <div><span>Market</span><strong>{_text(token)}</strong></div>
+        <div><span>Decision</span><strong>{_text(decision)}</strong></div>
+        <div><span>Confidence</span><strong>{_text(confidence)}</strong></div>
+        <div><span>Memory</span><strong>{_text(memory)}</strong></div>
+        <p>{summary}</p>
+      </div>
     </article>
     """
 
@@ -208,7 +266,12 @@ def render_dexsato_dashboard(
     .metrics{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}}
     .metric{{padding:16px;border:1px solid var(--line);border-radius:11px;background:linear-gradient(145deg,var(--panel2),#091727)}}
     .metric strong{{display:block;font-size:26px}} .metric span{{color:var(--muted)}} .section-title{{display:flex;justify-content:space-between;align-items:center}}
-    .section-title h2{{margin:0;font-size:21px}} .filters{{display:flex;gap:8px;margin:14px 0}}
+    .section-title h2{{margin:0;font-size:21px}} .search-wrap{{position:relative;width:min(310px,42vw)}}
+    .search-wrap:before{{position:absolute;top:50%;left:13px;transform:translateY(-50%);color:#6f91b4;content:"⌕";font-size:20px}}
+    .search-wrap input{{width:100%;padding:10px 38px;border:1px solid #254662;border-radius:9px;outline:0;background:#091827;color:#edf5ff}}
+    .search-wrap input::placeholder{{color:#65809d}} .search-wrap input:focus{{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(35,217,210,.12)}}
+    .clear-search{{position:absolute;top:50%;right:8px;transform:translateY(-50%);width:26px;height:26px;border:0;border-radius:50%;background:transparent;color:#8ba2bb;cursor:pointer}}
+    .filters{{display:flex;gap:8px;margin:14px 0;overflow:auto}}
     .filters button{{padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:#0b1929;color:#aebdd0;cursor:pointer}}
     .filters button.active{{border-color:var(--violet);background:#1b1d4e;color:#fff}}
     .decision-list{{display:grid;gap:12px}} .decision-card{{display:grid;grid-template-columns:250px 1fr 1.15fr 140px;
@@ -225,9 +288,12 @@ def render_dexsato_dashboard(
     .tone-alert .decision-pill{{color:var(--red)}} .tone-watch .decision-pill{{color:var(--amber)}}
     .tone-review .decision-pill{{color:var(--blue)}} .confidence{{margin:12px 0 3px;color:var(--muted);font-size:12px}}
     .confidence strong{{display:block;color:#f2c94c;font-size:13px}} .coin-column small{{color:var(--muted)}}
-    ul{{margin:0;padding-left:18px;color:#c1cedc}} li{{margin:8px 0}} .summary-column p{{margin:0;color:#aebdd0;line-height:1.55}}
+    ul{{margin:0;padding-left:18px;color:#cad7e5;font-size:14px}} li{{margin:8px 0}} .summary-column p{{margin:0;color:#bdcada;font-size:14px;line-height:1.55}}
     .decision-button{{margin-right:18px;padding:11px;border:1px solid var(--blue);border-radius:7px;background:transparent;color:#7fb0ff;cursor:pointer}}
-    .rail{{display:grid;align-content:start;gap:12px}} .rail-card{{padding:17px;border:1px solid var(--line);border-radius:11px;background:#091827}}
+    .decision-button:hover{{background:rgba(83,148,255,.1)}} .decision-detail{{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:15px;padding:17px 20px;border-top:1px solid #183149;background:#071522}}
+    .decision-detail span{{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}} .decision-detail strong{{display:block;margin-top:4px}}
+    .decision-detail p{{grid-column:1/-1;margin:0;color:#bdcada;line-height:1.55}}
+    .rail{{position:sticky;top:18px;display:grid;align-content:start;gap:12px;align-self:start}} .rail-card{{padding:17px;border:1px solid var(--line);border-radius:11px;background:#091827}}
     .rail-card h2{{margin:0 0 14px;font-size:17px}} .timeline{{padding:0;list-style:none}} .timeline li{{position:relative;margin:0;padding:0 0 18px 25px}}
     .timeline li:before{{position:absolute;top:9px;bottom:-8px;left:6px;width:1px;background:#34506d;content:""}}
     .timeline li:last-child:before{{display:none}} .timeline-dot{{position:absolute;top:5px;left:1px;width:11px;height:11px;border-radius:50%;background:var(--amber)}}
@@ -238,8 +304,8 @@ def render_dexsato_dashboard(
     .footer{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px;padding:15px;border:1px solid var(--line);
       border-radius:11px;color:var(--muted);text-align:center}} .footer b{{color:var(--green)}} .dedication{{grid-column:1/-1;color:#fff}}
     .mobile-toggle{{display:none}} [hidden]{{display:none!important}}
-    @media(max-width:1180px){{.workspace{{grid-template-columns:1fr}}.rail{{grid-template-columns:repeat(3,1fr)}}.decision-card{{grid-template-columns:220px 1fr 1fr}}.decision-button{{grid-column:1/-1;margin:0 18px 16px}}}}
-    @media(max-width:820px){{.app{{grid-template-columns:1fr}}.sidebar{{position:relative;height:auto}}nav,.engine-card{{display:none}}.content{{padding:18px}}.topbar{{display:block}}.top-status{{margin-top:14px;overflow:auto}}.metrics{{grid-template-columns:repeat(2,1fr)}}.decision-card{{grid-template-columns:1fr}}.evidence-column,.summary-column{{border-top:1px solid #183149;border-left:0}}.rail{{grid-template-columns:1fr}}.footer{{grid-template-columns:1fr}}}}
+    @media(max-width:1180px){{.workspace{{grid-template-columns:1fr}}.rail{{position:static;grid-template-columns:repeat(3,1fr)}}.decision-card{{grid-template-columns:220px 1fr 1fr}}.decision-button{{grid-column:1/-1;margin:0 18px 16px}}}}
+    @media(max-width:820px){{.app{{grid-template-columns:1fr}}.sidebar{{position:relative;height:auto}}nav,.engine-card{{display:none}}.content{{padding:18px}}.topbar{{display:block}}.top-status{{margin-top:14px;overflow:auto}}.metrics{{grid-template-columns:repeat(2,1fr)}}.section-title{{align-items:start;flex-direction:column;gap:12px}}.search-wrap{{width:100%}}.decision-card{{grid-template-columns:1fr}}.evidence-column,.summary-column{{border-top:1px solid #183149;border-left:0}}.decision-button{{width:calc(100% - 36px)}}.decision-detail{{grid-template-columns:repeat(2,1fr)}}.rail{{grid-template-columns:1fr}}.footer{{grid-template-columns:1fr}}}}
   </style>
 </head>
 <body>
@@ -269,10 +335,13 @@ def render_dexsato_dashboard(
           <div class="metric"><strong>{_text(freshness.title())}</strong><span>Snapshot</span></div>
           <div class="metric"><strong id="next-scan">--:--</strong><span>Next Scan MYT</span></div>
         </div>
-        <div id="decisions" class="section-title"><h2>Market Decisions</h2><input id="token-search" type="search" placeholder="Search market" aria-label="Search market"></div>
+        <div id="decisions" class="section-title"><h2>Market Decisions</h2><div class="search-wrap">
+          <input id="token-search" type="search" placeholder="Search BTC, ETH, SUI..." aria-label="Search market">
+          <button id="clear-search" class="clear-search" type="button" aria-label="Clear search" hidden>×</button>
+        </div></div>
         <div class="filters">
           <button class="active" data-filter="">All</button><button data-filter="alert">ALERT</button>
-          <button data-filter="watch">WATCH</button><button data-filter="review">REVIEW</button><button data-filter="ignore">IGNORE</button>
+          <button data-filter="watch">WATCH</button><button data-filter="review">REVIEW</button><button data-filter="ignore">IGNORE</button><button data-filter="unavailable">UNAVAILABLE</button>
         </div>
         <div id="decision-list" class="decision-list">{cards}</div>
       </section>
@@ -288,13 +357,14 @@ def render_dexsato_dashboard(
         </div></section>
       </aside>
     </div>
-    <footer class="footer"><span>Engine <b>{_text(health)}</b></span><span>Last completed scan <b>{generated_at}</b></span>
+    <footer class="footer"><span>Engine <b>{_text(health)}</b></span><span>Last completed scan <b id="completed-scan" data-generated-at="{generated_at}">calculating…</b></span>
       <span><b>{available}/{total}</b> markets available</span><span class="dedication">Made for Sya ❤️</span></footer>
   </main>
 </div>
 <script>
   const cards=[...document.querySelectorAll(".decision-card")];
   const search=document.getElementById("token-search");
+  const clearSearch=document.getElementById("clear-search");
   const filters=[...document.querySelectorAll("[data-filter]")];
   let selected="";
   function applyFilters(){{
@@ -302,11 +372,21 @@ def render_dexsato_dashboard(
     cards.forEach(card=>card.hidden=!((!selected||card.dataset.decision===selected)&&(!query||card.dataset.token.includes(query))));
   }}
   filters.forEach(button=>button.addEventListener("click",()=>{{filters.forEach(item=>item.classList.remove("active"));button.classList.add("active");selected=button.dataset.filter;applyFilters();}}));
-  search.addEventListener("input",applyFilters);
+  search.addEventListener("input",()=>{{clearSearch.hidden=!search.value;applyFilters();}});
+  clearSearch.addEventListener("click",()=>{{search.value="";clearSearch.hidden=true;search.focus();applyFilters();}});
+  document.querySelectorAll(".decision-button").forEach(button=>button.addEventListener("click",()=>{{
+    const detail=button.parentElement.querySelector(".decision-detail");
+    const opening=detail.hidden;
+    detail.hidden=!opening;
+    button.setAttribute("aria-expanded",String(opening));
+    button.textContent=opening?"Close Decision":"View Decision";
+  }}));
   function malaysiaParts(date){{return Object.fromEntries(new Intl.DateTimeFormat("en-CA",{{timeZone:"Asia/Kuala_Lumpur",hour:"2-digit",minute:"2-digit",hour12:false,year:"numeric",month:"2-digit",day:"2-digit"}}).formatToParts(date).filter(p=>p.type!=="literal").map(p=>[p.type,p.value]));}}
   function nextPlannedScan(now=new Date()){{const p=malaysiaParts(now),hours=[8,14,20];let h=hours.find(x=>x>Number(p.hour));if(h===undefined)h=8;return `${{String(h).padStart(2,"0")}}:00`;}}
   function updateNextScan(){{document.getElementById("next-scan").textContent=nextPlannedScan();}}
   function updateSnapshotAge(){{const raw="{generated_at}",time=new Date(raw),minutes=Math.max(0,Math.floor((Date.now()-time.getTime())/60000));document.getElementById("last-scan-age").textContent=Number.isNaN(minutes)?"unavailable":minutes<60?`${{minutes}} min ago`:`${{Math.floor(minutes/60)}} hr ago`;}}
+  function formatMYT(raw){{const time=new Date(raw);if(Number.isNaN(time.getTime()))return"Not available";return new Intl.DateTimeFormat("en-MY",{{timeZone:"Asia/Kuala_Lumpur",day:"2-digit",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true}}).format(time)+" MYT";}}
+  document.getElementById("completed-scan").textContent=formatMYT(document.getElementById("completed-scan").dataset.generatedAt);
   updateNextScan();updateSnapshotAge();window.setInterval(updateSnapshotAge,60000);
 </script>
 </body></html>"""
