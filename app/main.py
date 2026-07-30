@@ -46,9 +46,11 @@ from application.system_health_dashboard import (
     collect_system_dashboard_status,
 )
 
-from presentation.founder_snapshot_presenter import (
-    render_founder_snapshot_dashboard,
+from presentation.dexsato_dashboard_presenter import (
+    render_dexsato_dashboard,
 )
+
+render_founder_snapshot_dashboard = render_dexsato_dashboard
 
 
 APP_TITLE = "AlphaRadar V1"
