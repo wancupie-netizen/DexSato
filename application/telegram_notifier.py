@@ -1,5 +1,5 @@
 """
-AlphaRadar Telegram Notifier.
+DexSato Telegram Notifier.
 
 Supports two notification modes:
 
@@ -11,7 +11,7 @@ Supports two notification modes:
    - Used by Founder Automation
    - Sends only useful market changes
    - Remains silent when no meaningful changes exist
-   - Uses AlphaRadar Notification V1 format
+   - Uses the compact DexSato market-update format
 
 Environment variables
 ---------------------
@@ -53,9 +53,6 @@ import requests
 
 MAX_DIGEST_CHANGES = 10
 
-DIVIDER = "━━━━━━━━━━━━━━━━━━"
-
-
 EVIDENCE_LABELS = {
     "ACCUMULATION": "Buying pressure increasing",
     "DISTRIBUTION": "Selling pressure increasing",
@@ -74,6 +71,7 @@ EVIDENCE_LABELS = {
 
 
 DECISION_EMOJIS = {
+    "ALERT": "🔴",
     "BUY": "🟢",
     "WATCH": "🔵",
     "REVIEW": "🟡",
@@ -455,6 +453,35 @@ def _market_label(
     return f"{count} markets changed"
 
 
+def _founder_action(
+    decision: object,
+) -> str:
+    """
+    Translate an engine decision into a concise next step.
+
+    This is presentation guidance only. It does not create or
+    override a market decision.
+    """
+
+    normalized = _normalize_upper(
+        decision,
+    )
+
+    actions = {
+        "ALERT": "Review this market now",
+        "BUY": "Review this opportunity now",
+        "WATCH": "Keep on the watchlist",
+        "REVIEW": "Review the latest evidence",
+        "SELL": "Review current exposure",
+        "IGNORE": "No action required",
+    }
+
+    return actions.get(
+        normalized,
+        "Review the latest evidence",
+    )
+
+
 def _format_historical_success(
     value: object,
 ) -> str:
@@ -510,7 +537,7 @@ def _build_single_change_lines(
     change: dict[str, object],
 ) -> list[str]:
     """
-    Build one AlphaRadar Notification V1 market section.
+    Build one compact DexSato market-change section.
     """
 
     token = _normalize_upper(
@@ -550,19 +577,16 @@ def _build_single_change_lines(
     )
 
     lines = [
-        f"{decision_icon} {token}",
-        "",
-        "Status",
-        "",
         (
-            f"{old_decision} → "
+            f"{decision_icon} {token} · "
+            f"{new_decision}"
+        ),
+        (
+            f"Change: {old_decision} → "
             f"{new_decision}"
         ),
         "",
-        DIVIDER,
-        "",
-        "Why?",
-        "",
+        "Why it changed",
     ]
 
     if reasons:
@@ -582,21 +606,18 @@ def _build_single_change_lines(
     lines.extend(
         [
             "",
-            DIVIDER,
-            "",
-            "Confidence",
-            "",
             (
+                "Confidence: "
                 f"{confidence_icon} "
                 f"{confidence}"
             ),
-            "",
-            DIVIDER,
-            "",
-            "History",
-            "",
-            _build_history_line(
-                change,
+            (
+                "Pattern: "
+                f"{_build_history_line(change)}"
+            ),
+            (
+                "Founder action: "
+                f"{_founder_action(new_decision)}"
             ),
         ]
     )
@@ -615,7 +636,7 @@ def build_change_digest_message(
     max_changes: int = MAX_DIGEST_CHANGES,
 ) -> str:
     """
-    Build one actionable AlphaRadar Notification V1 digest.
+    Build one actionable DexSato market-update digest.
 
     Returns an empty string when no meaningful changes exist.
     Local dashboard URLs are intentionally omitted.
@@ -667,12 +688,12 @@ def build_change_digest_message(
     ]
 
     lines = [
-        "📡 AlphaRadar",
+        "📡 DexSato Market Update",
         "",
-        "Radar detected a market shift.",
-        "",
-        DIVIDER,
-        "",
+        (
+            f"{_activity_emoji(len(validated))} "
+            f"{_market_label(len(validated))}"
+        ),
     ]
 
     for index, change in enumerate(
@@ -683,8 +704,6 @@ def build_change_digest_message(
 
             lines.extend(
                 [
-                    "",
-                    DIVIDER,
                     "",
                 ]
             )
@@ -705,32 +724,17 @@ def build_change_digest_message(
         lines.extend(
             [
                 "",
-                DIVIDER,
-                "",
                 (
-                    f"+ {remaining} more "
-                    "market changes"
+                    f"➕ {remaining} additional "
+                    + (
+                        "change"
+                        if remaining == 1
+                        else "changes"
+                    )
+                    + " in dashboard"
                 ),
             ]
         )
-
-    change_count = len(
-        validated,
-    )
-
-    lines.extend(
-        [
-            "",
-            DIVIDER,
-            "",
-            "Radar Activity",
-            "",
-            (
-                f"{_activity_emoji(change_count)} "
-                f"{_market_label(change_count)}"
-            ),
-        ]
-    )
 
     resolved_dashboard_url = (
         _resolve_public_dashboard_url(
@@ -743,11 +747,10 @@ def build_change_digest_message(
         lines.extend(
             [
                 "",
-                DIVIDER,
-                "",
-                "Open dashboard",
-                "",
-                resolved_dashboard_url,
+                (
+                    "🔗 Dashboard: "
+                    f"{resolved_dashboard_url}"
+                ),
             ]
         )
 
@@ -825,7 +828,7 @@ def build_telegram_message(
         )
 
     lines = [
-        "🚨 AlphaRadar Founder Alert",
+        "🚨 DexSato Founder Alert",
         "",
         (
             f"{len(dashboard_data)} markets. "
@@ -953,8 +956,8 @@ def build_telegram_message(
         [
             "",
             (
-                "AlphaRadar · "
-                "Engine-driven market intelligence"
+                "DexSato · "
+                "Decision intelligence for crypto markets"
             ),
         ]
     )
