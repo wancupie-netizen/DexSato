@@ -125,20 +125,18 @@ def test_should_build_single_change_digest():
         ],
     )
 
-    assert "📡 AlphaRadar" in message
+    assert "📡 DexSato Market Update" in message
 
     assert (
-        "Radar detected a market shift."
+        "🟡 1 market changed"
         in message
     )
 
-    assert "🔵 BTC" in message
+    assert "🔵 BTC · WATCH" in message
 
-    assert "Status" in message
+    assert "Change: IGNORE → WATCH" in message
 
-    assert "IGNORE → WATCH" in message
-
-    assert "Why?" in message
+    assert "Why it changed" in message
 
     assert (
         "• Momentum improving"
@@ -151,24 +149,22 @@ def test_should_build_single_change_digest():
     )
 
     assert (
-        "Confidence\n\n🟢 HIGH"
+        "Confidence: 🟢 HIGH"
         in message
     )
 
-    assert "History" in message
-
     assert (
-        "📚 Seen before · "
+        "Pattern: 📚 Seen before · "
         "82% historical success"
         in message
     )
 
-    assert "Radar Activity" in message
-
     assert (
-        "🟡 1 market changed"
+        "Founder action: Keep on the watchlist"
         in message
     )
+
+    assert "━━━━━━━━━━━━━━━━━━" not in message
 
 
 def test_should_build_new_pattern_message():
@@ -202,11 +198,16 @@ def test_should_build_new_pattern_message():
     assert "• Weak breakout" in message
 
     assert (
-        "Confidence\n\n🟡 MEDIUM"
+        "Confidence: 🟡 MEDIUM"
         in message
     )
 
-    assert "🆕 New pattern" in message
+    assert "Pattern: 🆕 New pattern" in message
+
+    assert (
+        "Founder action: Review the latest evidence"
+        in message
+    )
 
 
 def test_should_build_multiple_change_digest():
@@ -246,7 +247,9 @@ def test_should_build_multiple_change_digest():
         in message
     )
 
-    assert "━━━━━━━━━━━━━━━━━━" in message
+    assert "━━━━━━━━━━━━━━━━━━" not in message
+
+    assert "Founder action: Review current exposure" in message
 
 
 def test_should_use_higher_activity_indicator():
@@ -324,7 +327,7 @@ def test_should_limit_digest_changes():
     assert "COIN2" not in message
 
     assert (
-        "+ 1 more market changes"
+        "➕ 1 additional change in dashboard"
         in message
     )
 
@@ -382,19 +385,19 @@ def test_should_include_public_dashboard_url():
             SINGLE_CHANGE,
         ],
         dashboard_url=(
-            "https://app.alpharadar.ai/"
+            "https://app.dexsato.com/"
         ),
     )
 
-    assert "Open dashboard" in message
+    assert "🔗 Dashboard:" in message
 
     assert (
-        "https://app.alpharadar.ai"
+        "https://app.dexsato.com"
         in message
     )
 
     assert (
-        "https://app.alpharadar.ai/"
+        "https://app.dexsato.com/"
         not in message
     )
 
@@ -409,7 +412,7 @@ def test_should_read_public_dashboard_url_from_environment(
 
     monkeypatch.setenv(
         "PUBLIC_DASHBOARD_URL",
-        "https://app.alpharadar.ai/",
+        "https://app.dexsato.com/",
     )
 
     message = build_change_digest_message(
@@ -418,10 +421,10 @@ def test_should_read_public_dashboard_url_from_environment(
         ],
     )
 
-    assert "Open dashboard" in message
+    assert "🔗 Dashboard:" in message
 
     assert (
-        "https://app.alpharadar.ai"
+        "https://app.dexsato.com"
         in message
     )
 
@@ -588,7 +591,7 @@ def test_should_send_change_digest():
     ]
 
     assert (
-        "Radar detected a market shift."
+        "📡 DexSato Market Update"
         in message
     )
 
@@ -654,7 +657,7 @@ def test_should_build_legacy_telegram_message():
     )
 
     assert (
-        "AlphaRadar Founder Alert"
+        "DexSato Founder Alert"
         in message
     )
 
