@@ -100,6 +100,27 @@ def test_should_keep_dashboard_search_and_filters():
     assert "formatMYT" in html
 
 
+def test_should_use_canonical_snapshot_time_when_latest_run_is_older():
+    stale_run_status = {
+        **STATUS,
+        "latest_run": {
+            **STATUS["latest_run"],
+            "generated_at": "2026-07-25T06:00:00+00:00",
+        },
+    }
+
+    html = render_dexsato_dashboard(
+        SNAPSHOT,
+        system_status=stale_run_status,
+    )
+
+    assert (
+        'data-generated-at="2026-07-30T13:32:45+00:00"'
+        in html
+    )
+    assert 'data-generated-at="2026-07-25T06:00:00+00:00"' not in html
+
+
 def test_should_build_grounded_intelligence_summary():
     summary = build_intelligence_summary(
         token="ETH",
