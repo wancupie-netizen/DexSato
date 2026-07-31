@@ -240,6 +240,7 @@ def render_dexsato_dashboard(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DexSato Market Decision Intelligence</title>
+  <link rel="icon" type="image/png" href="/static/branding/favicon.png">
   <style>
     :root{{--bg:#06111f;--panel:#0b1a2c;--panel2:#0d2034;--line:#1d3852;
       --text:#f5f8ff;--muted:#91a8c1;--violet:#8068ff;--cyan:#23d9d2;
@@ -250,9 +251,8 @@ def render_dexsato_dashboard(
     button,input{{font:inherit}} .app{{min-height:100vh;display:grid;grid-template-columns:230px 1fr}}
     .sidebar{{position:sticky;top:0;height:100vh;padding:26px 16px;border-right:1px solid #132941;
       background:linear-gradient(180deg,#06101d,#071525)}}
-    .brand{{display:flex;align-items:center;gap:11px;margin:0 14px 34px;font-size:20px;font-weight:800;letter-spacing:.08em}}
-    .brand-mark{{display:grid;place-items:center;width:38px;height:44px;border:2px solid var(--cyan);
-      color:var(--cyan);clip-path:polygon(0 0,72% 0,100% 22%,100% 78%,72% 100%,0 100%)}}
+    .brand{{display:flex;align-items:center;margin:0 8px 34px}}
+    .brand img{{display:block;width:100%;max-width:188px;height:auto}}
     nav{{display:grid;gap:9px}} nav a{{display:flex;align-items:center;gap:12px;padding:13px 15px;
       border-radius:10px;color:#bdc9da;text-decoration:none}} nav a.active{{background:#171c48;color:#a997ff}}
     nav span{{font-size:20px;width:24px;text-align:center}}
@@ -311,7 +311,9 @@ def render_dexsato_dashboard(
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brand"><span class="brand-mark">D</span> DEXSATO</div>
+    <div class="brand">
+      <img src="/static/branding/dexsato-logo.png" alt="DexSato">
+    </div>
     <nav>
       <a class="active" href="#"><span>⌂</span>Overview</a>
       <a href="#decisions"><span>◉</span>Market Radar</a>

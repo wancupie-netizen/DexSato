@@ -25,6 +25,8 @@ This module does NOT:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import requests
 
 from fastapi import (
@@ -34,6 +36,7 @@ from fastapi import (
 from fastapi.responses import (
     HTMLResponse,
 )
+from fastapi.staticfiles import StaticFiles
 
 from application.founder_snapshot_service import (
     read_latest_snapshot,
@@ -67,6 +70,14 @@ app = FastAPI(
     version=APP_VERSION,
     docs_url=None,
     redoc_url=None,
+)
+
+app.mount(
+    "/static",
+    StaticFiles(
+        directory=Path(__file__).resolve().parents[1] / "static",
+    ),
+    name="static",
 )
 
 
