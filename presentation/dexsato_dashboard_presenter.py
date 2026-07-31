@@ -213,7 +213,7 @@ def render_dexsato_dashboard(
         latest_run = {}
     telegram = _status(latest_run.get("telegram_status"), "NOT RUN YET")
     generated_at = _text(
-        latest_run.get("generated_at", snapshot.get("generated_at")),
+        snapshot.get("generated_at", latest_run.get("generated_at")),
         "Not available",
     )
     tasks = status.get("tasks", [])
