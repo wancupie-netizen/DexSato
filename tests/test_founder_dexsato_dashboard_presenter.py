@@ -72,7 +72,10 @@ def test_should_render_dexsato_north_star_ui():
     )
 
     assert "<!doctype html>" in html
-    assert "DEXSATO" in html
+    assert 'src="/static/branding/dexsato-logo.png"' in html
+    assert 'alt="DexSato"' in html
+    assert 'href="/static/branding/favicon.png"' in html
+    assert "brand-mark" not in html
     assert "Market Decision Intelligence" in html
     assert "Decision Timeline" in html
     assert "Market State" in html
