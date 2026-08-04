@@ -5,7 +5,7 @@ Run from the project root:
 
     python generate_snapshot.py
 
-The command scans the approved ten-coin V1 universe and
+The command scans the approved five-market V1 universe and
 replaces the latest shared snapshot.
 """
 
@@ -24,7 +24,7 @@ def main() -> int:
     print()
 
     print("=" * 60)
-    print("DexSato V1 — 10 Coin Snapshot")
+    print("DexSato V1 — 5 Market Snapshot")
     print("=" * 60)
 
     try:

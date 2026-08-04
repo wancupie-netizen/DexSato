@@ -52,11 +52,24 @@ def serialize_founder_dashboard_results(
             "error",
         )
 
+        market = result.get(
+            "market",
+        )
+
         if card is None:
 
             serialized.append(
                 {
                     "token": token,
+                    "pair": None,
+                    "price": None,
+                    "liquidity": None,
+                    "volume_24h": None,
+                    "market_cap": None,
+                    "fdv": None,
+                    "pair_address": None,
+                    "chain": None,
+                    "source": None,
                     "available": False,
                     "decision": None,
                     "confidence": None,
@@ -83,9 +96,24 @@ def serialize_founder_dashboard_results(
                 "an invalid DashboardCard."
             )
 
+        if not isinstance(
+            market,
+            dict,
+        ):
+            market = {}
+
         serialized.append(
             {
                 "token": card.token,
+                "pair": market.get("pair"),
+                "price": market.get("price"),
+                "liquidity": market.get("liquidity"),
+                "volume_24h": market.get("volume_24h"),
+                "market_cap": market.get("market_cap"),
+                "fdv": market.get("fdv"),
+                "pair_address": market.get("pair_address"),
+                "chain": market.get("chain"),
+                "source": market.get("source"),
                 "available": True,
                 "decision": card.decision,
                 "confidence": card.confidence,

@@ -9,7 +9,7 @@ The command:
 
 1. Loads Founder V1 configuration from the project .env file.
 2. Reads the previous stored snapshot when available.
-3. Generates a fresh ten-coin snapshot.
+3. Generates a fresh five-market snapshot.
 4. Compares the previous and current snapshots.
 5. Sends a Telegram digest only for meaningful changes.
 6. Preserves a successful snapshot when Telegram is unavailable.
@@ -44,7 +44,7 @@ This module does NOT:
 - run continuously
 - contain its own clock scheduler
 - prompt the founder for confirmation
-- send the complete ten-coin technical report
+- send the complete five-market technical report
 - retry failed runs
 - manage Windows Task Scheduler
 """

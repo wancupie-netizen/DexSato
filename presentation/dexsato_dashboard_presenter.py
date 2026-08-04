@@ -102,8 +102,40 @@ def render_coin_logo(token: object) -> str:
     )
 
 
+def format_usd(value: object) -> str:
+    """Format a market price without implying false precision."""
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "Not available"
+    if amount >= 1000:
+        return f"${amount:,.2f}"
+    if amount >= 1:
+        return f"${amount:,.4f}"
+    return f"${amount:,.6f}".rstrip("0").rstrip(".")
+
+
+def format_compact_usd(value: object) -> str:
+    """Format liquidity and other large USD market values."""
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "Not available"
+    absolute = abs(amount)
+    if absolute >= 1_000_000_000:
+        return f"${amount / 1_000_000_000:,.2f}B"
+    if absolute >= 1_000_000:
+        return f"${amount / 1_000_000:,.2f}M"
+    if absolute >= 1_000:
+        return f"${amount / 1_000:,.2f}K"
+    return f"${amount:,.2f}"
+
+
 def render_decision_card(coin: dict[str, object]) -> str:
     token = _status(coin.get("token"))
+    pair = _text(coin.get("pair") or token)
+    price = format_usd(coin.get("price"))
+    liquidity = format_compact_usd(coin.get("liquidity"))
     available = coin.get("available", False) is True
     decision = _status(
         coin.get("decision") if available else "UNAVAILABLE"
@@ -131,12 +163,14 @@ def render_decision_card(coin: dict[str, object]) -> str:
 
     return f"""
     <article class="decision-card tone-{decision.lower()}"
-        data-token="{_text(token.lower())}"
+        data-token="{_text(pair.lower())}"
         data-decision="{_text(decision.lower())}">
       <div class="coin-column">
         <div class="coin-logo">{render_coin_logo(token)}</div>
         <div>
-          <h3>{_text(token)}</h3>
+          <h3>{_text(pair)}</h3>
+          <small class="market-price">{_text(price)}</small>
+          <small class="market-liquidity">Liquidity {_text(liquidity)}</small>
           <span class="decision-pill">{_text(decision)}</span>
           <p class="confidence">Confidence <strong>{_text(confidence)}</strong></p>
         </div>
@@ -154,7 +188,9 @@ def render_decision_card(coin: dict[str, object]) -> str:
         View Decision
       </button>
       <div class="decision-detail" hidden>
-        <div><span>Market</span><strong>{_text(token)}</strong></div>
+        <div><span>Market</span><strong>{_text(pair)}</strong></div>
+        <div><span>Price</span><strong>{_text(price)}</strong></div>
+        <div><span>Liquidity</span><strong>{_text(liquidity)}</strong></div>
         <div><span>Decision</span><strong>{_text(decision)}</strong></div>
         <div><span>Confidence</span><strong>{_text(confidence)}</strong></div>
         <div><span>Memory</span><strong>{_text(memory)}</strong></div>
@@ -287,7 +323,7 @@ def render_dexsato_dashboard(
     .decision-pill{{display:inline-flex;padding:5px 10px;border:1px solid currentColor;border-radius:6px;font-size:12px;font-weight:800}}
     .tone-alert .decision-pill{{color:var(--red)}} .tone-watch .decision-pill{{color:var(--amber)}}
     .tone-review .decision-pill{{color:var(--blue)}} .confidence{{margin:12px 0 3px;color:var(--muted);font-size:12px}}
-    .confidence strong{{display:block;color:#f2c94c;font-size:13px}} .coin-column small{{color:var(--muted)}}
+    .confidence strong{{display:block;color:#f2c94c;font-size:13px}} .coin-column small{{display:block;margin-top:4px;color:var(--muted)}}
     ul{{margin:0;padding-left:18px;color:#cad7e5;font-size:14px}} li{{margin:8px 0}} .summary-column p{{margin:0;color:#bdcada;font-size:14px;line-height:1.55}}
     .decision-button{{margin-right:18px;padding:11px;border:1px solid var(--blue);border-radius:7px;background:transparent;color:#7fb0ff;cursor:pointer}}
     .decision-button:hover{{background:rgba(83,148,255,.1)}} .decision-detail{{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:15px;padding:17px 20px;border-top:1px solid #183149;background:#071522}}

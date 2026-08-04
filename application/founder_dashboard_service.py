@@ -136,6 +136,9 @@ def build_founder_dashboard_results(
             {
                 "token": normalized_token,
                 "card": card,
+                "market": scan_result.get(
+                    "event",
+                ),
                 "error": None,
             }
         )

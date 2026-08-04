@@ -7,7 +7,7 @@ Manual V1 operating workflow:
 
 The command:
 
-1. Generates the latest ten-coin market snapshot.
+1. Generates the latest five-market snapshot.
 2. Displays a concise decision summary.
 3. Asks whether the snapshot should be sent to Telegram.
 4. Sends the stored snapshot when the founder confirms.
@@ -299,7 +299,7 @@ def run_founder_daily(
 
     print_heading()
 
-    print("Generating latest 10-coin snapshot...")
+    print("Generating latest 5-market snapshot...")
     print()
 
     try:

@@ -49,6 +49,17 @@ def test_should_serialize_available_coin():
             {
                 "token": "BTC",
                 "card": build_test_card(),
+                "market": {
+                    "pair": "BTC/USDT",
+                    "price": "64202.82",
+                    "liquidity": 15149834.19,
+                    "volume_24h": 16594948.71,
+                    "market_cap": 4194770084,
+                    "fdv": 4194770084,
+                    "pair_address": "0xpool",
+                    "chain": "bsc",
+                    "source": "DexScreener",
+                },
                 "error": None,
             }
         ]
@@ -57,6 +68,14 @@ def test_should_serialize_available_coin():
     assert result["token"] == "BTC"
 
     assert result["available"] is True
+
+    assert result["pair"] == "BTC/USDT"
+
+    assert result["price"] == "64202.82"
+
+    assert result["liquidity"] == 15149834.19
+
+    assert result["source"] == "DexScreener"
 
     assert result["decision"] == "WATCH"
 
@@ -91,6 +110,10 @@ def test_should_serialize_unavailable_coin():
     assert result["token"] == "ETH"
 
     assert result["available"] is False
+
+    assert result["pair"] is None
+
+    assert result["price"] is None
 
     assert result["decision"] is None
 

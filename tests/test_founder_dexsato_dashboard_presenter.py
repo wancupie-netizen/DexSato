@@ -2,6 +2,8 @@
 
 from presentation.dexsato_dashboard_presenter import (
     build_intelligence_summary,
+    format_compact_usd,
+    format_usd,
     render_decision_card,
     render_dexsato_dashboard,
 )
@@ -15,6 +17,9 @@ SNAPSHOT = {
     "coins": [
         {
             "token": "BTC",
+            "pair": "BTC/USDT",
+            "price": "64202.82",
+            "liquidity": 15149834.19,
             "available": True,
             "decision": "WATCH",
             "confidence": "MEDIUM",
@@ -56,6 +61,9 @@ def test_should_render_real_decision_card():
     html = render_decision_card(SNAPSHOT["coins"][0])
 
     assert "BTC" in html
+    assert "BTC/USDT" in html
+    assert "$64,202.82" in html
+    assert "Liquidity $15.15M" in html
     assert "WATCH" in html
     assert "Decision Evidence" in html
     assert "Intelligence Summary" in html
@@ -63,6 +71,14 @@ def test_should_render_real_decision_card():
     assert "/1.png" in html
     assert "Historical" not in html
     assert "decision-detail" in html
+
+
+def test_should_format_market_values():
+    assert format_usd("1871.3") == "$1,871.30"
+    assert format_usd("1.077") == "$1.0770"
+    assert format_usd("0.6936") == "$0.6936"
+    assert format_compact_usd(99221150.8) == "$99.22M"
+    assert format_usd(None) == "Not available"
 
 
 def test_should_render_dexsato_north_star_ui():

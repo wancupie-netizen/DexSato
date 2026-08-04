@@ -82,6 +82,11 @@ def test_should_scan_v1_tokens_by_default():
 
         return {
             "success": True,
+            "event": {
+                "pair": f"{token}/USDT",
+                "price": "100.00",
+                "liquidity": 1_000_000,
+            },
             "dashboard": build_test_card(
                 token,
             ),
@@ -105,6 +110,10 @@ def test_should_scan_v1_tokens_by_default():
     assert len(
         results,
     ) == 5
+
+    assert results[0]["market"]["pair"] == (
+        "BTC/USDT"
+    )
 
 
 def test_should_accept_explicit_token_collection():
