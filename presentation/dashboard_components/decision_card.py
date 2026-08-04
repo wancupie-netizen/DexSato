@@ -1,5 +1,5 @@
 """
-AlphaRadar Decision Card Component.
+DexSato Decision Card Component.
 
 Renders the primary market decision and confidence state
 for Dashboard V2.
@@ -130,7 +130,7 @@ def render_decision_card(
     confidence: str,
 ) -> str:
     """
-    Render the primary AlphaRadar Decision card.
+    Render the primary DexSato Decision card.
 
     Parameters
     ----------
@@ -193,7 +193,7 @@ def render_decision_card(
         title="Market Decision",
 
         subtitle=(
-            "Current AlphaRadar recommendation "
+            "Current DexSato recommendation "
             "and confidence classification."
         ),
 

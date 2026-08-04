@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Knowledge Fingerprint.
+Tests for DexSato Knowledge Fingerprint.
 
 Responsibilities
 ----------------

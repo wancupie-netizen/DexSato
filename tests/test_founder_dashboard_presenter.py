@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Founder Dashboard Presenter.
+Tests for DexSato Founder Dashboard Presenter.
 """
 
 from datetime import datetime, timezone
@@ -129,7 +129,7 @@ def test_should_render_five_coin_dashboard():
 
     assert "<!DOCTYPE html>" in html
 
-    assert "AlphaRadar Market Intelligence" in html
+    assert "DexSato Market Intelligence" in html
 
     assert "BTC" in html
 

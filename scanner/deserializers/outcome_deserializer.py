@@ -1,5 +1,5 @@
 """
-AlphaRadar Outcome Deserializer
+DexSato Outcome Deserializer
 
 Deserialize stored Outcome payloads into
 official OutcomeArtifact objects.

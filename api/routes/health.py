@@ -1,5 +1,5 @@
 """
-AlphaRadar Health Route
+DexSato Health Route
 
 Health endpoint for service monitoring.
 
@@ -25,7 +25,7 @@ def health():
 
         "status": "ok",
 
-        "service": "AlphaRadar API",
+        "service": "DexSato API",
 
         "version": "0.9.0-alpha",
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Fingerprint
+DexSato Knowledge Fingerprint
 
 Build stable Knowledge fingerprints from
 LearningArtifacts.

@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Context Builder.
+Tests for DexSato Context Builder.
 """
 
 from scanner.context_builder import build_context

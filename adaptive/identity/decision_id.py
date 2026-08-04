@@ -1,5 +1,5 @@
 """
-AlphaRadar Adaptive Intelligence
+DexSato Adaptive Intelligence
 Decision ID Generator
 
 Responsibilities

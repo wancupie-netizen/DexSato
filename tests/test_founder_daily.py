@@ -1,5 +1,5 @@
 """
-Tests for the AlphaRadar Founder Daily command.
+Tests for the DexSato Founder Daily command.
 """
 
 from founder_daily import (

@@ -1,5 +1,5 @@
 """
-AlphaRadar Learning Deserializer
+DexSato Learning Deserializer
 
 Deserialize stored Learning payloads into
 official LearningArtifact objects.

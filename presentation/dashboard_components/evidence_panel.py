@@ -1,8 +1,8 @@
 """
-AlphaRadar Evidence Panel.
+DexSato Evidence Panel.
 
 Displays the supporting evidence behind the current
-AlphaRadar decision.
+DexSato decision.
 
 Responsibilities
 ----------------
@@ -115,7 +115,7 @@ def render_evidence_panel(
 
         subtitle=(
             "Signals supporting the current "
-            "AlphaRadar decision."
+            "DexSato decision."
         ),
 
         content=content,

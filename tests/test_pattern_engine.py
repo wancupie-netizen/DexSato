@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Pattern Engine.
+Tests for DexSato Pattern Engine.
 """
 
 from scanner.pattern_engine import detect_patterns

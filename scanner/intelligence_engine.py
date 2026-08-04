@@ -1,5 +1,5 @@
 """
-AlphaRadar Intelligence Engine
+DexSato Intelligence Engine
 
 Build a complete Intelligence Package.
 

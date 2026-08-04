@@ -1,5 +1,5 @@
 """
-AlphaRadar Decision Gate Test
+DexSato Decision Gate Test
 
 Validate Decision Gate behaviour.
 

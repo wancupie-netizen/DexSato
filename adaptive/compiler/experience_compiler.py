@@ -1,5 +1,5 @@
 """
-AlphaRadar Experience Compiler
+DexSato Experience Compiler
 
 Compile Learning into Experience.
 

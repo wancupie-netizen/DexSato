@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder MVP Launcher.
+DexSato Founder MVP Launcher.
 
 Run from the project root:
 
@@ -15,7 +15,7 @@ from app.main import run
 
 def main() -> None:
     """
-    Start the AlphaRadar Founder MVP web application.
+    Start the DexSato Founder MVP web application.
     """
 
     run()

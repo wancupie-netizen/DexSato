@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder Dashboard Shared Data.
+DexSato Founder Dashboard Shared Data.
 
 Converts Founder Dashboard scan results into a small,
 serializable data structure shared by the API and Telegram.

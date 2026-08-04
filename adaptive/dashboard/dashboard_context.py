@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Context
+DexSato Dashboard Context
 
 View model exposed to Dashboard.
 

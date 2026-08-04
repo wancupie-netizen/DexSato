@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Request Builder
+DexSato Dashboard Request Builder
 
 Build DashboardRequest from
 DecisionArtifact.

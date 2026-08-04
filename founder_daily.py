@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder Daily Command.
+DexSato Founder Daily Command.
 
 Manual V1 operating workflow:
 
@@ -54,7 +54,7 @@ def print_heading() -> None:
 
     print()
     print("=" * 60)
-    print("AlphaRadar Founder Daily")
+    print("DexSato Founder Daily")
     print("=" * 60)
     print()
 
@@ -110,7 +110,7 @@ def print_snapshot_summary(
     ):
 
         raise RuntimeError(
-            "Latest AlphaRadar snapshot coin data is invalid."
+            "Latest DexSato snapshot coin data is invalid."
         )
 
     counts = build_decision_counts(
@@ -410,7 +410,7 @@ def run_founder_daily(
 
 def main() -> int:
     """
-    Execute the AlphaRadar Founder Daily command.
+    Execute the DexSato Founder Daily command.
     """
 
     return run_founder_daily()

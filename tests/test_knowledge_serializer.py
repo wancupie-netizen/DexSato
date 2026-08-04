@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Knowledge Serializer.
+Tests for DexSato Knowledge Serializer.
 """
 
 from decimal import Decimal

@@ -1,5 +1,5 @@
 """
-AlphaRadar Adaptive Dashboard Service
+DexSato Adaptive Dashboard Service
 
 Application orchestration layer
 for DashboardCard creation.

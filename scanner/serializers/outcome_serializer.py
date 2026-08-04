@@ -1,5 +1,5 @@
 """
-AlphaRadar Outcome Serializer
+DexSato Outcome Serializer
 
 Serialize OutcomeArtifact into a database payload.
 

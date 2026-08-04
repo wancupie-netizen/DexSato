@@ -1,5 +1,5 @@
 """
-AlphaRadar Decision Snapshot
+DexSato Decision Snapshot
 
 Immutable snapshot captured immediately after a market decision.
 
@@ -28,7 +28,7 @@ class DecisionSnapshot:
     Immutable Decision Snapshot.
 
     A Decision Snapshot represents the complete cognitive state
-    of AlphaRadar immediately after the Decision Engine
+    of DexSato immediately after the Decision Engine
     produces its recommendation.
     """
 

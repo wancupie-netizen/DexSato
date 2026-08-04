@@ -1,5 +1,5 @@
 """
-Tests for the AlphaRadar Founder Scheduler.
+Tests for the DexSato Founder Scheduler.
 """
 
 from founder_scheduler import (

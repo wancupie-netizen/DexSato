@@ -1,5 +1,5 @@
 """
-AlphaRadar Learning Artifact
+DexSato Learning Artifact
 
 Official output produced by the Learning Engine.
 

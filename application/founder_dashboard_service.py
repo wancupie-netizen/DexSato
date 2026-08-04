@@ -1,7 +1,7 @@
 """
-AlphaRadar Founder Dashboard Service.
+DexSato Founder Dashboard Service.
 
-Runs the existing AlphaRadar engine sequentially for the
+Runs the existing DexSato engine sequentially for the
 approved V1 active market universe.
 
 V1 Active Markets
@@ -85,7 +85,7 @@ def build_founder_dashboard_results(
     scan: Callable[[str], dict] = run_scan,
 ) -> list[dict[str, object]]:
     """
-    Run sequential AlphaRadar scans.
+    Run sequential DexSato scans.
 
     When no explicit token collection is supplied, the
     approved V1 ten-coin universe is used.

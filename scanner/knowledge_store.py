@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Store
+DexSato Knowledge Store
 
 Persist and retrieve Knowledge Artifacts.
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar Scanner Configuration
+DexSato Scanner Configuration
 
 Centralized runtime configuration for
 Production Runner.

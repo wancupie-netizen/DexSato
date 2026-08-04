@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Preview Entry Point.
+DexSato Dashboard Preview Entry Point.
 
 Creates a standalone DashboardCard preview,
 renders it as HTML, saves the generated document,
@@ -45,7 +45,7 @@ OUTPUT_FILE = OUTPUT_DIRECTORY / "dashboard_preview.html"
 
 def build_preview_dashboard_card() -> DashboardCard:
     """
-    Build a representative AlphaRadar DashboardCard.
+    Build a representative DexSato DashboardCard.
 
     This sample will later be replaced by real stored
     Intelligence and Adaptive history.
@@ -163,7 +163,7 @@ def open_dashboard_preview(
 
 def main() -> Path:
     """
-    Generate and open the first AlphaRadar Dashboard.
+    Generate and open the first DexSato Dashboard.
     """
 
     print()
@@ -171,7 +171,7 @@ def main() -> Path:
     print("=" * 60)
 
     print(
-        "AlphaRadar Dashboard Preview"
+        "DexSato Dashboard Preview"
     )
 
     print("=" * 60)

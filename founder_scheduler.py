@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder Scheduler.
+DexSato Founder Scheduler.
 
 Single-run automated V1 workflow:
 
@@ -249,7 +249,7 @@ def execute_founder_scheduler(
     ] = send_change_digest,
 ) -> dict[str, object]:
     """
-    Execute one complete automated AlphaRadar run.
+    Execute one complete automated DexSato run.
 
     Snapshot generation and change comparison errors propagate
     to the command-line wrapper.
@@ -369,7 +369,7 @@ def print_heading() -> None:
 
     print()
     print("=" * CONSOLE_WIDTH)
-    print("AlphaRadar Founder Automation")
+    print("DexSato Founder Automation")
     print("=" * CONSOLE_WIDTH)
     print()
 

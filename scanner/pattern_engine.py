@@ -1,5 +1,5 @@
 """
-AlphaRadar Pattern Engine
+DexSato Pattern Engine
 
 Run every registered historical pattern detector.
 """

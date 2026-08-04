@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Knowledge Gate.
+Tests for DexSato Knowledge Gate.
 
 Responsibilities
 ----------------

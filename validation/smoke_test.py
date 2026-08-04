@@ -1,9 +1,9 @@
 """
-AlphaRadar Smoke Test
+DexSato Smoke Test
 
 Purpose
 -------
-Verify that all core AlphaRadar modules can be imported successfully.
+Verify that all core DexSato modules can be imported successfully.
 
 Smoke Test only checks module availability.
 

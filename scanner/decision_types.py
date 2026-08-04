@@ -1,5 +1,5 @@
 """
-AlphaRadar Decision Types
+DexSato Decision Types
 
 Decision Types represent the final recommendation produced by the
 Decision Engine.

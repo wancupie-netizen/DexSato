@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Live Dashboard Entry Point.
+Tests for DexSato Live Dashboard Entry Point.
 """
 
 from datetime import datetime, timezone

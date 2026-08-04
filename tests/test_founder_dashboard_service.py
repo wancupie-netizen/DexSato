@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Founder Dashboard Service.
+Tests for DexSato Founder Dashboard Service.
 """
 
 from datetime import (

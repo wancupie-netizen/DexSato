@@ -1,5 +1,5 @@
 """
-AlphaRadar Windows Scheduler Uninstaller.
+DexSato Windows Scheduler Uninstaller.
 
 Usage:
 
@@ -7,10 +7,10 @@ Usage:
 
 The uninstaller:
 
-1. Removes the three AlphaRadar scheduled tasks.
+1. Removes the three DexSato scheduled tasks.
 2. Removes the generated machine-local command runner.
 3. Preserves .env configuration.
-4. Preserves snapshots and AlphaRadar data.
+4. Preserves snapshots and DexSato data.
 5. Preserves all source code.
 
 The command is safe to run more than once.
@@ -46,7 +46,7 @@ def print_heading() -> None:
 
     print()
     print("=" * CONSOLE_WIDTH)
-    print("AlphaRadar Windows Scheduler Uninstaller")
+    print("DexSato Windows Scheduler Uninstaller")
     print("=" * CONSOLE_WIDTH)
     print()
 
@@ -232,7 +232,7 @@ def run_scheduler_uninstaller(
 
 def main() -> int:
     """
-    Remove AlphaRadar Windows scheduled tasks.
+    Remove DexSato Windows scheduled tasks.
     """
 
     return run_scheduler_uninstaller()

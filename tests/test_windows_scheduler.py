@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Windows Scheduler.
+Tests for DexSato Windows Scheduler.
 """
 
 import subprocess
@@ -112,7 +112,7 @@ def test_should_write_runner_file(
 
     project_root = (
         tmp_path
-        / "AlphaRadar"
+        / "DexSato"
     )
 
     project_root.mkdir()
@@ -251,7 +251,7 @@ def test_should_build_schtasks_create_command(
     )
 
     result = build_create_task_command(
-        task_name="AlphaRadar Founder Scan 1",
+        task_name="DexSato Founder Scan 1",
         scan_time="08:00",
         runner_file=runner_file,
     )
@@ -260,7 +260,7 @@ def test_should_build_schtasks_create_command(
         "schtasks.exe",
         "/Create",
         "/TN",
-        "AlphaRadar Founder Scan 1",
+        "DexSato Founder Scan 1",
         "/TR",
         f'"{runner_file.resolve()}"',
         "/SC",
@@ -509,7 +509,7 @@ def test_should_include_task_name_in_registration_error(
     with pytest.raises(
         RuntimeError,
         match=(
-            "AlphaRadar Founder Scan 1"
+            "DexSato Founder Scan 1"
         ),
     ):
 

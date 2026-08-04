@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Deserializer
+DexSato Knowledge Deserializer
 
 Deserialize stored Knowledge payloads into
 official KnowledgeArtifact objects.

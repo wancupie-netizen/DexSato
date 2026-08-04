@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Knowledge Artifact.
+Tests for DexSato Knowledge Artifact.
 """
 
 from decimal import Decimal

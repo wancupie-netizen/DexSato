@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Decision Card Component.
+Tests for DexSato Decision Card Component.
 """
 
 import pytest

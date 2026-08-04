@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Signal Detector.
+Tests for DexSato Signal Detector.
 
 Responsibilities
 ----------------

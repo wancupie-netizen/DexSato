@@ -1,5 +1,5 @@
 """
-AlphaRadar Fingerprint Builder
+DexSato Fingerprint Builder
 
 Build decision fingerprint from
 Intelligence Package.

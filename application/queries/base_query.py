@@ -1,5 +1,5 @@
 """
-AlphaRadar Base Query
+DexSato Base Query
 
 Official foundation for all Product Layer queries.
 

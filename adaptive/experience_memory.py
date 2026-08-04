@@ -8,7 +8,7 @@ from typing import Any
 @dataclass(frozen=True)
 class Experience:
     """
-    Immutable record of a single AlphaRadar decision experience.
+    Immutable record of a single DexSato decision experience.
     """
 
     decision_id: str

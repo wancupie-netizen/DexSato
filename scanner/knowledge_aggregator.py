@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Aggregator
+DexSato Knowledge Aggregator
 
 Transform a LearningArtifact into a reusable
 KnowledgeArtifact.

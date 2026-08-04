@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Collection Service
+DexSato Dashboard Collection Service
 
 Application orchestration layer for building
 multiple DashboardCard artifacts.

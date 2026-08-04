@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Adapter
+DexSato Dashboard Adapter
 
 Build DashboardContext from Core Decision
 and Adaptive Evidence.

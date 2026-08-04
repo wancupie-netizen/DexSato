@@ -1,5 +1,5 @@
 """
-AlphaRadar Adaptive Experience Store.
+DexSato Adaptive Experience Store.
 
 Supabase persistence adapter for serialized
 ExperienceArtifact payloads.

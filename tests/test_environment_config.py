@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Environment Configuration.
+Tests for DexSato Environment Configuration.
 """
 
 import os

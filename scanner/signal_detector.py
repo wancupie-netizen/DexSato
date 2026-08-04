@@ -1,5 +1,5 @@
 """
-AlphaRadar Signal Detector
+DexSato Signal Detector
 
 Convert normalized market observations into atomic signals.
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar Validation Suite
+DexSato Validation Suite
 
 Entry point for all engineering validation.
 
@@ -38,7 +38,7 @@ def print_header():
 
     print()
     print("=" * 60)
-    print("AlphaRadar Validation Suite")
+    print("DexSato Validation Suite")
     print("=" * 60)
     print("Version : v0.8.2-alpha")
     print()

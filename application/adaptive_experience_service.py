@@ -1,5 +1,5 @@
 """
-AlphaRadar Adaptive Experience Service.
+DexSato Adaptive Experience Service.
 
 Application service responsible for converting a completed
 LearningArtifact into an ExperienceArtifact and recording it

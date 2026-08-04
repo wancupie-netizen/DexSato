@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Observation Builder.
+Tests for DexSato Observation Builder.
 """
 
 from scanner.observation_builder import (

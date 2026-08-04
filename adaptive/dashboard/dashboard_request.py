@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Request
+DexSato Dashboard Request
 
 Official input contract for the
 Adaptive Dashboard Service.

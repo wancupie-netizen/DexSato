@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Explanation Engine.
+Tests for DexSato Explanation Engine.
 """
 
 from scanner.models import PatternResult

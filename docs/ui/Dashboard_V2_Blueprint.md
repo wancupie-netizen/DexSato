@@ -1,4 +1,4 @@
-# AlphaRadar Dashboard V2 Blueprint
+# DexSato Dashboard V2 Blueprint
 
 Version: 1.0
 
@@ -8,7 +8,7 @@ Status: Architecture Locked
 
 # Objective
 
-Dashboard V2 represents the primary interface of AlphaRadar.
+Dashboard V2 represents the primary interface of DexSato.
 
 The dashboard must:
 

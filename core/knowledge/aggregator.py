@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Aggregator
+DexSato Knowledge Aggregator
 
 Build KnowledgeArtifact objects from
 historical LearningArtifacts.

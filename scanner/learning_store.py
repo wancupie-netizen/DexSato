@@ -1,5 +1,5 @@
 """
-AlphaRadar Learning Store
+DexSato Learning Store
 
 Persist and retrieve Learning Artifacts.
 

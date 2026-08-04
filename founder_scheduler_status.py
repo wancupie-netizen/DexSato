@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder Scheduler Status.
+DexSato Founder Scheduler Status.
 
 Usage:
 
@@ -9,7 +9,7 @@ The command:
 
 1. Loads Founder V1 environment configuration.
 2. Queries the three Windows scheduled tasks.
-3. Checks the latest AlphaRadar snapshot.
+3. Checks the latest DexSato snapshot.
 4. Determines overall automation health.
 5. Prints one founder-friendly terminal report.
 6. Returns an operating-system exit code.
@@ -17,14 +17,14 @@ The command:
 Exit codes
 ----------
 0
-    AlphaRadar Founder is HEALTHY.
+    DexSato Founder is HEALTHY.
 
 1
-    AlphaRadar Founder is FAILED or the status check itself
+    DexSato Founder is FAILED or the status check itself
     could not be completed.
 
 2
-    AlphaRadar Founder is DEGRADED and requires attention.
+    DexSato Founder is DEGRADED and requires attention.
 
 This module does NOT:
 - register Windows scheduled tasks
@@ -101,7 +101,7 @@ def print_status_failure(
 
     print()
     print("=" * 60)
-    print("AlphaRadar Founder Health")
+    print("DexSato Founder Health")
     print("=" * 60)
     print()
 
@@ -124,7 +124,7 @@ def print_status_failure(
     )
 
     print(
-        "AlphaRadar Founder status "
+        "DexSato Founder status "
         "could not be determined."
     )
 
@@ -218,7 +218,7 @@ def run_founder_status(
 
 def main() -> int:
     """
-    Execute one AlphaRadar Founder health check.
+    Execute one DexSato Founder health check.
     """
 
     return run_founder_status()

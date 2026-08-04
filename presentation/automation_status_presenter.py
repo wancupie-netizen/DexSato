@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder Automation Status Presenter.
+DexSato Founder Automation Status Presenter.
 
 Formats the Founder V1 automation health status for terminal
 display.
@@ -60,13 +60,13 @@ STATUS_SYMBOLS = {
 
 OVERALL_MESSAGES = {
     "HEALTHY": (
-        "AlphaRadar Founder is healthy."
+        "DexSato Founder is healthy."
     ),
     "DEGRADED": (
-        "AlphaRadar Founder is running with warnings."
+        "DexSato Founder is running with warnings."
     ),
     "FAILED": (
-        "AlphaRadar Founder requires attention."
+        "DexSato Founder requires attention."
     ),
 }
 
@@ -315,7 +315,7 @@ def short_task_name(
         "\\",
     )
 
-    prefix = "AlphaRadar Founder "
+    prefix = "DexSato Founder "
 
     if normalized.startswith(
         prefix,
@@ -852,7 +852,7 @@ def build_overall_health_lines(
     message = OVERALL_MESSAGES.get(
         overall_health,
         (
-            "AlphaRadar Founder health "
+            "DexSato Founder health "
             "could not be determined."
         ),
     )
@@ -941,7 +941,7 @@ def build_automation_status_lines(
     lines = [
         "",
         "=" * CONSOLE_WIDTH,
-        "AlphaRadar Founder Health",
+        "DexSato Founder Health",
         "=" * CONSOLE_WIDTH,
         "",
     ]

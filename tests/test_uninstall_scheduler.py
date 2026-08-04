@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Windows Scheduler Uninstall.
+Tests for DexSato Windows Scheduler Uninstall.
 """
 
 import subprocess
@@ -30,14 +30,14 @@ def test_should_build_delete_task_command():
     """
 
     result = build_delete_task_command(
-        task_name="AlphaRadar Founder Scan 1",
+        task_name="DexSato Founder Scan 1",
     )
 
     assert result == [
         "schtasks.exe",
         "/Delete",
         "/TN",
-        "AlphaRadar Founder Scan 1",
+        "DexSato Founder Scan 1",
         "/F",
     ]
 

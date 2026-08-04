@@ -1,5 +1,5 @@
 """
-AlphaRadar Evidence Artifact
+DexSato Evidence Artifact
 
 Immutable domain model representing evidence
 derived from historical Experience.

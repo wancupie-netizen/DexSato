@@ -1,5 +1,5 @@
 """
-AlphaRadar Interpretation Engine
+DexSato Interpretation Engine
 
 Convert atomic market signals into market interpretations.
 

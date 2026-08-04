@@ -1,5 +1,5 @@
 """
-AlphaRadar Token Assembler
+DexSato Token Assembler
 
 Application Assembler responsible for converting
 Token Query data into TokenDetailDTO.

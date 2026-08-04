@@ -1,8 +1,8 @@
 """
-AlphaRadar V1 Snapshot Dashboard Presenter.
+DexSato V1 Snapshot Dashboard Presenter.
 
 Renders the latest stored V1 market snapshot without
-running the AlphaRadar engine.
+running the DexSato engine.
 
 Responsibilities
 ----------------
@@ -330,7 +330,7 @@ def render_founder_snapshot_dashboard(
     system_status: dict[str, object] | None = None,
 ) -> str:
     """
-    Render the complete AlphaRadar V1 snapshot dashboard.
+    Render the complete DexSato V1 snapshot dashboard.
     """
 
     if not isinstance(
@@ -503,7 +503,7 @@ def render_founder_snapshot_dashboard(
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>AlphaRadar Market Intelligence</title>
+    <title>DexSato Market Intelligence</title>
 
     <style>
         {shared_css}
@@ -1205,7 +1205,7 @@ def render_founder_snapshot_dashboard(
         <header class="snapshot-header">
             <div class="header-topline">
                 <p class="snapshot-kicker">
-                    AlphaRadar V1
+                    DexSato V1
                 </p>
 
                 <div class="live-indicator">
@@ -1215,7 +1215,7 @@ def render_founder_snapshot_dashboard(
             </div>
 
             <h1 class="snapshot-title">
-                AlphaRadar Market Intelligence
+                DexSato Market Intelligence
             </h1>
 
             <p class="snapshot-description">
@@ -1228,7 +1228,7 @@ def render_founder_snapshot_dashboard(
                 <div
                     class="radar-wrap"
                     role="img"
-                    aria-label="AlphaRadar active radar"
+                    aria-label="DexSato active radar"
                 >
                     <span class="radar-sweep"></span>
                     <span class="radar-target"></span>
@@ -1246,7 +1246,7 @@ def render_founder_snapshot_dashboard(
 
                 <p class="system-subtitle">
                     Dashboard is reading the latest completed
-                    AlphaRadar engine snapshot.
+                    DexSato engine snapshot.
                 </p>
 
                 <span

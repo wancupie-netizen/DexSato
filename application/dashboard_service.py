@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Service
+DexSato Dashboard Service
 
 Application orchestration layer
 for DashboardContext creation.

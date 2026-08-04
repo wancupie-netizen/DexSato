@@ -1,5 +1,5 @@
 """
-AlphaRadar Token Mapper
+DexSato Token Mapper
 
 Translate Core Artifacts into Token Detail DTOs.
 

@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar models.
+Tests for DexSato models.
 """
 
 from scanner.models import ExplanationResult

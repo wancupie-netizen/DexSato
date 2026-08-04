@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Summary
+DexSato Knowledge Summary
 
 Summarize historical Intelligence Events.
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar History Service
+DexSato History Service
 
 Application service for Historical Intelligence.
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar V1 FastAPI Application.
+DexSato V1 FastAPI Application.
 
 Official launcher:
 
@@ -56,7 +56,7 @@ from presentation.dexsato_dashboard_presenter import (
 render_founder_snapshot_dashboard = render_dexsato_dashboard
 
 
-APP_TITLE = "AlphaRadar V1"
+APP_TITLE = "DexSato V1"
 
 APP_VERSION = "1.0.0"
 
@@ -83,7 +83,7 @@ app.mount(
 
 def load_current_snapshot() -> dict[str, object]:
     """
-    Read the latest generated AlphaRadar snapshot.
+    Read the latest generated DexSato snapshot.
     """
 
     return read_latest_snapshot()
@@ -106,7 +106,7 @@ def build_current_dashboard_data() -> list[dict[str, object]]:
     ):
 
         raise RuntimeError(
-            "Latest AlphaRadar snapshot coin data is invalid."
+            "Latest DexSato snapshot coin data is invalid."
         )
 
     return coins
@@ -241,7 +241,7 @@ def health_check() -> dict[str, str]:
 
 def run() -> None:
     """
-    Start the AlphaRadar V1 server.
+    Start the DexSato V1 server.
     """
 
     import uvicorn

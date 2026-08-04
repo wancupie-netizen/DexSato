@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Gate
+DexSato Knowledge Gate
 
 Decide whether an Intelligence Package deserves
 to become persistent knowledge.

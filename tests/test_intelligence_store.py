@@ -1,5 +1,5 @@
 """
-AlphaRadar Intelligence Store Test
+DexSato Intelligence Store Test
 
 This test verifies that Intelligence Store
 accepts a serialized payload.

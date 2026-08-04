@@ -7,7 +7,7 @@
 
 **Related Documents:**
 
-- `docs/architecture/AlphaRadar_Architecture.md`
+- `docs/architecture/DexSato_Architecture.md`
 - `docs/architecture/ADR/ADR-001_Artifact_Ownership.md`
 - `docs/architecture/ADR/ADR-002_Folder_Responsibility.md`
 - `docs/architecture/ADR/ADR-003_Dependency_Rules.md`
@@ -17,7 +17,7 @@
 
 ## 1. Context
 
-AlphaRadar persists several categories of data:
+DexSato persists several categories of data:
 
 - market events,
 - Intelligence Packages,
@@ -45,7 +45,7 @@ A formal persistence boundary is required.
 
 ## 2. Decision
 
-AlphaRadar adopts the following official persistence flow:
+DexSato adopts the following official persistence flow:
 
 ```text
 Domain or Engine Artifact
@@ -462,7 +462,7 @@ differently.
 ### Ignore legacy compatibility
 
 Rejected because historical Intelligence and Learning records are part
-of AlphaRadar's accumulated knowledge.
+of DexSato's accumulated knowledge.
 
 ---
 
@@ -485,7 +485,7 @@ Before changing persistence code:
 
 ## 22. Final Decision
 
-AlphaRadar adopts explicit persistence boundaries.
+DexSato adopts explicit persistence boundaries.
 
 Artifacts are serialized before storage.
 

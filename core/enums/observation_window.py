@@ -1,5 +1,5 @@
 """
-AlphaRadar Observation Window
+DexSato Observation Window
 
 Official observation windows supported by
 the Lifecycle Engine.
@@ -20,7 +20,7 @@ from enum import StrEnum
 class ObservationWindow(StrEnum):
     """
     Official observation windows used
-    throughout AlphaRadar.
+    throughout DexSato.
     """
 
     MINUTES_15 = "15M"

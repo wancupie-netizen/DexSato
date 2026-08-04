@@ -1,5 +1,5 @@
 """
-AlphaRadar Experience Deserializer.
+DexSato Experience Deserializer.
 
 Restores ExperienceArtifact from a persistence payload.
 

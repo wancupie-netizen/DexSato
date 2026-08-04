@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Theme.
+DexSato Dashboard Theme.
 
 Centralised visual language for every Dashboard presenter.
 
@@ -128,7 +128,7 @@ def decision_colour(
 
 def build_dashboard_css() -> str:
     """
-    Build the shared AlphaRadar Dashboard V2 CSS.
+    Build the shared DexSato Dashboard V2 CSS.
     """
 
     return f"""

@@ -1,5 +1,5 @@
 """
-AlphaRadar Token Service
+DexSato Token Service
 
 Application Service responsible for the
 Token Detail use case.

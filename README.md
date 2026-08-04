@@ -1,8 +1,8 @@
-# AlphaRadar Founder MVP
+# DexSato Founder MVP
 
-AlphaRadar is an AI-assisted crypto market intelligence engine.
+DexSato is an AI-assisted crypto market intelligence engine.
 
-Founder MVP demonstrates how AlphaRadar analyses multiple markets, produces trading intelligence, displays the results in a web dashboard and sends the same intelligence to Telegram.
+Founder MVP demonstrates how DexSato analyses multiple markets, produces trading intelligence, displays the results in a web dashboard and sends the same intelligence to Telegram.
 
 ---
 
@@ -36,13 +36,13 @@ Python 3.14+
 Clone the repository.
 
 ```bash
-git clone https://github.com/wancupie-netizen/AlphaRadar.git
+git clone https://github.com/wancupie-netizen/DexSato.git
 ```
 
 Enter the project.
 
 ```bash
-cd AlphaRadar
+cd DexSato
 ```
 
 Install dependencies.
@@ -57,7 +57,7 @@ pip install -r requirements.txt
 
 Create a Telegram Bot using BotFather.
 
-Set the environment variables before starting AlphaRadar.
+Set the environment variables before starting DexSato.
 
 Windows PowerShell
 
@@ -77,7 +77,7 @@ export TELEGRAM_CHAT_ID="YOUR_CHAT_ID"
 
 # Run
 
-Start AlphaRadar.
+Start DexSato.
 
 ```bash
 python main.py

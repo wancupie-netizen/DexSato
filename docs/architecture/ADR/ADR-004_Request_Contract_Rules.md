@@ -7,7 +7,7 @@
 
 **Related Documents:**
 
-- `docs/architecture/AlphaRadar_Architecture.md`
+- `docs/architecture/DexSato_Architecture.md`
 - `docs/architecture/ADR/ADR-001_Artifact_Ownership.md`
 - `docs/architecture/ADR/ADR-002_Folder_Responsibility.md`
 - `docs/architecture/ADR/ADR-003_Dependency_Rules.md`
@@ -16,7 +16,7 @@
 
 ## 1. Context
 
-AlphaRadar Application services previously accepted collections of
+DexSato Application services previously accepted collections of
 primitive parameters such as:
 
 - token,
@@ -67,7 +67,7 @@ contains multiple related values that represent one operation.
 
 ## 2. Decision
 
-AlphaRadar adopts formal request contracts for Application services.
+DexSato adopts formal request contracts for Application services.
 
 When a request artifact exists, all consumers must use that artifact.
 
@@ -466,7 +466,7 @@ Before creating or changing an Application service:
 
 ## 17. Final Decision
 
-AlphaRadar adopts formal request artifact governance.
+DexSato adopts formal request artifact governance.
 
 Builders construct requests.
 

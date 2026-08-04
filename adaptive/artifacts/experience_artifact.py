@@ -1,5 +1,5 @@
 """
-AlphaRadar Experience Artifact
+DexSato Experience Artifact
 
 Immutable domain model representing accumulated
 historical experience derived from one or more

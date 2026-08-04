@@ -1,5 +1,5 @@
 """
-AlphaRadar Experience Serializer.
+DexSato Experience Serializer.
 
 Converts ExperienceArtifact into a persistence-safe payload.
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar CoinMarketCap Universe.
+DexSato CoinMarketCap Universe.
 
 Loads the current Top 100 cryptocurrencies ranked by
 market capitalisation.
@@ -16,7 +16,7 @@ Environment variables
 COINMARKETCAP_API_KEY
 
 This module does NOT:
-- run AlphaRadar scans
+- run DexSato scans
 - render dashboards
 - send Telegram alerts
 - schedule universe refreshes

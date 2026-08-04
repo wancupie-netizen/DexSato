@@ -1,5 +1,5 @@
 """
-AlphaRadar Observation Builder
+DexSato Observation Builder
 
 Build market observations by comparing market events.
 

@@ -19,7 +19,7 @@ def test_should_render_dashboard_header():
 
     )
 
-    assert "AlphaRadar" in html
+    assert "DexSato" in html
 
     assert "BTC" in html
 

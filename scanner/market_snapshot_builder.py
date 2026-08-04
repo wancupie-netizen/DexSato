@@ -1,5 +1,5 @@
 """
-AlphaRadar Market Snapshot Builder
+DexSato Market Snapshot Builder
 
 Build a Domain MarketSnapshot from a
 normalized Market Event.

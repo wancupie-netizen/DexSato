@@ -2,13 +2,13 @@ ADR-002: Folder Responsibility
 
 Status: AcceptedDecision Date: Sprint E9.5Architecture Version: 1.0Supersedes: NoneRelated Documents:
 
-docs/architecture/AlphaRadar_Architecture.md
+docs/architecture/DexSato_Architecture.md
 
 docs/architecture/ADR/ADR-001_Artifact_Ownership.md
 
 1. Context
 
-AlphaRadar has grown into a multi-layer Python system containing production scanning, domain artifacts, adaptive intelligence, application services, delivery components, operational tracking, scheduling, validation, and automated tests.
+DexSato has grown into a multi-layer Python system containing production scanning, domain artifacts, adaptive intelligence, application services, delivery components, operational tracking, scheduling, validation, and automated tests.
 
 Without explicit folder ownership, business logic can drift into delivery or orchestration code, services can duplicate domain calculations, infrastructure code can redefine contracts, and new modules can be placed according to convenience rather than architecture.
 
@@ -16,7 +16,7 @@ A formal folder-responsibility model is required so each top-level package has a
 
 2. Decision
 
-Each top-level AlphaRadar folder has one primary architectural responsibility.
+Each top-level DexSato folder has one primary architectural responsibility.
 
 Folder
 
@@ -272,7 +272,7 @@ Permitting unrestricted imports is rejected because it creates circular dependen
 
 19. Final Decision
 
-AlphaRadar adopts responsibility-based folder governance.
+DexSato adopts responsibility-based folder governance.
 
 Each top-level folder has one primary architectural purpose.
 

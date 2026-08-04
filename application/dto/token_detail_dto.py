@@ -1,5 +1,5 @@
 """
-AlphaRadar Token Detail DTO
+DexSato Token Detail DTO
 
 Public Data Transfer Objects used by the
 Application Layer.

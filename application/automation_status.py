@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder Automation Status.
+DexSato Founder Automation Status.
 
 Collects health information for the Founder V1 automation.
 
@@ -237,7 +237,7 @@ def query_windows_task(
     platform_name: str = os.name,
 ) -> dict[str, object]:
     """
-    Query one AlphaRadar Windows scheduled task.
+    Query one DexSato Windows scheduled task.
     """
 
     if platform_name != "nt":
@@ -492,7 +492,7 @@ def collect_snapshot_status(
             "total_coins": 0,
             "available_coins": 0,
             "error": (
-                "Latest AlphaRadar snapshot is not available."
+                "Latest DexSato snapshot is not available."
             ),
         }
 

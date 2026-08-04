@@ -1,5 +1,5 @@
 """
-AlphaRadar Outcome Store
+DexSato Outcome Store
 
 Persist and retrieve Outcome Artifacts.
 

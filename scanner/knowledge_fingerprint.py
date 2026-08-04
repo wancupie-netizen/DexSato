@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Fingerprint
+DexSato Knowledge Fingerprint
 
 Build a stable fingerprint from an Intelligence Package.
 

@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Live Dashboard Verification.
+Tests for DexSato Live Dashboard Verification.
 """
 
 from datetime import datetime, timezone

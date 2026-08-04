@@ -1,7 +1,7 @@
 # scanner/signal_types.py
 
 """
-AlphaRadar Signal Types
+DexSato Signal Types
 
 Atomic signals produced by Signal Detector.
 

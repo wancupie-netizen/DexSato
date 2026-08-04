@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Production Runner.
+Tests for DexSato Production Runner.
 
 Responsibilities
 ----------------

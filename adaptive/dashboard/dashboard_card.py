@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Card
+DexSato Dashboard Card
 
 Dashboard Domain Artifact.
 

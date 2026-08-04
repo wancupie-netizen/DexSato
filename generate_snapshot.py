@@ -1,5 +1,5 @@
 """
-AlphaRadar V1 Snapshot Command.
+DexSato V1 Snapshot Command.
 
 Run from the project root:
 
@@ -18,13 +18,13 @@ from application.founder_snapshot_service import (
 
 def main() -> int:
     """
-    Generate and report the latest AlphaRadar V1 snapshot.
+    Generate and report the latest DexSato V1 snapshot.
     """
 
     print()
 
     print("=" * 60)
-    print("AlphaRadar V1 — 10 Coin Snapshot")
+    print("DexSato V1 — 10 Coin Snapshot")
     print("=" * 60)
 
     try:

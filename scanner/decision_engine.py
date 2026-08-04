@@ -1,5 +1,5 @@
 """
-AlphaRadar Decision Engine
+DexSato Decision Engine
 
 Convert market interpretations into an official DecisionArtifact.
 

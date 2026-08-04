@@ -1,5 +1,5 @@
 """
-AlphaRadar History Repository
+DexSato History Repository
 
 In-memory repository for ExperienceArtifact.
 

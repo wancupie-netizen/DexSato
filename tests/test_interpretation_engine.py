@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Interpretation Engine.
+Tests for DexSato Interpretation Engine.
 
 Responsibilities
 ----------------

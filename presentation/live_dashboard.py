@@ -1,7 +1,7 @@
 """
-AlphaRadar Live Dashboard Entry Point.
+DexSato Live Dashboard Entry Point.
 
-Runs the AlphaRadar Production Runner for one token,
+Runs the DexSato Production Runner for one token,
 extracts the resulting DashboardCard, renders it as HTML,
 saves the document, and opens it in the default browser.
 
@@ -124,7 +124,7 @@ def extract_dashboard(
 
         message = result.get(
             "error",
-            "AlphaRadar scan failed.",
+            "DexSato scan failed.",
         )
 
         raise RuntimeError(
@@ -257,7 +257,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
 
         description=(
-            "Run AlphaRadar and open a live token dashboard."
+            "Run DexSato and open a live token dashboard."
         ),
 
     )
@@ -289,7 +289,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     """
-    Generate the live AlphaRadar dashboard.
+    Generate the live DexSato dashboard.
     """
 
     arguments = parse_arguments()
@@ -299,7 +299,7 @@ def main() -> int:
     print("=" * 60)
 
     print(
-        "AlphaRadar Live Dashboard"
+        "DexSato Live Dashboard"
     )
 
     print("=" * 60)

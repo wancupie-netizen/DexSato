@@ -1,5 +1,5 @@
 """
-AlphaRadar Intelligence Deserializer
+DexSato Intelligence Deserializer
 
 Deserialize Intelligence Packages.
 

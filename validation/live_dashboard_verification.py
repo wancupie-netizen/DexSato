@@ -1,5 +1,5 @@
 """
-AlphaRadar Live Dashboard Verification.
+DexSato Live Dashboard Verification.
 
 Verifies that a DashboardCard returned by the Production Runner
 matches the Intelligence and Adaptive history used to build it.
@@ -103,7 +103,7 @@ def extract_live_artifacts(
             str(
                 result.get(
                     "error",
-                    "AlphaRadar scan failed.",
+                    "DexSato scan failed.",
                 )
             )
         )
@@ -301,7 +301,7 @@ def render_verification_report(
     return "\n".join(
         [
             "=" * 60,
-            "AlphaRadar Live Dashboard Verification",
+            "DexSato Live Dashboard Verification",
             "=" * 60,
             "",
             (
@@ -375,7 +375,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
 
         description=(
-            "Verify AlphaRadar live Dashboard data provenance."
+            "Verify DexSato live Dashboard data provenance."
         ),
 
     )

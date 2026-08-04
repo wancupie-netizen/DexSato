@@ -1,5 +1,5 @@
 """
-AlphaRadar Domain Models
+DexSato Domain Models
 
 Domain models shared across the Intelligence Engine.
 
@@ -100,7 +100,7 @@ class DecisionResult:
 class ExplanationResult:
     """
     Human-readable explanation generated
-    from AlphaRadar intelligence.
+    from DexSato intelligence.
     """
 
     summary: str
@@ -117,7 +117,7 @@ class ExplanationResult:
 @dataclass(slots=True, frozen=True)
 class IntelligencePackage:
     """
-    Canonical Intelligence Package produced by AlphaRadar.
+    Canonical Intelligence Package produced by DexSato.
     """
 
     token: str

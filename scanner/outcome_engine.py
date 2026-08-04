@@ -1,5 +1,5 @@
 """
-AlphaRadar Outcome Engine
+DexSato Outcome Engine
 
 Record the observed market outcome after
 a DecisionArtifact has passed the Decision Gate.

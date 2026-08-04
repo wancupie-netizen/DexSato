@@ -1,5 +1,5 @@
 """
-AlphaRadar Token Route
+DexSato Token Route
 
 Token API endpoints.
 

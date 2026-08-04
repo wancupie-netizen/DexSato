@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Knowledge Summary.
+Tests for DexSato Knowledge Summary.
 """
 
 from scanner.knowledge_summary import summarize

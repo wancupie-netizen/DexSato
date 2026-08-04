@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Founder Snapshot Service.
+Tests for DexSato Founder Snapshot Service.
 """
 
 from datetime import (
@@ -177,7 +177,7 @@ def test_should_reject_missing_snapshot(
     with pytest.raises(
         FileNotFoundError,
         match=(
-            "Latest AlphaRadar snapshot is not available"
+            "Latest DexSato snapshot is not available"
         ),
     ):
 

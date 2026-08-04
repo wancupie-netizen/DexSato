@@ -1,5 +1,5 @@
 """
-AlphaRadar Regression Test
+DexSato Regression Test
 
 Validate engine behaviour against the official
 Golden Dataset.

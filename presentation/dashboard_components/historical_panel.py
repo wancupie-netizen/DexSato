@@ -1,5 +1,5 @@
 """
-AlphaRadar Historical Intelligence Panel.
+DexSato Historical Intelligence Panel.
 
 Renders Adaptive History information currently available
 inside DashboardCard.
@@ -127,7 +127,7 @@ def render_historical_panel(
     seen_before: bool,
 ) -> str:
     """
-    Render the AlphaRadar Historical Intelligence panel.
+    Render the DexSato Historical Intelligence panel.
 
     Parameters
     ----------

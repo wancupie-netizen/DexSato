@@ -1,3 +1,3 @@
 """
-AlphaRadar Founder MVP web application.
+DexSato Founder MVP web application.
 """

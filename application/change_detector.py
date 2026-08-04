@@ -1,7 +1,7 @@
 """
-AlphaRadar Meaningful Change Detector.
+DexSato Meaningful Change Detector.
 
-Compares two stored AlphaRadar snapshots and returns only
+Compares two stored DexSato snapshots and returns only
 market changes that are useful for founder notifications.
 
 Meaningful changes

@@ -1,5 +1,5 @@
 """
-AlphaRadar Windows Scheduler Installer.
+DexSato Windows Scheduler Installer.
 
 Usage:
 
@@ -14,7 +14,7 @@ The installer:
 5. Registers three Windows scheduled tasks.
 
 Re-running this installer safely replaces the existing
-AlphaRadar tasks with the current configuration.
+DexSato tasks with the current configuration.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def print_heading() -> None:
 
     print()
     print("=" * CONSOLE_WIDTH)
-    print("AlphaRadar Windows Scheduler Installer")
+    print("DexSato Windows Scheduler Installer")
     print("=" * CONSOLE_WIDTH)
     print()
 
@@ -168,7 +168,7 @@ def execute_scheduler_installation(
     ) is not True:
 
         raise RuntimeError(
-            "AlphaRadar .env file was not found. "
+            "DexSato .env file was not found. "
             "Create it from .env.example first."
         )
 
@@ -248,7 +248,7 @@ def run_scheduler_installer(
 
 def main() -> int:
     """
-    Install AlphaRadar Windows scheduled tasks.
+    Install DexSato Windows scheduled tasks.
     """
 
     return run_scheduler_installer()

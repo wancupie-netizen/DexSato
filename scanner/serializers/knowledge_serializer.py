@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Serializer
+DexSato Knowledge Serializer
 
 Serialize KnowledgeArtifact into a database payload.
 

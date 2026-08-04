@@ -1,5 +1,5 @@
 """
-AlphaRadar Learning Engine
+DexSato Learning Engine
 
 Transform OutcomeArtifact into a reusable
 LearningArtifact.

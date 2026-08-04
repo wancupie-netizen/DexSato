@@ -1,5 +1,5 @@
 """
-AlphaRadar Learning Engine Test
+DexSato Learning Engine Test
 
 Validate Learning Engine behaviour.
 

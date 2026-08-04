@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Historical Intelligence Panel.
+Tests for DexSato Historical Intelligence Panel.
 """
 
 import pytest

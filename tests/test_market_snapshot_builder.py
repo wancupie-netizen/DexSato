@@ -1,5 +1,5 @@
 """
-AlphaRadar Market Snapshot Builder Test
+DexSato Market Snapshot Builder Test
 """
 
 from pprint import pprint

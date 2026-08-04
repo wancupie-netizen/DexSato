@@ -1,5 +1,5 @@
 """
-AlphaRadar Intelligence Serializer
+DexSato Intelligence Serializer
 
 Serialize Intelligence Packages into JSON-safe structures.
 

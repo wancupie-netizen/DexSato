@@ -1,5 +1,5 @@
 """
-AlphaRadar Market Normalizer Test
+DexSato Market Normalizer Test
 """
 
 from pprint import pprint

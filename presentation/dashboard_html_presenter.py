@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard HTML Presenter.
+DexSato Dashboard HTML Presenter.
 
 Presentation boundary for converting a DashboardCard
 into a complete standalone Dashboard V2 HTML document.
@@ -578,7 +578,7 @@ def render_dashboard_html(
     >
 
     <title>
-        AlphaRadar Dashboard — {safe_token}
+        DexSato Dashboard — {safe_token}
     </title>
 
     <style>

@@ -1,5 +1,5 @@
 """
-AlphaRadar Explanation Engine
+DexSato Explanation Engine
 
 Convert machine intelligence into
 human-readable explanations.

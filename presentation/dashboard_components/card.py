@@ -1,5 +1,5 @@
 """
-AlphaRadar Shared Dashboard Card Component.
+DexSato Shared Dashboard Card Component.
 
 Provides the standard HTML container used by Dashboard V2
 presentation components.

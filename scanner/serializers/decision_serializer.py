@@ -1,5 +1,5 @@
 """
-AlphaRadar Decision Serializer
+DexSato Decision Serializer
 
 Serialize DecisionArtifact into a JSON-safe structure.
 

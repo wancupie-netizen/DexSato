@@ -1,5 +1,5 @@
 """
-AlphaRadar Database
+DexSato Database
 
 Shared database connection and market event persistence.
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Builder
+DexSato Dashboard Builder
 
 Build DashboardCard from Decision + HistorySummary.
 

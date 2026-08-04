@@ -1,5 +1,5 @@
 """
-AlphaRadar History Summary
+DexSato History Summary
 
 Historical Intelligence Artifact.
 

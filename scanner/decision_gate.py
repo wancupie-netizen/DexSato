@@ -1,5 +1,5 @@
 """
-AlphaRadar Decision Gate
+DexSato Decision Gate
 
 Validate DecisionArtifact before it enters
 the downstream pipeline.

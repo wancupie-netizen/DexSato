@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Dashboard HTML Presenter.
+Tests for DexSato Dashboard HTML Presenter.
 """
 
 from datetime import datetime, timezone
@@ -115,7 +115,7 @@ def test_should_render_dashboard_components():
         card,
     )
 
-    assert "AlphaRadar" in html
+    assert "DexSato" in html
 
     assert "BTC" in html
 
@@ -167,7 +167,7 @@ def test_should_render_dashboard_card_as_html():
 
     assert '<html lang="en">' in html
 
-    assert "AlphaRadar Dashboard" in html
+    assert "DexSato Dashboard" in html
 
     assert "BTC" in html
 

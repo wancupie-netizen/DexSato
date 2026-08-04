@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Adaptive Experience Service.
+Tests for DexSato Adaptive Experience Service.
 """
 
 from datetime import datetime, timezone

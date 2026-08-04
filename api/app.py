@@ -1,7 +1,7 @@
 """
-AlphaRadar API
+DexSato API
 
-Main entry point for the AlphaRadar Platform.
+Main entry point for the DexSato Platform.
 
 Responsibilities
 ----------------
@@ -23,7 +23,7 @@ from api.routes.token import router as token_router
 
 app = FastAPI(
 
-    title="AlphaRadar API",
+    title="DexSato API",
 
     description=(
         "Evidence-Driven Intelligence Platform "

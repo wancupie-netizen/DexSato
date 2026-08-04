@@ -1,5 +1,5 @@
 """
-AlphaRadar Engine Contract Test
+DexSato Engine Contract Test
 
 Validate the public Intelligence Engine contract.
 

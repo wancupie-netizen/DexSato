@@ -1,15 +1,15 @@
-# AlphaRadar Architecture
+# DexSato Architecture
 
 **Status:** LOCKED BASELINE  
 **Architecture Version:** 1.0  
 **Established:** Sprint E9.5  
-**Repository:** `wancupie-netizen/AlphaRadar`
+**Repository:** `wancupie-netizen/DexSato`
 
 ---
 
 ## 1. Purpose
 
-AlphaRadar is an adaptive intelligence system that:
+DexSato is an adaptive intelligence system that:
 
 1. observes market conditions,
 2. detects signals,
@@ -26,7 +26,7 @@ and maintainable.
 
 ## 2. Architecture Principle
 
-AlphaRadar follows this dependency direction:
+DexSato follows this dependency direction:
 
 ```text
 Delivery
@@ -50,7 +50,7 @@ Business decisions must not depend on:
 
 ## 3. Production Flow
 
-The official AlphaRadar production flow is:
+The official DexSato production flow is:
 
 ```text
 Market Provider
@@ -321,7 +321,7 @@ The Collection Service must not reconstruct or duplicate
 
 ## 7. Fingerprint Ownership
 
-AlphaRadar currently contains two distinct fingerprint concepts.
+DexSato currently contains two distinct fingerprint concepts.
 
 ### 7.1 Operational Intelligence Fingerprint
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar Production Runner v1.0
+DexSato Production Runner v1.0
 
 Production Orchestrator
 
@@ -684,7 +684,7 @@ def _finish_failure(
     """
 
     print(
-        "\n❌ AlphaRadar Exception"
+        "\n❌ DexSato Exception"
     )
 
     traceback.print_exc()
@@ -734,7 +734,7 @@ def run_scan(
     token: str,
 ) -> dict:
     """
-    Run a complete AlphaRadar Production Scan.
+    Run a complete DexSato Production Scan.
 
     Flow
     ----

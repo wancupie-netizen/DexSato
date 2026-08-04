@@ -1,5 +1,5 @@
 """
-AlphaRadar Learning Serializer
+DexSato Learning Serializer
 
 Serialize LearningArtifact into a database payload.
 

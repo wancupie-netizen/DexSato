@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Intelligence Engine.
+Tests for DexSato Intelligence Engine.
 """
 
 from unittest.mock import patch

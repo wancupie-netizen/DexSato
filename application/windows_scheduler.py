@@ -1,5 +1,5 @@
 """
-AlphaRadar Windows Scheduler Service.
+DexSato Windows Scheduler Service.
 
 Creates and removes the Windows Task Scheduler entries
 required to run Founder Automation automatically.
@@ -12,7 +12,7 @@ Founder V1 installation flow
 
 Founder V1 uninstall flow
 -------------------------
-1. Delete the three AlphaRadar scheduled tasks.
+1. Delete the three DexSato scheduled tasks.
 2. Optionally remove the generated local runner.
 3. Preserve configuration, snapshots, source code, and data.
 
@@ -68,9 +68,9 @@ RUNNER_FILE = (
 
 
 TASK_NAMES = (
-    "AlphaRadar Founder Scan 1",
-    "AlphaRadar Founder Scan 2",
-    "AlphaRadar Founder Scan 3",
+    "DexSato Founder Scan 1",
+    "DexSato Founder Scan 2",
+    "DexSato Founder Scan 3",
 )
 
 
@@ -89,7 +89,7 @@ def ensure_windows(
     if platform_name != "nt":
 
         raise RuntimeError(
-            "AlphaRadar Windows Scheduler can only be "
+            "DexSato Windows Scheduler can only be "
             "managed on Windows."
         )
 
@@ -124,7 +124,7 @@ def build_runner_content(
     Build the machine-local Windows command runner.
 
     The runner changes into the project root before launching
-    Python so all relative AlphaRadar paths remain correct.
+    Python so all relative DexSato paths remain correct.
     """
 
     resolved_project_root = Path(
@@ -186,7 +186,7 @@ def write_runner_file(
     if not resolved_scheduler.is_file():
 
         raise FileNotFoundError(
-            "AlphaRadar founder_scheduler.py was not found."
+            "DexSato founder_scheduler.py was not found."
         )
 
     resolved_runner.parent.mkdir(
@@ -227,7 +227,7 @@ def build_task_definitions(
     ):
 
         raise ValueError(
-            "AlphaRadar requires exactly three scan times."
+            "DexSato requires exactly three scan times."
         )
 
     definitions: list[
@@ -264,7 +264,7 @@ def build_create_task_command(
     Build one schtasks.exe daily task registration command.
 
     The /F option makes installation repeatable by replacing
-    an existing AlphaRadar task with the same stable name.
+    an existing DexSato task with the same stable name.
     """
 
     resolved_runner = Path(
@@ -344,7 +344,7 @@ def install_windows_tasks(
     platform_name: str = os.name,
 ) -> list[dict[str, object]]:
     """
-    Register all AlphaRadar Founder V1 scheduled tasks.
+    Register all DexSato Founder V1 scheduled tasks.
     """
 
     ensure_windows(
@@ -464,7 +464,7 @@ def remove_windows_tasks(
     ignore_missing: bool = True,
 ) -> list[dict[str, object]]:
     """
-    Remove all AlphaRadar Founder scheduled tasks.
+    Remove all DexSato Founder scheduled tasks.
 
     Re-running the uninstaller is safe. Missing tasks are
     reported as ALREADY REMOVED when ignore_missing=True.
@@ -576,7 +576,7 @@ def remove_runner_file(
     if not resolved_runner.is_file():
 
         raise RuntimeError(
-            "AlphaRadar automation runner path is not a file."
+            "DexSato automation runner path is not a file."
         )
 
     resolved_runner.unlink()

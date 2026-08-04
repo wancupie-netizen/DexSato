@@ -1,5 +1,5 @@
 """
-AlphaRadar Decision Deserializer
+DexSato Decision Deserializer
 
 Deserialize Decision dictionaries into DecisionArtifact objects.
 

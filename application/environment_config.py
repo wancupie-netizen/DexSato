@@ -1,5 +1,5 @@
 """
-AlphaRadar Environment Configuration.
+DexSato Environment Configuration.
 
 Loads local Founder V1 configuration from the project-level
 .env file.
@@ -77,7 +77,7 @@ def load_environment(
     override: bool = False,
 ) -> dict[str, object]:
     """
-    Load the AlphaRadar project environment.
+    Load the DexSato project environment.
 
     Operating-system values remain authoritative unless
     override=True is explicitly supplied.
@@ -207,7 +207,7 @@ def get_scan_times(
     ):
 
         raise ValueError(
-            "AlphaRadar scan times must be unique."
+            "DexSato scan times must be unique."
         )
 
     return tuple(

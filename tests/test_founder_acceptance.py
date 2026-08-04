@@ -1,5 +1,5 @@
 """
-AlphaRadar V1 Acceptance Tests.
+DexSato V1 Acceptance Tests.
 
 These tests verify the complete V1 founder journey.
 
@@ -34,7 +34,7 @@ from application.telegram_notifier import (
 
 def test_should_support_official_founder_tokens():
     """
-    AlphaRadar V1 must support the approved ten-coin
+    DexSato V1 must support the approved ten-coin
     production universe.
     """
 
@@ -108,7 +108,7 @@ def test_should_build_shared_dashboard_data():
 
 def test_should_build_founder_telegram_message():
     """
-    Telegram message should contain readable AlphaRadar
+    Telegram message should contain readable DexSato
     market intelligence.
     """
 
@@ -172,7 +172,7 @@ def test_should_have_founder_readme():
 
 def test_should_have_root_launcher():
     """
-    AlphaRadar V1 should expose one simple root launcher.
+    DexSato V1 should expose one simple root launcher.
     """
 
     launcher = Path(

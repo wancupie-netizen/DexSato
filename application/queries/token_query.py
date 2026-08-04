@@ -1,5 +1,5 @@
 """
-AlphaRadar Token Query
+DexSato Token Query
 
 Application Query responsible for retrieving
 Token Detail data.

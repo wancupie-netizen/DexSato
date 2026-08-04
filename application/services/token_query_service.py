@@ -1,5 +1,5 @@
 """
-AlphaRadar Token Query Service
+DexSato Token Query Service
 
 Application Service responsible for retrieving
 Token Detail payloads.

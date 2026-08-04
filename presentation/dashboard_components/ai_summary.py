@@ -1,5 +1,5 @@
 """
-AlphaRadar AI Summary Component.
+DexSato AI Summary Component.
 
 Displays the intelligence summary generated for the current
 DashboardCard.
@@ -76,7 +76,7 @@ def render_ai_summary_panel(
         title="Intelligence Summary",
 
         subtitle=(
-            "AlphaRadar explanation of the current "
+            "DexSato explanation of the current "
             "market recommendation."
         ),
 

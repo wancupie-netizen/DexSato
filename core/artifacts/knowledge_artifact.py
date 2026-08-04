@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Artifact
+DexSato Knowledge Artifact
 
 Official output produced by the Knowledge Aggregator.
 

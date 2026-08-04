@@ -1,5 +1,5 @@
 """
-AlphaRadar Market Store
+DexSato Market Store
 
 Persist and retrieve Market Events.
 

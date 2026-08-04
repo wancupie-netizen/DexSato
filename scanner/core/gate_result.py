@@ -1,5 +1,5 @@
 """
-AlphaRadar Gate Result
+DexSato Gate Result
 
 Official output produced by Decision Gate.
 

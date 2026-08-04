@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder Snapshot Service.
+DexSato Founder Snapshot Service.
 
 Builds and stores the latest serialized Top 100 market
 snapshot.
@@ -148,7 +148,7 @@ def read_latest_snapshot(
     if not snapshot_file.exists():
 
         raise FileNotFoundError(
-            "Latest AlphaRadar snapshot is not available."
+            "Latest DexSato snapshot is not available."
         )
 
     try:
@@ -162,7 +162,7 @@ def read_latest_snapshot(
     except json.JSONDecodeError as error:
 
         raise RuntimeError(
-            "Latest AlphaRadar snapshot contains invalid JSON."
+            "Latest DexSato snapshot contains invalid JSON."
         ) from error
 
     if not isinstance(
@@ -171,7 +171,7 @@ def read_latest_snapshot(
     ):
 
         raise RuntimeError(
-            "Latest AlphaRadar snapshot is invalid."
+            "Latest DexSato snapshot is invalid."
         )
 
     required_fields = {
@@ -187,7 +187,7 @@ def read_latest_snapshot(
     ):
 
         raise RuntimeError(
-            "Latest AlphaRadar snapshot is incomplete."
+            "Latest DexSato snapshot is incomplete."
         )
 
     if not isinstance(
@@ -196,7 +196,7 @@ def read_latest_snapshot(
     ):
 
         raise RuntimeError(
-            "Latest AlphaRadar snapshot coin data is invalid."
+            "Latest DexSato snapshot coin data is invalid."
         )
 
     return payload

@@ -1,5 +1,5 @@
 """
-AlphaRadar Context Builder
+DexSato Context Builder
 
 Build a Knowledge Context from historical knowledge.
 

@@ -1,5 +1,5 @@
 """
-AlphaRadar History Builder
+DexSato History Builder
 
 Build HistorySummary from ExperienceArtifact collection.
 

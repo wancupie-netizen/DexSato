@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Telegram Notifier.
+Tests for DexSato Telegram Notifier.
 """
 
 import pytest
@@ -433,7 +433,7 @@ def test_should_ignore_legacy_dashboard_environment_variable(
     monkeypatch,
 ):
     """
-    The retired AlphaRadar-specific dashboard variable should
+    The retired DexSato-specific dashboard variable should
     no longer control Telegram messages.
     """
 

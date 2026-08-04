@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge History
+DexSato Knowledge History
 
 Read historical Intelligence Events from the database.
 

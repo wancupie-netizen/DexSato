@@ -1,5 +1,5 @@
 """
-AlphaRadar Knowledge Engine
+DexSato Knowledge Engine
 
 Public entry point for the Knowledge Engine.
 

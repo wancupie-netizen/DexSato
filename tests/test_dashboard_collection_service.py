@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Dashboard Collection Service.
+Tests for DexSato Dashboard Collection Service.
 
 Responsibilities
 ----------------

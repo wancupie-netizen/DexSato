@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Shared Dashboard Card Component.
+Tests for DexSato Shared Dashboard Card Component.
 """
 
 import pytest

@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Meaningful Change Detector.
+Tests for DexSato Meaningful Change Detector.
 """
 
 import pytest

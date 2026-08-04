@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar V1 Snapshot Dashboard Presenter.
+Tests for DexSato V1 Snapshot Dashboard Presenter.
 """
 
 import pytest
@@ -219,7 +219,7 @@ def test_should_render_complete_snapshot_dashboard():
     assert "<!DOCTYPE html>" in html
 
     assert (
-        "AlphaRadar Market Intelligence"
+        "DexSato Market Intelligence"
         in html
     )
 
@@ -309,7 +309,7 @@ def test_should_render_operational_system_status():
             "tasks": [
                 {
                     "task_name": (
-                        "AlphaRadar Founder Scan 1"
+                        "DexSato Founder Scan 1"
                     ),
                     "status": "READY",
                     "last_run_time": (
@@ -329,7 +329,7 @@ def test_should_render_operational_system_status():
     assert "FRESH" in html
     assert "SENT" in html
     assert "DOGE: REVIEW → ALERT" in html
-    assert "AlphaRadar Founder Scan 1" in html
+    assert "DexSato Founder Scan 1" in html
     assert "/api/system-status" not in html
 
 

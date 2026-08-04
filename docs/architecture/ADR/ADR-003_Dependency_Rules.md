@@ -6,7 +6,7 @@
 **Supersedes:** None  
 **Related Documents:**
 
-- `docs/architecture/AlphaRadar_Architecture.md`
+- `docs/architecture/DexSato_Architecture.md`
 - `docs/architecture/ADR/ADR-001_Artifact_Ownership.md`
 - `docs/architecture/ADR/ADR-002_Folder_Responsibility.md`
 
@@ -14,7 +14,7 @@
 
 # 1. Context
 
-As AlphaRadar grows, the number of modules, packages and
+As DexSato grows, the number of modules, packages and
 cross-layer interactions increases.
 
 Without explicit dependency rules:
@@ -31,7 +31,7 @@ A stable dependency model is therefore required.
 
 # 2. Decision
 
-AlphaRadar adopts **one-way dependency flow**.
+DexSato adopts **one-way dependency flow**.
 
 Every dependency must point toward a more stable layer.
 
@@ -427,7 +427,7 @@ These trade-offs are accepted.
 
 # 14. Final Decision
 
-AlphaRadar adopts strict dependency governance.
+DexSato adopts strict dependency governance.
 
 Dependency direction is part of the architecture.
 

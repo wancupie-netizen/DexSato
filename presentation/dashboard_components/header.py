@@ -1,5 +1,5 @@
 """
-AlphaRadar Dashboard Header Component.
+DexSato Dashboard Header Component.
 
 Responsibilities
 ----------------
@@ -32,7 +32,7 @@ def render_dashboard_header(
     return f"""
 <div class="card">
 
-<h1>AlphaRadar</h1>
+<h1>DexSato</h1>
 
 <p>
 

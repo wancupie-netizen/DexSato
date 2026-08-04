@@ -1,5 +1,5 @@
 """
-AlphaRadar Lifecycle Engine
+DexSato Lifecycle Engine
 
 Coordinate the complete lifecycle from
 DecisionArtifact to KnowledgeArtifact.

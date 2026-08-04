@@ -1,5 +1,5 @@
 """
-AlphaRadar Interpretation Types
+DexSato Interpretation Types
 
 Interpretations represent the meaning derived from one or more
 atomic market signals.

@@ -4,13 +4,13 @@
 **Decision Date:** Sprint E9.5  
 **Architecture Version:** 1.0  
 **Supersedes:** None  
-**Related Document:** `docs/architecture/AlphaRadar_Architecture.md`
+**Related Document:** `docs/architecture/DexSato_Architecture.md`
 
 ---
 
 ## 1. Context
 
-AlphaRadar produces and consumes multiple artifacts across the
+DexSato produces and consumes multiple artifacts across the
 Core Engine, Adaptive Layer, Application Layer, persistence
 components, and delivery boundaries.
 
@@ -33,7 +33,7 @@ A formal ownership model is required so that every artifact has:
 
 ## 2. Decision
 
-Every formal AlphaRadar artifact must have exactly one canonical
+Every formal DexSato artifact must have exactly one canonical
 owner.
 
 The canonical owner:
@@ -304,7 +304,7 @@ mutable form of `ExperienceArtifact`.
 
 ## 8. Fingerprint Ownership
 
-AlphaRadar currently has two distinct fingerprint contracts.
+DexSato currently has two distinct fingerprint contracts.
 
 ### 8.1 Operational Intelligence Fingerprint
 
@@ -490,7 +490,7 @@ Before introducing or modifying an artifact, confirm:
 
 ## 14. Final Decision
 
-AlphaRadar adopts single-owner artifact governance.
+DexSato adopts single-owner artifact governance.
 
 Each formal artifact has one canonical contract owner.
 

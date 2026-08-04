@@ -1,5 +1,5 @@
 """
-AlphaRadar Engineering Test
+DexSato Engineering Test
 
 Token Query Integration Test
 
@@ -31,7 +31,7 @@ from application.assemblers.token_assembler import TokenAssembler
 
 
 print("=" * 60)
-print("AlphaRadar Product Layer Test")
+print("DexSato Product Layer Test")
 print("=" * 60)
 
 query = TokenQuery()

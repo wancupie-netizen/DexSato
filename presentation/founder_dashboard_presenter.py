@@ -1,5 +1,5 @@
 """
-AlphaRadar Founder Multi-Coin Dashboard Presenter.
+DexSato Founder Multi-Coin Dashboard Presenter.
 
 Renders the Founder MVP multi-coin dashboard as one
 standalone HTML document.
@@ -10,7 +10,7 @@ Responsibilities
 - Render successful engine results
 - Render unavailable-token states
 - Escape all data-derived text
-- Reuse the official AlphaRadar Theme
+- Reuse the official DexSato Theme
 
 This module does NOT:
 - run scans
@@ -172,7 +172,7 @@ def render_founder_dashboard(
     results: list[dict[str, object]],
 ) -> str:
     """
-    Render the complete AlphaRadar Founder Dashboard.
+    Render the complete DexSato Founder Dashboard.
     """
 
     if not isinstance(
@@ -245,7 +245,7 @@ def render_founder_dashboard(
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>AlphaRadar Founder Dashboard</title>
+    <title>DexSato Founder Dashboard</title>
 
     <style>
         {shared_css}
@@ -436,7 +436,7 @@ def render_founder_dashboard(
             </p>
 
             <h1 class="founder-title">
-                AlphaRadar Market Intelligence
+                DexSato Market Intelligence
             </h1>
 
             <p class="founder-description">
@@ -450,7 +450,7 @@ def render_founder_dashboard(
         </section>
 
         <footer class="founder-footer">
-            AlphaRadar Founder MVP · Engine-driven market
+            DexSato Founder MVP · Engine-driven market
             intelligence
         </footer>
     </main>

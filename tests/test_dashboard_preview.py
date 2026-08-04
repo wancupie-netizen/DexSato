@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Dashboard Preview Entry Point.
+Tests for DexSato Dashboard Preview Entry Point.
 """
 
 from unittest.mock import patch
@@ -71,9 +71,9 @@ def test_should_write_dashboard_preview(
 
     assert "<!DOCTYPE html>" in html
 
-    assert "AlphaRadar Dashboard" in html
+    assert "DexSato Dashboard" in html
 
-    assert "AlphaRadar" in html
+    assert "DexSato" in html
 
     assert "BTC" in html
 

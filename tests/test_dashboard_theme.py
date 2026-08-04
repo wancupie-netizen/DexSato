@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Dashboard Theme.
+Tests for DexSato Dashboard Theme.
 """
 
 from presentation.dashboard_theme import (

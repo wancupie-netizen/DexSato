@@ -1,5 +1,5 @@
 """
-AlphaRadar Outcome Engine Test
+DexSato Outcome Engine Test
 
 Validate Outcome Engine behaviour.
 

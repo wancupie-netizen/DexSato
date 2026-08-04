@@ -1,5 +1,5 @@
 """
-AlphaRadar Market Normalizer
+DexSato Market Normalizer
 
 Normalize raw DexScreener pair data into a
 canonical Market Event.
@@ -22,7 +22,7 @@ from datetime import datetime
 def normalize_pair(pair: dict) -> dict:
     """
     Normalize a DexScreener pair into
-    AlphaRadar Market Event.
+    DexSato Market Event.
     """
 
     base = pair["baseToken"]

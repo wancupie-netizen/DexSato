@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Decision Engine.
+Tests for DexSato Decision Engine.
 
 Responsibilities
 ----------------

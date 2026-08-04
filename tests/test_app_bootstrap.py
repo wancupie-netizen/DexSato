@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar V1 FastAPI Application.
+Tests for DexSato V1 FastAPI Application.
 """
 
 from unittest.mock import patch
@@ -190,7 +190,7 @@ def test_should_reject_missing_snapshot(
     """
 
     mock_load.side_effect = FileNotFoundError(
-        "Latest AlphaRadar snapshot is not available."
+        "Latest DexSato snapshot is not available."
     )
 
     try:

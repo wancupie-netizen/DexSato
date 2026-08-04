@@ -1,5 +1,5 @@
 """
-AlphaRadar Intelligence Store
+DexSato Intelligence Store
 
 Persist and retrieve serialized Intelligence Packages.
 

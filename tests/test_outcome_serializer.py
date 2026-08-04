@@ -1,5 +1,5 @@
 """
-Tests for AlphaRadar Outcome Serializer.
+Tests for DexSato Outcome Serializer.
 """
 
 from decimal import Decimal
