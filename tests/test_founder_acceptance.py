@@ -5,7 +5,7 @@ These tests verify the complete V1 founder journey.
 
 Production Features Verified
 ----------------------------
-- Stable ten-coin production universe
+- Stable five-market production universe
 - Shared dashboard data
 - Telegram message builder
 - Founder README
@@ -34,21 +34,16 @@ from application.telegram_notifier import (
 
 def test_should_support_official_founder_tokens():
     """
-    DexSato V1 must support the approved ten-coin
+    DexSato V1 must support the approved five-market
     production universe.
     """
 
     expected_tokens = (
         "BTC",
         "ETH",
-        "BNB",
-        "XRP",
         "SOL",
-        "DOGE",
-        "ADA",
+        "XRP",
         "SUI",
-        "LINK",
-        "AVAX",
     )
 
     assert V1_ACTIVE_TOKENS == expected_tokens
@@ -57,7 +52,7 @@ def test_should_support_official_founder_tokens():
 
     assert len(
         FOUNDER_TOKENS,
-    ) == 10
+    ) == 5
 
 
 # ==========================================================

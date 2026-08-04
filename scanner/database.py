@@ -57,7 +57,7 @@ def save_market_event(event):
     return response
 
 
-def get_latest_events(token, limit=2):
+def get_latest_events(token, limit=2, *, pair_address=None):
     """
     Load the latest Market Events for a token.
 
@@ -73,11 +73,18 @@ def get_latest_events(token, limit=2):
     list
     """
 
-    response = (
+    query = (
         supabase
         .table("market_events")
         .select("*")
         .eq("token", token)
+    )
+
+    if pair_address:
+        query = query.eq("pair_address", pair_address)
+
+    response = (
+        query
         .order("scanned_at", desc=True)
         .limit(limit)
         .execute()

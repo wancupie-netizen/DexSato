@@ -1,0 +1,9 @@
+{
+  "markets": [
+    {"token":"BTC","display_pair":"BTC/USDT","chain_id":"bsc","dex_id":"pancakeswap","pair_address":"0x46Cf1cF8c69595804ba91dFdd8d6b960c9B0a7C4","base_address":"0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c","quote_address":"0x55d398326f99059fF775485246999027B3197955"},
+    {"token":"ETH","display_pair":"ETH/USDC","chain_id":"ethereum","dex_id":"uniswap","pair_address":"0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640","base_address":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","quote_address":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},
+    {"token":"SOL","display_pair":"SOL/USDT","chain_id":"solana","dex_id":"raydium","pair_address":"3nMFwZXwY1s1M5s8vYAHqd4wGs4iSxXE4LRoUMMYqEgF","base_address":"So11111111111111111111111111111111111111112","quote_address":"Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"},
+    {"token":"XRP","display_pair":"XRP/USDT","chain_id":"bsc","dex_id":"pancakeswap","pair_address":"0x71f5a8F7d448E59B1ede00A19fE59e05d125E742","base_address":"0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE","quote_address":"0x55d398326f99059fF775485246999027B3197955"},
+    {"token":"SUI","display_pair":"SUI/USDC","chain_id":"sui","dex_id":"cetus","pair_address":"0x51e883ba7c0b566a26cbc8a94cd33eb0abd418a77cc1e60ad22fd9b1f29cd2ab","base_address":"0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI","quote_address":"0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC"}
+  ]
+}

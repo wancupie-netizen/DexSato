@@ -8,14 +8,9 @@ V1 Active Markets
 -----------------
 - BTC
 - ETH
-- BNB
-- XRP
 - SOL
-- DOGE
-- ADA
+- XRP
 - SUI
-- LINK
-- AVAX
 
 Responsibilities
 ----------------
@@ -59,14 +54,9 @@ from scanner.runner import (
 V1_ACTIVE_TOKENS = (
     "BTC",
     "ETH",
-    "BNB",
-    "XRP",
     "SOL",
-    "DOGE",
-    "ADA",
+    "XRP",
     "SUI",
-    "LINK",
-    "AVAX",
 )
 
 
@@ -88,7 +78,7 @@ def build_founder_dashboard_results(
     Run sequential DexSato scans.
 
     When no explicit token collection is supplied, the
-    approved V1 ten-coin universe is used.
+    approved V1 five-market universe is used.
 
     Invalid or failed tokens remain in the output as
     unavailable entries and do not stop subsequent scans.

@@ -16,10 +16,10 @@ This module does NOT:
 - access databases
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-def normalize_pair(pair: dict) -> dict:
+def normalize_pair(pair: dict, *, token: str | None = None, display_pair: str | None = None) -> dict:
     """
     Normalize a DexScreener pair into
     DexSato Market Event.
@@ -32,13 +32,13 @@ def normalize_pair(pair: dict) -> dict:
     return {
 
         "token":
-            base["symbol"],
+            token or base["symbol"],
 
         "name":
             base["name"],
 
         "pair":
-            f"{base['symbol']}/{quote['symbol']}",
+            display_pair or f"{base['symbol']}/{quote['symbol']}",
 
         "pair_address":
             pair.get("pairAddress"),
@@ -71,6 +71,6 @@ def normalize_pair(pair: dict) -> dict:
             "DexScreener",
 
         "scanned_at":
-            datetime.utcnow().isoformat(),
+            datetime.now(timezone.utc).isoformat(),
 
     }

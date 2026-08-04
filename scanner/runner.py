@@ -35,11 +35,11 @@ from scanner.config import (
 # ==========================================================
 
 from scanner.dexscreener import (
-    search_token,
+    fetch_registered_pair,
 )
 
-from scanner.pair_selector import (
-    select_best_pair,
+from scanner.market_registry import (
+    get_market,
 )
 
 from scanner.normalizer import (
@@ -196,7 +196,7 @@ def _scan_market(
     # Scan DexScreener
     # ------------------------------------------------------
 
-    data = search_token(
+    market = get_market(
         token,
     )
 
@@ -204,20 +204,7 @@ def _scan_market(
     # Select Best Pair
     # ------------------------------------------------------
 
-    pairs = data.get(
-        "pairs",
-        [],
-    )
-
-    selected_pair = select_best_pair(
-        pairs,
-    )
-
-    if selected_pair is None:
-
-        raise ValueError(
-            "No valid trading pair found."
-        )
+    selected_pair = fetch_registered_pair(market)
 
     # ------------------------------------------------------
     # Normalize
@@ -225,6 +212,8 @@ def _scan_market(
 
     event = normalize_pair(
         selected_pair,
+        token=market["token"],
+        display_pair=market["display_pair"],
     )
 
     # ------------------------------------------------------
@@ -241,6 +230,7 @@ def _scan_market(
 
     observation = build_observation(
         token,
+        pair_address=event["pair_address"],
     )
 
     # ------------------------------------------------------

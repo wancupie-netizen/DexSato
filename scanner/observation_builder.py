@@ -88,12 +88,12 @@ def calculate_observation(
     }
 
 
-def build_observation(token):
+def build_observation(token, *, pair_address=None):
     """
     Build an observation from the latest two market events.
     """
 
-    events = get_latest_events(token)
+    events = get_latest_events(token, pair_address=pair_address)
 
     if len(events) < 2:
         return None

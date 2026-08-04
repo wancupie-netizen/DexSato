@@ -45,25 +45,20 @@ def build_test_card(
 
 def test_should_define_v1_active_tokens():
     """
-    V1 production universe must contain ten approved coins.
+    V1 production universe must contain five approved markets.
     """
 
     assert V1_ACTIVE_TOKENS == (
         "BTC",
         "ETH",
-        "BNB",
-        "XRP",
         "SOL",
-        "DOGE",
-        "ADA",
+        "XRP",
         "SUI",
-        "LINK",
-        "AVAX",
     )
 
     assert len(
         V1_ACTIVE_TOKENS,
-    ) == 10
+    ) == 5
 
     assert FOUNDER_TOKENS == (
         V1_ACTIVE_TOKENS
@@ -72,7 +67,7 @@ def test_should_define_v1_active_tokens():
 
 def test_should_scan_v1_tokens_by_default():
     """
-    Default service should scan the ten-coin V1 universe.
+    Default service should scan the five-market V1 universe.
     """
 
     scanned_tokens: list[str] = []
@@ -109,7 +104,7 @@ def test_should_scan_v1_tokens_by_default():
 
     assert len(
         results,
-    ) == 10
+    ) == 5
 
 
 def test_should_accept_explicit_token_collection():
