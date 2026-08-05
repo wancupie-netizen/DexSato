@@ -1,0 +1,13 @@
+{
+  "markets": [
+    {
+      "token": "XAU",
+      "name": "Gold",
+      "display_pair": "XAU/USD",
+      "provider": "twelve_data",
+      "provider_symbol": "XAU/USD",
+      "market_id": "twelvedata:XAU/USD",
+      "asset_class": "commodities"
+    }
+  ]
+}
