@@ -20,7 +20,14 @@ def test_should_build_non_actionable_gold_reference():
                 "pair_address": "twelvedata:XAU/USD",
                 "chain": "spot-metals",
                 "source": "Twelve Data",
-            }
+            },
+            "provider_quote": {
+                "open": "4000",
+                "high": "4100",
+                "low": "3950",
+                "close": "4073.39",
+                "previous_close": "4020",
+            },
         }
 
     result = build_commodity_reference_results(scan=fake_scan)[0]
@@ -29,3 +36,6 @@ def test_should_build_non_actionable_gold_reference():
     assert result["reference_only"] is True
     assert result["card"] is None
     assert result["market"]["pair"] == "XAU/USD"
+    assert result["reference_intelligence"]["market_state"] == (
+        "UPPER_RANGE"
+    )

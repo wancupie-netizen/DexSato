@@ -32,6 +32,7 @@ def scan_commodity_market(
 
     return {
         "event": event,
+        "provider_quote": quote,
         "observation": observation,
         "first_scan": observation is None,
     }

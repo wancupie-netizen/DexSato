@@ -129,6 +129,14 @@ def test_should_serialize_gold_as_reference_only():
                 "token": "XAU",
                 "card": None,
                 "reference_only": True,
+                "reference_intelligence": {
+                    "market_state": "UPPER_RANGE",
+                    "daily_change_pct": 0.5,
+                    "intraday_range_pct": 1.25,
+                    "range_position_pct": 75.0,
+                    "evidence": ["ABOVE_OPEN", "UPPER_RANGE"],
+                    "summary": "Objective gold reference intelligence.",
+                },
                 "market": {
                     "pair": "XAU/USD",
                     "price": "4073.39",
@@ -151,6 +159,12 @@ def test_should_serialize_gold_as_reference_only():
     assert result["asset_class"] == "commodities"
     assert result["liquidity"] is None
     assert result["historical_success"] is None
+    assert result["market_state"] == "UPPER_RANGE"
+    assert result["daily_change_pct"] == 0.5
+    assert result["reference_evidence"] == [
+        "ABOVE_OPEN",
+        "UPPER_RANGE",
+    ]
 
 
 def test_should_reject_invalid_collection():

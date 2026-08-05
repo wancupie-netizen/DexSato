@@ -148,10 +148,14 @@ def render_decision_card(coin: dict[str, object]) -> str:
     )
     confidence = _status(coin.get("confidence"))
     reasons = coin.get("reasons", [])
+    if decision == "REFERENCE":
+        reasons = coin.get("reference_evidence", [])
     if not isinstance(reasons, list):
         reasons = []
     summary = _text(
-        build_intelligence_summary(
+        coin.get("summary")
+        if decision == "REFERENCE"
+        else build_intelligence_summary(
             token=token,
             decision=decision,
             confidence=confidence,

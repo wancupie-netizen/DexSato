@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from scanner.commodity_registry import load_commodity_registry
 from scanner.commodity_runner import scan_commodity_market
+from scanner.gold_intelligence import build_gold_reference_intelligence
 
 
 def build_commodity_reference_results(
@@ -19,10 +20,22 @@ def build_commodity_reference_results(
         try:
             scan_result = scan(token)
             event = scan_result["event"]
+            intelligence = build_gold_reference_intelligence(
+                scan_result.get("provider_quote", {})
+            )
         except (RuntimeError, ValueError) as error:
             results.append({"token": token, "card": None, "market": None, "reference_only": True, "error": str(error)})
             continue
 
-        results.append({"token": token, "card": None, "market": event, "reference_only": True, "error": None})
+        results.append(
+            {
+                "token": token,
+                "card": None,
+                "market": event,
+                "reference_only": True,
+                "reference_intelligence": intelligence,
+                "error": None,
+            }
+        )
 
     return results

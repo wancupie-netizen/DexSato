@@ -41,6 +41,7 @@ def test_should_persist_exact_gold_market_event():
     assert result["event"]["pair"] == "XAU/USD"
     assert result["event"]["price"] == "4073.84"
     assert result["event"]["liquidity"] is None
+    assert result["provider_quote"] == QUOTE
     assert saved == [result["event"]]
     assert observed == {
         "token": "XAU",

@@ -62,6 +62,9 @@ def serialize_founder_dashboard_results(
         ) is True
 
         if reference_only and isinstance(market, dict):
+            intelligence = result.get("reference_intelligence")
+            if not isinstance(intelligence, dict):
+                intelligence = {}
             serialized.append(
                 {
                     "token": token,
@@ -81,9 +84,16 @@ def serialize_founder_dashboard_results(
                     "historical_success": None,
                     "seen_before": False,
                     "reasons": [],
-                    "summary": (
-                        "Reference price collection is active. "
-                        "Gold intelligence policy is not enabled yet."
+                    "market_state": intelligence.get("market_state"),
+                    "daily_change_pct": intelligence.get("daily_change_pct"),
+                    "intraday_range_pct": intelligence.get("intraday_range_pct"),
+                    "range_position_pct": intelligence.get("range_position_pct"),
+                    "reference_evidence": list(
+                        intelligence.get("evidence", [])
+                    ),
+                    "summary": intelligence.get(
+                        "summary",
+                        "Gold reference intelligence is collecting data.",
                     ),
                     "error": None,
                 }

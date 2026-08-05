@@ -46,7 +46,16 @@ SNAPSHOT = {
             "confidence": "REFERENCE",
             "historical_success": None,
             "reasons": [],
-            "summary": "Reference price collection is active.",
+            "reference_evidence": [
+                "ABOVE_OPEN",
+                "UPPER_RANGE",
+                "DAILY_CHANGE_+0.5000%",
+            ],
+            "summary": (
+                "XAU/USD is above the daily open and in the upper "
+                "third of today's range. This is reference "
+                "intelligence, not a trade signal."
+            ),
         },
     ],
 }
@@ -92,7 +101,9 @@ def test_should_render_gold_as_reference_market():
     assert "$4,073.39" in html
     assert "Liquidity Not available" in html
     assert "REFERENCE" in html
-    assert "Gold intelligence policy is not enabled yet" in html
+    assert "not a trade signal" in html
+    assert "Above Open" in html
+    assert "Upper Range" in html
     assert 'class="commodity-fallback">Au</span>' in html
 
 
