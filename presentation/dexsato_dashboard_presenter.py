@@ -162,6 +162,10 @@ def render_decision_card(coin: dict[str, object]) -> str:
             reasons=reasons,
         )
     )
+    risk_note = _text(
+        coin.get("risk_note")
+        or "Current risk information is unavailable."
+    )
     reason_items = "".join(
         f"<li>{_reason_label(reason)}</li>" for reason in reasons[:3]
     ) or "<li>No supporting evidence recorded.</li>"
@@ -192,6 +196,8 @@ def render_decision_card(coin: dict[str, object]) -> str:
       <div class="summary-column">
         <h4>Intelligence Summary</h4>
         <p>{summary}</p>
+        <h4 class="risk-note-heading">⚠ Risk Note</h4>
+        <p class="risk-note">{risk_note}</p>
       </div>
       <button class="decision-button" type="button"
           data-open-token="{_text(token)}" aria-expanded="false">
@@ -205,6 +211,7 @@ def render_decision_card(coin: dict[str, object]) -> str:
         <div><span>Confidence</span><strong>{_text(confidence)}</strong></div>
         <div><span>Memory</span><strong>{_text(memory)}</strong></div>
         <p>{summary}</p>
+        <p><strong>⚠ Risk Note:</strong> {risk_note}</p>
       </div>
     </article>
     """
@@ -334,7 +341,7 @@ def render_dexsato_dashboard(
     .tone-alert .decision-pill{{color:var(--red)}} .tone-watch .decision-pill{{color:var(--amber)}}
     .tone-review .decision-pill{{color:var(--blue)}} .tone-reference .decision-pill{{color:var(--cyan)}} .confidence{{margin:12px 0 3px;color:var(--muted);font-size:12px}}
     .confidence strong{{display:block;color:#f2c94c;font-size:13px}} .coin-column small{{display:block;margin-top:4px;color:var(--muted)}}
-    ul{{margin:0;padding-left:18px;color:#cad7e5;font-size:14px}} li{{margin:8px 0}} .summary-column p{{margin:0;color:#bdcada;font-size:14px;line-height:1.55}}
+    ul{{margin:0;padding-left:18px;color:#cad7e5;font-size:14px}} li{{margin:8px 0}} .summary-column p{{margin:0;color:#bdcada;font-size:14px;line-height:1.55}} .risk-note-heading{{margin-top:14px!important;color:#ffbf3c}} .risk-note{{color:#f0dca8!important}}
     .decision-button{{margin-right:18px;padding:11px;border:1px solid var(--blue);border-radius:7px;background:transparent;color:#7fb0ff;cursor:pointer}}
     .decision-button:hover{{background:rgba(83,148,255,.1)}} .decision-detail{{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:15px;padding:17px 20px;border-top:1px solid #183149;background:#071522}}
     .decision-detail span{{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}} .decision-detail strong{{display:block;margin-top:4px}}

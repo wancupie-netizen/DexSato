@@ -625,6 +625,55 @@ def _build_single_change_lines(
     return lines
 
 
+def _alert_changes(
+    changes: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Return only markets whose current engine decision is ALERT."""
+    return [
+        change
+        for change in changes
+        if _normalize_upper(change.get("new_decision")) == "ALERT"
+    ]
+
+
+def _build_alert_lines(
+    change: dict[str, object],
+) -> list[str]:
+    """Build one focused decision alert with a grounded risk note."""
+    token = _normalize_upper(change.get("token"))
+    pair = _normalize_upper(change.get("pair"), fallback=token)
+    confidence = _normalize_upper(change.get("new_confidence"))
+    reasons = _meaningful_reasons(change)
+    risk_note = _normalize_text(
+        change.get("risk_note"),
+        fallback=(
+            "Current evidence requires attention. Review the latest market "
+            "conditions before making any decision."
+        ),
+    )
+
+    lines = [
+        f"🔴 {pair} · ALERT",
+        f"Confidence: {_confidence_emoji(confidence)} {confidence}",
+        "",
+        "Why it triggered",
+    ]
+    lines.extend(
+        [f"• {reason}" for reason in reasons]
+        or ["• Market risk evidence changed"]
+    )
+    lines.extend(
+        [
+            "",
+            "⚠️ Risk Note",
+            risk_note,
+            "",
+            "Not a trade signal.",
+        ]
+    )
+    return lines
+
+
 # ==========================================================
 # Meaningful Change Digest
 # ==========================================================
@@ -660,10 +709,6 @@ def build_change_digest_message(
             "Maximum digest changes must be at least one."
         )
 
-    if not changes:
-
-        return ""
-
     validated: list[
         dict[str, object]
     ] = []
@@ -683,17 +728,19 @@ def build_change_digest_message(
             change,
         )
 
-    selected = validated[
+    alerts = _alert_changes(validated)
+
+    if not alerts:
+        return ""
+
+    selected = alerts[
         :max_changes
     ]
 
     lines = [
-        "📡 DexSato Market Update",
+        "🚨 DexSato Market Decision Alert",
         "",
-        (
-            f"{_activity_emoji(len(validated))} "
-            f"{_market_label(len(validated))}"
-        ),
+        f"{len(alerts)} market{'s' if len(alerts) != 1 else ''} require attention",
     ]
 
     for index, change in enumerate(
@@ -709,13 +756,13 @@ def build_change_digest_message(
             )
 
         lines.extend(
-            _build_single_change_lines(
+            _build_alert_lines(
                 change,
             )
         )
 
     remaining = (
-        len(validated)
+        len(alerts)
         - len(selected)
     )
 
@@ -731,7 +778,7 @@ def build_change_digest_message(
                         if remaining == 1
                         else "changes"
                     )
-                    + " in dashboard"
+                    + " requiring attention in dashboard"
                 ),
             ]
         )
@@ -795,10 +842,12 @@ def send_change_digest(
         post=post,
     )
 
+    alert_count = len(_alert_changes(changes))
+
     return {
         **result,
         "changes": min(
-            len(changes),
+            alert_count,
             max_changes,
         ),
     }

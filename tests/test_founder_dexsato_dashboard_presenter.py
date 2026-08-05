@@ -88,6 +88,7 @@ def test_should_render_real_decision_card():
     assert "WATCH" in html
     assert "Decision Evidence" in html
     assert "Intelligence Summary" in html
+    assert "Risk Note" in html
     assert "View Decision" in html
     assert "/1.png" in html
     assert "Historical" not in html

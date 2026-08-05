@@ -89,6 +89,8 @@ def test_should_serialize_available_coin():
         "STRONG_LIQUIDITY",
     ]
 
+    assert "Liquidity is currently supportive" in result["risk_note"]
+
     assert result["error"] is None
 
 
@@ -165,6 +167,7 @@ def test_should_serialize_gold_as_reference_only():
         "ABOVE_OPEN",
         "UPPER_RANGE",
     ]
+    assert "upper end of today's range" in result["risk_note"]
 
 
 def test_should_reject_invalid_collection():

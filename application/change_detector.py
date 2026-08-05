@@ -435,6 +435,7 @@ def detect_coin_change(
 
     return {
         "token": token,
+        "pair": new_coin.get("pair"),
         "old_decision": old_decision,
         "new_decision": new_decision,
         "old_confidence": old_confidence,
@@ -464,6 +465,9 @@ def detect_coin_change(
                     "",
                 )
             ).strip()
+        ),
+        "risk_note": (
+            str(new_coin.get("risk_note", "")).strip()
         ),
         "triggers": triggers,
     }

@@ -30,6 +30,7 @@ DASHBOARD_DATA = [
     },
     {
         "token": "ETH",
+        "pair": "ETH/USDT",
         "available": False,
         "decision": None,
         "confidence": None,
@@ -45,7 +46,7 @@ DASHBOARD_DATA = [
 SINGLE_CHANGE = {
     "token": "BTC",
     "old_decision": "IGNORE",
-    "new_decision": "WATCH",
+    "new_decision": "ALERT",
     "old_confidence": "LOW",
     "new_confidence": "HIGH",
     "reasons": [
@@ -59,6 +60,8 @@ SINGLE_CHANGE = {
     "historical_success": 82.0,
     "seen_before": True,
     "summary": "Momentum detected.",
+    "pair": "BTC/USDT",
+    "risk_note": "Momentum may reverse without continued confirmation.",
     "triggers": [
         "DECISION_CHANGED",
         "CONFIDENCE_INCREASED",
@@ -125,18 +128,16 @@ def test_should_build_single_change_digest():
         ],
     )
 
-    assert "📡 DexSato Market Update" in message
+    assert "🚨 DexSato Market Decision Alert" in message
 
     assert (
-        "🟡 1 market changed"
+        "1 market require attention"
         in message
     )
 
-    assert "🔵 BTC · WATCH" in message
+    assert "🔴 BTC/USDT · ALERT" in message
 
-    assert "Change: IGNORE → WATCH" in message
-
-    assert "Why it changed" in message
+    assert "Why it triggered" in message
 
     assert (
         "• Momentum improving"
@@ -154,15 +155,13 @@ def test_should_build_single_change_digest():
     )
 
     assert (
-        "Pattern: 📚 Seen before · "
-        "82% historical success"
+        "⚠️ Risk Note"
         in message
     )
 
-    assert (
-        "Founder action: Keep on the watchlist"
-        in message
-    )
+    assert "Not a trade signal." in message
+
+    assert "historical success" not in message
 
     assert "━━━━━━━━━━━━━━━━━━" not in message
 
@@ -175,8 +174,9 @@ def test_should_build_new_pattern_message():
     change = {
         **SINGLE_CHANGE,
         "token": "ETH",
+        "pair": "ETH/USDT",
         "old_decision": "IGNORE",
-        "new_decision": "REVIEW",
+        "new_decision": "ALERT",
         "new_confidence": "MEDIUM",
         "reasons_added": [
             "WEAK_BREAKOUT",
@@ -191,9 +191,7 @@ def test_should_build_new_pattern_message():
         ],
     )
 
-    assert "🟡 ETH" in message
-
-    assert "IGNORE → REVIEW" in message
+    assert "🔴 ETH/USDT" in message
 
     assert "• Weak breakout" in message
 
@@ -202,12 +200,7 @@ def test_should_build_new_pattern_message():
         in message
     )
 
-    assert "Pattern: 🆕 New pattern" in message
-
-    assert (
-        "Founder action: Review the latest evidence"
-        in message
-    )
+    assert "Pattern:" not in message
 
 
 def test_should_build_multiple_change_digest():
@@ -218,8 +211,9 @@ def test_should_build_multiple_change_digest():
     second_change = {
         **SINGLE_CHANGE,
         "token": "ETH",
+        "pair": "ETH/USDT",
         "old_decision": "REVIEW",
-        "new_decision": "SELL",
+        "new_decision": "ALERT",
         "new_confidence": "MEDIUM",
         "reasons_added": [
             "RISKY_ACTIVITY",
@@ -234,22 +228,18 @@ def test_should_build_multiple_change_digest():
         ],
     )
 
-    assert "🔵 BTC" in message
+    assert "🔴 BTC/USDT" in message
 
-    assert "🔴 ETH" in message
-
-    assert "IGNORE → WATCH" in message
-
-    assert "REVIEW → SELL" in message
+    assert "ALERT" in message
 
     assert (
-        "🟡 2 markets changed"
+        "2 markets require attention"
         in message
     )
 
     assert "━━━━━━━━━━━━━━━━━━" not in message
 
-    assert "Founder action: Review current exposure" in message
+    assert "Founder action:" not in message
 
 
 def test_should_use_higher_activity_indicator():
@@ -261,6 +251,7 @@ def test_should_use_higher_activity_indicator():
         {
             **SINGLE_CHANGE,
             "token": f"COIN{index}",
+            "pair": f"COIN{index}/USDT",
         }
         for index in range(
             3,
@@ -271,6 +262,7 @@ def test_should_use_higher_activity_indicator():
         {
             **SINGLE_CHANGE,
             "token": f"MARKET{index}",
+            "pair": f"MARKET{index}/USDT",
         }
         for index in range(
             6,
@@ -290,12 +282,12 @@ def test_should_use_higher_activity_indicator():
     )
 
     assert (
-        "🟠 3 markets changed"
+        "3 markets require attention"
         in medium_message
     )
 
     assert (
-        "🔴 6 markets changed"
+        "6 markets require attention"
         in high_message
     )
 
@@ -309,6 +301,7 @@ def test_should_limit_digest_changes():
         {
             **SINGLE_CHANGE,
             "token": f"COIN{index}",
+            "pair": f"COIN{index}/USDT",
         }
         for index in range(
             3,
@@ -327,12 +320,12 @@ def test_should_limit_digest_changes():
     assert "COIN2" not in message
 
     assert (
-        "➕ 1 additional change in dashboard"
+        "➕ 1 additional change requiring attention in dashboard"
         in message
     )
 
     assert (
-        "🟠 3 markets changed"
+        "3 markets require attention"
         in message
     )
 
@@ -591,13 +584,11 @@ def test_should_send_change_digest():
     ]
 
     assert (
-        "📡 DexSato Market Update"
+        "🚨 DexSato Market Decision Alert"
         in message
     )
 
-    assert "🔵 BTC" in message
-
-    assert "IGNORE → WATCH" in message
+    assert "🔴 BTC/USDT" in message
 
     assert (
         calls[0]["json"][

@@ -16,6 +16,7 @@ from __future__ import annotations
 from adaptive.dashboard.dashboard_card import (
     DashboardCard,
 )
+from application.risk_note import build_market_risk_note
 
 
 def serialize_founder_dashboard_results(
@@ -95,6 +96,11 @@ def serialize_founder_dashboard_results(
                         "summary",
                         "Gold reference intelligence is collecting data.",
                     ),
+                    "risk_note": build_market_risk_note(
+                        asset_class="commodities",
+                        market_state=intelligence.get("market_state"),
+                        daily_change_pct=intelligence.get("daily_change_pct"),
+                    ),
                     "error": None,
                 }
             )
@@ -171,6 +177,10 @@ def serialize_founder_dashboard_results(
                     card.reasons,
                 ),
                 "summary": card.summary,
+                "risk_note": build_market_risk_note(
+                    asset_class="crypto",
+                    reasons=list(card.reasons),
+                ),
                 "error": None,
             }
         )
