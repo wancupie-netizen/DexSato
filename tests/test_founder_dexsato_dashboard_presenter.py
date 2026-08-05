@@ -36,6 +36,18 @@ SNAPSHOT = {
             "reasons": ["MULTIPLE_SIGNALS_ALIGNED"],
             "summary": "Founder attention is required.",
         },
+        {
+            "token": "XAU",
+            "pair": "XAU/USD",
+            "price": "4073.39",
+            "liquidity": None,
+            "available": True,
+            "decision": "REFERENCE",
+            "confidence": "REFERENCE",
+            "historical_success": None,
+            "reasons": [],
+            "summary": "Reference price collection is active.",
+        },
     ],
 }
 
@@ -71,6 +83,17 @@ def test_should_render_real_decision_card():
     assert "/1.png" in html
     assert "Historical" not in html
     assert "decision-detail" in html
+
+
+def test_should_render_gold_as_reference_market():
+    html = render_decision_card(SNAPSHOT["coins"][2])
+
+    assert "XAU/USD" in html
+    assert "$4,073.39" in html
+    assert "Liquidity Not available" in html
+    assert "REFERENCE" in html
+    assert "Gold intelligence policy is not enabled yet" in html
+    assert 'class="commodity-fallback">Au</span>' in html
 
 
 def test_should_format_market_values():
@@ -111,6 +134,7 @@ def test_should_keep_dashboard_search_and_filters():
     assert "function applyFilters()" in html
     assert 'data-filter="alert"' in html
     assert 'data-filter="unavailable"' in html
+    assert 'data-filter="reference"' in html
     assert '"Asia/Kuala_Lumpur"' in html
     assert "Search BTC, ETH, SUI..." in html
     assert "formatMYT" in html

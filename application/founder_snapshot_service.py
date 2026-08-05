@@ -35,12 +35,24 @@ from application.founder_dashboard_service import (
     build_founder_dashboard_results,
 )
 
+from application.commodity_dashboard_service import (
+    build_commodity_reference_results,
+)
+
 
 LATEST_SNAPSHOT_FILE = Path(
     "output",
     "snapshots",
     "latest_snapshot.json",
 )
+
+
+def build_complete_dashboard_results() -> list[dict[str, object]]:
+    """Build crypto decisions plus commodity reference markets."""
+    return [
+        *build_founder_dashboard_results(),
+        *build_commodity_reference_results(),
+    ]
 
 
 def build_snapshot_payload(
@@ -208,7 +220,7 @@ def generate_latest_snapshot(
     build_results: Callable[
         [],
         list[dict[str, object]],
-    ] = build_founder_dashboard_results,
+    ] = build_complete_dashboard_results,
     generated_at: datetime | None = None,
 ) -> dict[str, object]:
     """

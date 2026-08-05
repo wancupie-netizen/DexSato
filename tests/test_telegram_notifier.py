@@ -647,6 +647,26 @@ def test_should_remain_silent_without_changes():
 # Legacy Manual Snapshot
 # ==========================================================
 
+def test_should_render_reference_market_without_trade_signal():
+    message = build_telegram_message(
+        [
+            {
+                "token": "XAU",
+                "available": True,
+                "decision": "REFERENCE",
+                "confidence": "REFERENCE",
+                "historical_success": None,
+                "seen_before": False,
+                "reasons": [],
+            }
+        ]
+    )
+
+    assert "XAU" in message
+    assert "Status: REFERENCE" in message
+    assert "Collecting price data" in message
+    assert "Historical Success" not in message
+
 def test_should_build_legacy_telegram_message():
     """
     Legacy manual message should remain available.

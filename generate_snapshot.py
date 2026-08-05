@@ -5,7 +5,7 @@ Run from the project root:
 
     python generate_snapshot.py
 
-The command scans the approved five-market V1 universe and
+The command scans the active market universe and
 replaces the latest shared snapshot.
 """
 
@@ -24,7 +24,7 @@ def main() -> int:
     print()
 
     print("=" * 60)
-    print("DexSato V1 — 5 Market Snapshot")
+    print("DexSato — Market Snapshot")
     print("=" * 60)
 
     try:
@@ -43,13 +43,13 @@ def main() -> int:
 
     print()
     print(
-        f"Total coins       : {result['total_coins']}"
+        f"Total markets     : {result['total_coins']}"
     )
     print(
-        f"Available coins   : {result['available_coins']}"
+        f"Available markets : {result['available_coins']}"
     )
     print(
-        f"Unavailable coins : {result['unavailable_coins']}"
+        f"Unavailable       : {result['unavailable_coins']}"
     )
     print(
         f"Generated at      : {result['generated_at']}"

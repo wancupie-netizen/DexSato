@@ -56,6 +56,40 @@ def serialize_founder_dashboard_results(
             "market",
         )
 
+        reference_only = result.get(
+            "reference_only",
+            False,
+        ) is True
+
+        if reference_only and isinstance(market, dict):
+            serialized.append(
+                {
+                    "token": token,
+                    "pair": market.get("pair"),
+                    "price": market.get("price"),
+                    "liquidity": market.get("liquidity"),
+                    "volume_24h": market.get("volume_24h"),
+                    "market_cap": market.get("market_cap"),
+                    "fdv": market.get("fdv"),
+                    "pair_address": market.get("pair_address"),
+                    "chain": market.get("chain"),
+                    "source": market.get("source"),
+                    "asset_class": "commodities",
+                    "available": True,
+                    "decision": "REFERENCE",
+                    "confidence": "REFERENCE",
+                    "historical_success": None,
+                    "seen_before": False,
+                    "reasons": [],
+                    "summary": (
+                        "Reference price collection is active. "
+                        "Gold intelligence policy is not enabled yet."
+                    ),
+                    "error": None,
+                }
+            )
+            continue
+
         if card is None:
 
             serialized.append(
@@ -70,6 +104,7 @@ def serialize_founder_dashboard_results(
                     "pair_address": None,
                     "chain": None,
                     "source": None,
+                    "asset_class": None,
                     "available": False,
                     "decision": None,
                     "confidence": None,
@@ -114,6 +149,7 @@ def serialize_founder_dashboard_results(
                 "pair_address": market.get("pair_address"),
                 "chain": market.get("chain"),
                 "source": market.get("source"),
+                "asset_class": "crypto",
                 "available": True,
                 "decision": card.decision,
                 "confidence": card.confidence,

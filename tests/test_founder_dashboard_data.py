@@ -122,6 +122,37 @@ def test_should_serialize_unavailable_coin():
     )
 
 
+def test_should_serialize_gold_as_reference_only():
+    result = serialize_founder_dashboard_results(
+        [
+            {
+                "token": "XAU",
+                "card": None,
+                "reference_only": True,
+                "market": {
+                    "pair": "XAU/USD",
+                    "price": "4073.39",
+                    "liquidity": None,
+                    "volume_24h": None,
+                    "market_cap": None,
+                    "fdv": None,
+                    "pair_address": "twelvedata:XAU/USD",
+                    "chain": "spot-metals",
+                    "source": "Twelve Data",
+                },
+                "error": None,
+            }
+        ]
+    )[0]
+
+    assert result["available"] is True
+    assert result["decision"] == "REFERENCE"
+    assert result["confidence"] == "REFERENCE"
+    assert result["asset_class"] == "commodities"
+    assert result["liquidity"] is None
+    assert result["historical_success"] is None
+
+
 def test_should_reject_invalid_collection():
     """
     Shared data requires a list.

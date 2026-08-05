@@ -893,6 +893,15 @@ def build_telegram_message(
             )
         )
 
+        if decision == "REFERENCE":
+            lines.extend(
+                [
+                    "Status: REFERENCE",
+                    "Intelligence: Collecting price data",
+                ]
+            )
+            continue
+
         historical = _format_historical_success(
             item.get(
                 "historical_success",

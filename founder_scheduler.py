@@ -9,7 +9,7 @@ The command:
 
 1. Loads Founder V1 configuration from the project .env file.
 2. Reads the previous stored snapshot when available.
-3. Generates a fresh five-market snapshot.
+3. Generates a fresh active-market snapshot.
 4. Compares the previous and current snapshots.
 5. Sends a Telegram digest only for meaningful changes.
 6. Preserves a successful snapshot when Telegram is unavailable.
@@ -44,7 +44,7 @@ This module does NOT:
 - run continuously
 - contain its own clock scheduler
 - prompt the founder for confirmation
-- send the complete five-market technical report
+- send the complete active-market technical report
 - retry failed runs
 - manage Windows Task Scheduler
 """
@@ -481,17 +481,17 @@ def print_scheduler_result(
     )
 
     print(
-        "Total coins        : "
+        "Total markets      : "
         f"{result.get('total_coins', 0)}"
     )
 
     print(
-        "Available coins    : "
+        "Available markets  : "
         f"{result.get('available_coins', 0)}"
     )
 
     print(
-        "Unavailable coins  : "
+        "Unavailable        : "
         f"{result.get('unavailable_coins', 0)}"
     )
 

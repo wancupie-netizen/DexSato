@@ -81,6 +81,10 @@ def build_intelligence_summary(
             f"{token} could not be evaluated in the current snapshot."
             " Wait for market data to become available."
         ),
+        "REFERENCE": (
+            f"{token} reference price collection is active."
+            " Gold intelligence policy is not enabled yet."
+        ),
     }
     return messages.get(
         decision,
@@ -92,6 +96,8 @@ def render_coin_logo(token: object) -> str:
     normalized = _status(token)
     source = COIN_LOGOS.get(normalized)
     fallback = _text(normalized[:4])
+    if normalized == "XAU":
+        return '<span class="commodity-fallback">Au</span>'
     if source is None:
         return f'<span class="coin-fallback">{fallback}</span>'
     return (
@@ -314,15 +320,15 @@ def render_dexsato_dashboard(
       align-items:center;min-height:150px;border:1px solid var(--line);border-left:2px solid var(--blue);
       border-radius:11px;background:linear-gradient(100deg,#0c1c2e,#081522);overflow:hidden}}
     .tone-alert{{border-left-color:var(--red)}} .tone-watch{{border-left-color:var(--amber)}}
-    .tone-review{{border-left-color:var(--blue)}} .tone-ignore,.tone-unavailable{{border-left-color:#718198}}
+    .tone-review{{border-left-color:var(--blue)}} .tone-reference{{border-left-color:var(--cyan)}} .tone-ignore,.tone-unavailable{{border-left-color:#718198}}
     .coin-column,.evidence-column,.summary-column{{min-width:0;padding:18px}}
     .coin-column{{display:flex;align-items:center;gap:16px}} .evidence-column,.summary-column{{border-left:1px solid #183149}}
     .coin-logo{{display:grid;place-items:center;flex:0 0 72px;width:72px;height:72px;border:1px solid #315474;
       border-radius:50%;background:#10253c;overflow:hidden}} .coin-logo img{{width:100%;height:100%;object-fit:cover}}
-    .coin-fallback{{font-weight:900}} h3{{margin:0 0 7px;font-size:24px}} h4{{margin:0 0 10px;font-size:13px}}
+    .coin-fallback,.commodity-fallback{{font-weight:900}} .commodity-fallback{{color:#f7c948;font-size:25px}} h3{{margin:0 0 7px;font-size:24px}} h4{{margin:0 0 10px;font-size:13px}}
     .decision-pill{{display:inline-flex;padding:5px 10px;border:1px solid currentColor;border-radius:6px;font-size:12px;font-weight:800}}
     .tone-alert .decision-pill{{color:var(--red)}} .tone-watch .decision-pill{{color:var(--amber)}}
-    .tone-review .decision-pill{{color:var(--blue)}} .confidence{{margin:12px 0 3px;color:var(--muted);font-size:12px}}
+    .tone-review .decision-pill{{color:var(--blue)}} .tone-reference .decision-pill{{color:var(--cyan)}} .confidence{{margin:12px 0 3px;color:var(--muted);font-size:12px}}
     .confidence strong{{display:block;color:#f2c94c;font-size:13px}} .coin-column small{{display:block;margin-top:4px;color:var(--muted)}}
     ul{{margin:0;padding-left:18px;color:#cad7e5;font-size:14px}} li{{margin:8px 0}} .summary-column p{{margin:0;color:#bdcada;font-size:14px;line-height:1.55}}
     .decision-button{{margin-right:18px;padding:11px;border:1px solid var(--blue);border-radius:7px;background:transparent;color:#7fb0ff;cursor:pointer}}
@@ -334,7 +340,7 @@ def render_dexsato_dashboard(
     .timeline li:before{{position:absolute;top:9px;bottom:-8px;left:6px;width:1px;background:#34506d;content:""}}
     .timeline li:last-child:before{{display:none}} .timeline-dot{{position:absolute;top:5px;left:1px;width:11px;height:11px;border-radius:50%;background:var(--amber)}}
     .timeline-dot.neutral{{background:#7f91a5}} .timeline small{{display:block;margin-top:4px;color:var(--muted)}}
-    .market-state{{display:grid;grid-template-columns:repeat(4,1fr);text-align:center}} .market-state div{{border-right:1px solid var(--line)}}
+    .market-state{{display:grid;grid-template-columns:repeat(5,1fr);text-align:center}} .market-state div{{border-right:1px solid var(--line)}}
     .market-state div:last-child{{border:0}} .market-state span{{display:block;font-size:11px;color:var(--muted)}} .market-state strong{{font-size:25px}}
     .health-list{{display:grid;gap:10px}} .health-row{{display:flex;justify-content:space-between;color:var(--muted)}} .health-row b{{color:var(--green)}}
     .footer{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px;padding:15px;border:1px solid var(--line);
@@ -379,7 +385,7 @@ def render_dexsato_dashboard(
         </div></div>
         <div class="filters">
           <button class="active" data-filter="">All</button><button data-filter="alert">ALERT</button>
-          <button data-filter="watch">WATCH</button><button data-filter="review">REVIEW</button><button data-filter="ignore">IGNORE</button><button data-filter="unavailable">UNAVAILABLE</button>
+          <button data-filter="watch">WATCH</button><button data-filter="review">REVIEW</button><button data-filter="reference">REFERENCE</button><button data-filter="ignore">IGNORE</button><button data-filter="unavailable">UNAVAILABLE</button>
         </div>
         <div id="decision-list" class="decision-list">{cards}</div>
       </section>
@@ -387,7 +393,7 @@ def render_dexsato_dashboard(
         <section id="timeline" class="rail-card"><h2>Decision Timeline</h2><ol class="timeline">{_render_timeline(latest_run)}</ol></section>
         <section class="rail-card"><h2>Market State</h2><div class="market-state">
           <div><span>ALERT</span><strong>{counts["ALERT"]}</strong></div><div><span>WATCH</span><strong>{counts["WATCH"]}</strong></div>
-          <div><span>REVIEW</span><strong>{counts["REVIEW"]}</strong></div><div><span>IGNORE</span><strong>{counts["IGNORE"]}</strong></div>
+          <div><span>REVIEW</span><strong>{counts["REVIEW"]}</strong></div><div><span>REFERENCE</span><strong>{counts["REFERENCE"]}</strong></div><div><span>IGNORE</span><strong>{counts["IGNORE"]}</strong></div>
         </div></section>
         <section class="rail-card"><h2>System Health</h2><div class="health-list">
           <div class="health-row"><span>Engine</span><b>ONLINE</b></div><div class="health-row"><span>Snapshot</span><b>{_text(freshness)}</b></div>
