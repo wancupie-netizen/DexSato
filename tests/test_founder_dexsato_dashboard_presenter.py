@@ -6,6 +6,7 @@ from presentation.dexsato_dashboard_presenter import (
     format_usd,
     render_decision_card,
     render_dexsato_dashboard,
+    render_market_detail_page,
 )
 
 
@@ -20,6 +21,23 @@ SNAPSHOT = {
             "pair": "BTC/USDT",
             "price": "64202.82",
             "liquidity": 15149834.19,
+            "volume_24h": 16594948.71,
+            "market_cap": 1250000000000,
+            "price_change_24h": 2.45,
+            "chain": "bsc",
+            "source": "DexScreener",
+            "scanned_at": "2026-07-30T13:30:00+00:00",
+            "trading_venues_status": "AVAILABLE",
+            "trading_venues": [
+                {
+                    "name": "PancakeSwap",
+                    "type": "DEX",
+                    "pair": "BTC/USDT",
+                    "volume_24h": 12000000,
+                    "liquidity": 15000000,
+                    "url": "https://dexscreener.com/bsc/0xpool",
+                }
+            ],
             "available": True,
             "decision": "WATCH",
             "confidence": "MEDIUM",
@@ -93,6 +111,48 @@ def test_should_render_real_decision_card():
     assert "/1.png" in html
     assert "Historical" not in html
     assert "decision-detail" in html
+    assert "market-title-button" in html
+    assert 'href="/market/btc"' in html
+    assert "market-detail-template" not in html
+    assert "data-open-market" not in html
+
+
+def test_should_render_dedicated_market_detail_page():
+    html = render_market_detail_page(
+        SNAPSHOT["coins"][0],
+        generated_at=SNAPSHOT["generated_at"],
+    )
+
+    assert "BTC/USDT Market Workspace" in html
+    assert "24h Volume" in html
+    assert "$16.59M" in html
+    assert "+2.45%" in html
+    assert "On-chain Market Cap" in html
+    assert "BSC" in html
+    assert "PancakeSwap" in html
+    assert "ranked by 24h volume" in html
+    assert 'id="copy-summary"' in html
+    assert 'href="/"' in html
+    assert "market-drawer" not in html
+
+
+def test_should_reject_untrusted_market_links():
+    coin = {
+        **SNAPSHOT["coins"][0],
+        "trading_venues": [
+            {
+                "name": "Unsafe Venue",
+                "type": "DEX",
+                "pair": "BTC/USDT",
+                "url": "javascript:alert(1)",
+            }
+        ],
+    }
+
+    html = render_market_detail_page(coin)
+
+    assert "Unsafe Venue" in html
+    assert "javascript:" not in html
 
 
 def test_should_render_gold_as_reference_market():

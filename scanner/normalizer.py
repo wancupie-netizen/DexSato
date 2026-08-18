@@ -67,6 +67,18 @@ def normalize_pair(pair: dict, *, token: str | None = None, display_pair: str | 
                 {},
             ).get("h24"),
 
+        "price_change_24h":
+            pair.get(
+                "priceChange",
+                {},
+            ).get("h24"),
+
+        "dex_id":
+            pair.get("dexId"),
+
+        "market_url":
+            pair.get("url"),
+
         "source":
             "DexScreener",
 

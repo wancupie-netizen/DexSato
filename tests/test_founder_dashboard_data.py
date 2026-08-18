@@ -59,7 +59,17 @@ def test_should_serialize_available_coin():
                     "pair_address": "0xpool",
                     "chain": "bsc",
                     "source": "DexScreener",
+                    "scanned_at": "2026-08-19T00:00:00+00:00",
+                    "price_change_24h": 2.4,
                 },
+                "trading_venues": [
+                    {
+                        "name": "PancakeSwap",
+                        "type": "DEX",
+                        "pair": "BTC/USDT",
+                    }
+                ],
+                "trading_venues_status": "AVAILABLE",
                 "error": None,
             }
         ]
@@ -76,6 +86,12 @@ def test_should_serialize_available_coin():
     assert result["liquidity"] == 15149834.19
 
     assert result["source"] == "DexScreener"
+
+    assert result["price_change_24h"] == 2.4
+
+    assert result["trading_venues_status"] == "AVAILABLE"
+
+    assert result["trading_venues"][0]["name"] == "PancakeSwap"
 
     assert result["decision"] == "WATCH"
 

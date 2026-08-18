@@ -38,6 +38,9 @@ from application.founder_dashboard_service import (
 from application.commodity_dashboard_service import (
     build_commodity_reference_results,
 )
+from application.trading_venue_service import (
+    fetch_trading_venues,
+)
 
 
 LATEST_SNAPSHOT_FILE = Path(
@@ -50,7 +53,9 @@ LATEST_SNAPSHOT_FILE = Path(
 def build_complete_dashboard_results() -> list[dict[str, object]]:
     """Build crypto decisions plus commodity reference markets."""
     return [
-        *build_founder_dashboard_results(),
+        *build_founder_dashboard_results(
+            venue_lookup=fetch_trading_venues,
+        ),
         *build_commodity_reference_results(),
     ]
 
