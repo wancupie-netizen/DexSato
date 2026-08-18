@@ -52,6 +52,12 @@ pair = {
 
     },
 
+    "priceChange": {"h24": 2.5},
+
+    "dexId": "uniswap",
+
+    "url": "https://dexscreener.com/ethereum/0xpool",
+
     "pairAddress": "PAIR-TEST-123",
 
 }
@@ -87,6 +93,12 @@ assert event["fdv"] == 800000000
 assert event["market_cap"] == 790000000
 
 assert event["volume_24h"] == 1200000
+
+assert event["price_change_24h"] == 2.5
+
+assert event["dex_id"] == "uniswap"
+
+assert event["market_url"] == "https://dexscreener.com/ethereum/0xpool"
 
 assert event["source"] == "DexScreener"
 

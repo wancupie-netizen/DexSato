@@ -73,6 +73,7 @@ def build_founder_dashboard_results(
     *,
     tokens: Iterable[str] | None = None,
     scan: Callable[[str], dict] = run_scan,
+    venue_lookup: Callable[[str], list[dict[str, object]]] | None = None,
 ) -> list[dict[str, object]]:
     """
     Run sequential DexSato scans.
@@ -132,6 +133,20 @@ def build_founder_dashboard_results(
 
             continue
 
+        trading_venues: list[dict[str, object]] = []
+        trading_venues_status = "NOT_REQUESTED"
+
+        if venue_lookup is not None:
+            try:
+                trading_venues = venue_lookup(normalized_token)
+                trading_venues_status = (
+                    "AVAILABLE" if trading_venues else "NO_MATCH"
+                )
+            except Exception:
+                # Venue discovery is optional presentation enrichment and
+                # must never fail a market scan or affect its decision.
+                trading_venues_status = "UNAVAILABLE"
+
         results.append(
             {
                 "token": normalized_token,
@@ -139,6 +154,8 @@ def build_founder_dashboard_results(
                 "market": scan_result.get(
                     "event",
                 ),
+                "trading_venues": trading_venues,
+                "trading_venues_status": trading_venues_status,
                 "error": None,
             }
         )

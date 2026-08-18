@@ -51,6 +51,7 @@ from application.system_health_dashboard import (
 
 from presentation.dexsato_dashboard_presenter import (
     render_dexsato_dashboard,
+    render_market_detail_page,
 )
 
 render_founder_snapshot_dashboard = render_dexsato_dashboard
@@ -142,6 +143,40 @@ def founder_home() -> str:
     return render_founder_snapshot_dashboard(
         snapshot,
         system_status=system_status,
+    )
+
+
+@app.get(
+    "/market/{token}",
+    response_class=HTMLResponse,
+)
+def market_detail(token: str) -> str:
+    """Display one market workspace from the latest stored snapshot."""
+    try:
+        snapshot = load_current_snapshot()
+    except (FileNotFoundError, RuntimeError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    coins = snapshot.get("coins")
+    if not isinstance(coins, list):
+        raise HTTPException(status_code=503, detail="Snapshot coin data is invalid.")
+
+    normalized = str(token).strip().upper()
+    coin = next(
+        (
+            item
+            for item in coins
+            if isinstance(item, dict)
+            and str(item.get("token", "")).strip().upper() == normalized
+        ),
+        None,
+    )
+    if coin is None:
+        raise HTTPException(status_code=404, detail="Market is not available.")
+
+    return render_market_detail_page(
+        coin,
+        generated_at=snapshot.get("generated_at"),
     )
 
 

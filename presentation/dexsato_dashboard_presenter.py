@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from html import escape
+from urllib.parse import urlparse
 
 
 COIN_LOGOS = {
@@ -137,6 +138,157 @@ def format_compact_usd(value: object) -> str:
     return f"${amount:,.2f}"
 
 
+def format_percentage(value: object) -> str:
+    """Format a percentage while preserving unavailable data honestly."""
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "Not available"
+    sign = "+" if amount > 0 else ""
+    return f"{sign}{amount:,.2f}%"
+
+
+def _safe_market_url(value: object) -> str | None:
+    """Allow only public HTTPS DexScreener links from provider data."""
+    candidate = str(value or "").strip()
+    parsed = urlparse(candidate)
+    if parsed.scheme != "https" or parsed.hostname not in {
+        "dexscreener.com",
+        "www.dexscreener.com",
+    }:
+        return None
+    return escape(candidate, quote=True)
+
+
+def _format_network(value: object) -> str:
+    """Format known network identifiers without damaging brand casing."""
+    normalized = str(value or "").strip().lower()
+    labels = {
+        "bsc": "BSC",
+        "ethereum": "Ethereum",
+        "solana": "Solana",
+        "sui": "Sui",
+        "spot-metals": "Spot Metals",
+    }
+    return labels.get(normalized, normalized.replace("-", " ").title()) or "Not available"
+
+
+def _render_market_detail_content(coin: dict[str, object]) -> str:
+    """Render reusable market-detail content from one stored snapshot."""
+    token = _status(coin.get("token"))
+    pair = _text(coin.get("pair") or token)
+    price = _text(format_usd(coin.get("price")))
+    change = _text(format_percentage(coin.get("price_change_24h")))
+    volume = _text(format_compact_usd(coin.get("volume_24h")))
+    liquidity = _text(format_compact_usd(coin.get("liquidity")))
+    market_cap = _text(format_compact_usd(coin.get("market_cap")))
+    decision = _text(_status(coin.get("decision")))
+    confidence = _text(_status(coin.get("confidence")))
+    source = _text(coin.get("source"), "Not available")
+    chain = _text(_format_network(coin.get("chain")))
+    market_cap_label = (
+        "On-chain Market Cap"
+        if _status(coin.get("asset_class"), "CRYPTO") == "CRYPTO"
+        else "Market Cap"
+    )
+    scanned_at = _text(coin.get("scanned_at"), "Not available")
+    risk_note = _text(
+        coin.get("risk_note") or "Current risk information is unavailable."
+    )
+    reasons = coin.get("reasons", [])
+    if decision == "REFERENCE":
+        reasons = coin.get("reference_evidence", [])
+    if not isinstance(reasons, list):
+        reasons = []
+    evidence = "".join(
+        f"<li>{_reason_label(reason)}</li>" for reason in reasons[:3]
+    ) or "<li>No supporting evidence recorded.</li>"
+
+    venues = coin.get("trading_venues", [])
+    if not isinstance(venues, list):
+        venues = []
+    venue_rows: list[str] = []
+    for index, venue in enumerate(venues[:3], start=1):
+        if not isinstance(venue, dict):
+            continue
+        url = _safe_market_url(venue.get("url"))
+        name = _text(venue.get("name"), "Unknown DEX")
+        name_html = (
+            f'<a href="{url}" target="_blank" rel="noopener noreferrer">'
+            f"{name}</a>"
+            if url
+            else name
+        )
+        venue_rows.append(
+            '<div class="venue-row">'
+            f'<span class="venue-rank">{index}</span>'
+            f'<div><strong>{name_html}</strong>'
+            f'<small>{_text(venue.get("type"), "DEX")} · '
+            f'{_text(venue.get("pair"), pair)}</small></div>'
+            f'<div><strong>{_text(format_compact_usd(venue.get("volume_24h")))}</strong>'
+            '<small>24h volume</small></div>'
+            f'<div><strong>{_text(format_compact_usd(venue.get("liquidity")))}</strong>'
+            '<small>Liquidity</small></div>'
+            "</div>"
+        )
+    venue_status = _status(coin.get("trading_venues_status"), "NOT_REQUESTED")
+    venue_html = "".join(venue_rows)
+    if not venue_html:
+        messages = {
+            "UNAVAILABLE": "Trading venue data is temporarily unavailable.",
+            "NO_MATCH": "No verified matching DEX venue was returned.",
+            "NOT_APPLICABLE": "Trading venue ranking does not apply to this market.",
+        }
+        venue_html = (
+            '<p class="detail-empty">'
+            f'{_text(messages.get(venue_status, "Trading venue data will be collected on the next scan."))}'
+            "</p>"
+        )
+
+    return f"""
+      <div class="drawer-heading">
+        <div class="drawer-logo">{render_coin_logo(token)}</div>
+        <div><small>Market Detail</small><h2>{pair}</h2>
+          <p>{price} <span class="market-change">{change} · 24h</span></p></div>
+      </div>
+      <section class="detail-section">
+        <h3>Market Snapshot</h3>
+        <div class="detail-metrics">
+          <div><span>Price</span><strong>{price}</strong></div>
+          <div><span>24h Change</span><strong>{change}</strong></div>
+          <div><span>24h Volume</span><strong>{volume}</strong></div>
+          <div><span>Liquidity</span><strong>{liquidity}</strong></div>
+          <div><span>{market_cap_label}</span><strong>{market_cap}</strong></div>
+          <div><span>Network</span><strong>{chain}</strong></div>
+        </div>
+      </section>
+      <section class="detail-section">
+        <h3>DexSato Decision</h3>
+        <div class="drawer-decision"><span>{decision}</span><strong>Confidence {confidence}</strong></div>
+        <ul>{evidence}</ul>
+        <p class="drawer-risk"><strong>Risk note</strong>{risk_note}</p>
+      </section>
+      <section class="detail-section">
+        <div class="detail-title-row"><h3>Top Trading Venues</h3><span>DEX · ranked by 24h volume</span></div>
+        <div class="venue-list">{venue_html}</div>
+        <p class="data-note">Venue ranking is informational and is not an endorsement.</p>
+      </section>
+      <section class="detail-source">
+        <span>Market source <strong>{source}</strong></span>
+        <span data-scanned-at="{scanned_at}">Updated <strong class="detail-updated">{scanned_at}</strong></span>
+      </section>
+    """
+
+
+def render_market_detail(coin: dict[str, object]) -> str:
+    """Render one hidden detail template for backward compatibility."""
+    return (
+        '<template class="market-detail-template">'
+        f"{_render_market_detail_content(coin)}"
+        "</template>"
+    )
+
+
 def render_decision_card(coin: dict[str, object]) -> str:
     token = _status(coin.get("token"))
     pair = _text(coin.get("pair") or token)
@@ -182,7 +334,9 @@ def render_decision_card(coin: dict[str, object]) -> str:
       <div class="coin-column">
         <div class="coin-logo">{render_coin_logo(token)}</div>
         <div>
-          <h3>{_text(pair)}</h3>
+          <a class="market-title-button" href="/market/{_text(token.lower())}">
+            {_text(pair)}<span aria-hidden="true">›</span>
+          </a>
           <small class="market-price">{_text(price)}</small>
           <small class="market-liquidity">Liquidity {_text(liquidity)}</small>
           <span class="decision-pill">{_text(decision)}</span>
@@ -215,6 +369,86 @@ def render_decision_card(coin: dict[str, object]) -> str:
       </div>
     </article>
     """
+
+
+def render_market_detail_page(
+    coin: dict[str, object],
+    *,
+    generated_at: object = None,
+) -> str:
+    """Render a dedicated market workspace from the latest snapshot."""
+    if not isinstance(coin, dict):
+        raise ValueError("Market detail requires a coin dictionary.")
+
+    token = _status(coin.get("token"))
+    pair = _text(coin.get("pair") or token)
+    content = _render_market_detail_content(coin)
+    summary = _text(
+        coin.get("summary") or f"Latest stored DexSato snapshot for {pair}."
+    )
+    generated = _text(generated_at, "Not available")
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{pair} · DexSato Market Detail</title>
+  <link rel="icon" type="image/png" href="/static/branding/favicon.png">
+  <script>
+    try{{if(localStorage.getItem("dexsato-theme")==="plain")document.documentElement.dataset.theme="plain";}}catch(error){{}}
+  </script>
+  <style>
+    :root{{--bg:#06111f;--panel:#0b1a2c;--panel2:#0f2238;--line:#1d3852;--text:#f5f8ff;--muted:#91a8c1;--cyan:#23d9d2;--blue:#5394ff;--amber:#f7b928}}
+    *{{box-sizing:border-box}} html{{color-scheme:dark}} body{{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -20%,#102746 0,transparent 35%),var(--bg);color:var(--text);font-family:"Segoe UI Variable","Segoe UI",Inter,system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.55;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}}
+    button{{font:inherit}} .market-page{{width:min(1180px,calc(100% - 36px));margin:0 auto;padding:24px 0 42px}}
+    .market-page-header{{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--line)}}
+    .page-brand{{display:flex;align-items:center;gap:15px}} .page-brand img{{width:150px;border-radius:9px}} .page-brand span{{color:var(--muted);font-size:14px;font-weight:600;letter-spacing:.01em}}
+    .page-actions{{display:flex;align-items:center;gap:9px}} .page-action{{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);font-size:14px;font-weight:700;text-decoration:none;cursor:pointer}}
+    .page-action:hover{{border-color:var(--blue)}} .theme-switcher{{display:flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}}
+    .theme-option{{min-height:34px;padding:7px 11px;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer}} .theme-option.active{{background:#1b1d4e;color:#fff}}
+    .page-intro{{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:20px}} .page-intro h1{{margin:0;font-size:32px;line-height:1.2;letter-spacing:-.025em}} .page-intro p{{max-width:700px;margin:8px 0 0;color:var(--muted);font-size:16px;line-height:1.5}} .snapshot-time{{color:var(--muted);font-size:12.5px;line-height:1.45;text-align:right}}
+    #market-page-content{{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(350px,.75fr);gap:18px;align-items:start}}
+    .drawer-heading{{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:20px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}}
+    .drawer-heading small{{color:var(--muted);font-size:13px;font-weight:750;text-transform:uppercase;letter-spacing:.09em}} .drawer-heading h2{{margin:3px 0 0;font-size:31px;line-height:1.2;letter-spacing:-.02em}} .drawer-heading p{{margin:5px 0 0;color:var(--muted);font-size:15px}}
+    .drawer-logo{{display:grid;place-items:center;flex:0 0 72px;width:72px;height:72px;border:1px solid var(--line);border-radius:50%;background:#10253c;overflow:hidden}} .drawer-logo img{{width:100%;height:100%;object-fit:cover}} .coin-fallback,.commodity-fallback{{font-weight:900}} .commodity-fallback{{color:#f7c948;font-size:25px}} .market-change{{color:var(--cyan);font-size:13px;font-weight:700}}
+    .detail-section{{padding:22px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}} .detail-section>h3,.detail-title-row h3{{margin:0 0 16px;font-size:18px;line-height:1.35;letter-spacing:-.01em}}
+    .detail-section:nth-of-type(1),.detail-section:nth-of-type(2){{grid-column:1}} .detail-section:nth-of-type(3){{grid-column:2;grid-row:2/span 2}}
+    .detail-metrics{{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}} .detail-metrics div{{min-height:72px;padding:14px;border-radius:9px;background:var(--panel2)}} .detail-metrics span,.venue-row small{{display:block;color:var(--muted);font-size:12px;line-height:1.4}} .detail-metrics strong{{display:block;margin-top:6px;font-size:15.5px;line-height:1.35;overflow-wrap:anywhere}}
+    ul{{margin:0;padding-left:20px;color:var(--text);font-size:15px;line-height:1.55}} li{{margin:8px 0}} .drawer-decision{{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}} .drawer-decision span{{padding:5px 10px;border:1px solid var(--blue);border-radius:6px;color:var(--blue);font-size:13px;font-weight:800}} .drawer-decision strong{{font-size:13px;color:var(--amber)}}
+    .drawer-risk{{margin:16px 0 0;padding:14px;border-radius:8px;background:rgba(247,185,40,.08);color:#e9d39c;font-size:14px;line-height:1.6}} .drawer-risk strong{{display:block;margin-bottom:4px;color:var(--amber);text-transform:uppercase;font-size:12px;letter-spacing:.03em}}
+    .detail-title-row{{display:flex;align-items:start;justify-content:space-between;gap:12px}} .detail-title-row span{{color:var(--muted);font-size:12px;line-height:1.4;text-align:right}} .venue-list{{display:grid;gap:9px}} .venue-row{{display:grid;grid-template-columns:28px minmax(110px,1fr) 96px 96px;align-items:center;gap:10px;min-height:62px;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}}
+    .venue-rank{{display:grid;place-items:center;width:24px;height:24px;border-radius:6px;background:#182b43;color:var(--cyan);font-size:12px;font-weight:800}} .venue-row strong{{display:block;font-size:13.5px;line-height:1.4;overflow-wrap:anywhere}} .venue-row a{{color:var(--cyan);font-weight:750;text-decoration:none}} .venue-row a:hover{{text-decoration:underline}} .detail-empty,.data-note{{margin:0;color:var(--muted);font-size:13px;line-height:1.5}} .data-note{{margin-top:13px}}
+    .detail-source{{grid-column:1/-1;display:flex;justify-content:space-between;gap:15px;padding:16px 3px;color:var(--muted);font-size:12.5px;line-height:1.45}} .detail-source strong{{color:var(--text)}} .copy-status{{min-height:20px;margin:10px 0 0;color:var(--cyan);font-size:13px;text-align:right}}
+    html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f4f6f8;--line:#dfe3e8;--text:#172033;--muted:#64748b;--cyan:#087f8c;--blue:#2869c7;--amber:#a86100}}
+    html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff8e7;color:#75591e}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}}
+    @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.detail-section:nth-of-type(1),.detail-section:nth-of-type(2),.detail-section:nth-of-type(3){{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
+  </style>
+</head>
+<body>
+  <main class="market-page">
+    <header class="market-page-header">
+      <div class="page-brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span>Market Workspace</span></div>
+      <div class="page-actions">
+        <div class="theme-switcher" role="group" aria-label="Page theme"><button class="theme-option active" type="button" data-theme-option="current">Current</button><button class="theme-option" type="button" data-theme-option="plain">Plain White</button></div>
+        <button id="copy-summary" class="page-action" type="button">Copy Summary</button>
+        <a class="page-action" href="/">← Dashboard</a>
+      </div>
+    </header>
+    <section class="page-intro"><div><h1>{pair} Market Workspace</h1><p>{summary}</p></div><span class="snapshot-time" data-snapshot-at="{generated}">Snapshot <strong>{generated}</strong></span></section>
+    <div id="market-page-content">{content}</div>
+    <p id="copy-status" class="copy-status" role="status"></p>
+  </main>
+  <script>
+    const themeOptions=[...document.querySelectorAll("[data-theme-option]")];
+    function applyTheme(theme){{const resolved=theme==="plain"?"plain":"current";if(resolved==="plain")document.documentElement.dataset.theme="plain";else delete document.documentElement.dataset.theme;themeOptions.forEach(button=>button.classList.toggle("active",button.dataset.themeOption===resolved));try{{localStorage.setItem("dexsato-theme",resolved);}}catch(error){{}}}}
+    let savedTheme="current";try{{savedTheme=localStorage.getItem("dexsato-theme")||"current";}}catch(error){{}}applyTheme(savedTheme);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
+    function formatMYT(raw){{const time=new Date(raw);if(Number.isNaN(time.getTime()))return"Not available";return new Intl.DateTimeFormat("en-MY",{{timeZone:"Asia/Kuala_Lumpur",day:"2-digit",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true}}).format(time)+" MYT";}}
+    document.querySelectorAll("[data-scanned-at]").forEach(item=>{{const strong=item.querySelector(".detail-updated");if(strong)strong.textContent=formatMYT(item.dataset.scannedAt);}});const snapshot=document.querySelector("[data-snapshot-at] strong");if(snapshot)snapshot.textContent=formatMYT(snapshot.parentElement.dataset.snapshotAt);
+    document.getElementById("copy-summary").addEventListener("click",async()=>{{const status=document.getElementById("copy-status");try{{await navigator.clipboard.writeText(document.getElementById("market-page-content").innerText.trim());status.textContent="Market summary copied.";}}catch(error){{status.textContent="Copy is unavailable in this browser.";}}}});
+  </script>
+</body>
+</html>"""
 
 
 def _render_timeline(latest_run: dict[str, object]) -> str:
@@ -342,6 +576,9 @@ def render_dexsato_dashboard(
     .coin-logo{{display:grid;place-items:center;flex:0 0 72px;width:72px;height:72px;border:1px solid #315474;
       border-radius:50%;background:#10253c;overflow:hidden}} .coin-logo img{{width:100%;height:100%;object-fit:cover}}
     .coin-fallback,.commodity-fallback{{font-weight:900}} .commodity-fallback{{color:#f7c948;font-size:25px}} h3{{margin:0 0 7px;font-size:24px}} h4{{margin:0 0 10px;font-size:13px}}
+    .market-title-button{{display:flex;align-items:center;gap:7px;margin:0 0 7px;padding:0;border:0;background:transparent;color:var(--text);font-size:24px;font-weight:800;cursor:pointer;text-align:left;text-decoration:none}}
+    .market-title-button span{{color:var(--blue);font-size:28px;line-height:1;transition:transform .16s ease}}
+    .market-title-button:hover span{{transform:translateX(3px)}} .market-title-button:focus-visible{{outline:2px solid var(--cyan);outline-offset:4px;border-radius:3px}}
     .decision-pill{{display:inline-flex;padding:5px 10px;border:1px solid currentColor;border-radius:6px;font-size:12px;font-weight:800}}
     .tone-alert .decision-pill{{color:var(--red)}} .tone-watch .decision-pill{{color:var(--amber)}}
     .tone-review .decision-pill{{color:var(--blue)}} .tone-reference .decision-pill{{color:var(--cyan)}} .confidence{{margin:12px 0 3px;color:var(--muted);font-size:12px}}

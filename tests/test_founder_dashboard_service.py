@@ -146,6 +146,53 @@ def test_should_accept_explicit_token_collection():
     assert results[0]["error"] is None
 
 
+def test_should_add_optional_trading_venues_without_affecting_scan():
+    def fake_scan(token: str) -> dict:
+        return {
+            "success": True,
+            "event": {"pair": f"{token}/USDT"},
+            "dashboard": build_test_card(token),
+        }
+
+    results = build_founder_dashboard_results(
+        tokens=["BTC"],
+        scan=fake_scan,
+        venue_lookup=lambda token: [
+            {
+                "name": "PancakeSwap",
+                "type": "DEX",
+                "pair": "BTC/USDT",
+                "volume_24h": 123,
+            }
+        ],
+    )
+
+    assert results[0]["trading_venues_status"] == "AVAILABLE"
+    assert results[0]["trading_venues"][0]["name"] == "PancakeSwap"
+
+
+def test_should_keep_scan_when_optional_venue_lookup_fails():
+    def fake_scan(token: str) -> dict:
+        return {
+            "success": True,
+            "event": {"pair": f"{token}/USDT"},
+            "dashboard": build_test_card(token),
+        }
+
+    def failed_lookup(token: str):
+        raise RuntimeError("Venue provider unavailable")
+
+    results = build_founder_dashboard_results(
+        tokens=["BTC"],
+        scan=fake_scan,
+        venue_lookup=failed_lookup,
+    )
+
+    assert results[0]["card"] is not None
+    assert results[0]["trading_venues"] == []
+    assert results[0]["trading_venues_status"] == "UNAVAILABLE"
+
+
 def test_should_preserve_failed_coin_and_continue():
     """
     One failed coin must not hide remaining coins.

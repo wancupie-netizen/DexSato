@@ -19,6 +19,7 @@ from app.main import (
     dashboard_api,
     founder_home,
     health_check,
+    market_detail,
     system_status_api,
     telegram_send,
 )
@@ -145,6 +146,31 @@ def test_should_return_snapshot_api(
     mock_load.return_value = SNAPSHOT
 
     assert dashboard_api() == SNAPSHOT
+
+
+@patch("app.main.render_market_detail_page")
+@patch("app.main.load_current_snapshot")
+def test_should_render_market_detail_page(mock_load, mock_render):
+    mock_load.return_value = SNAPSHOT
+    mock_render.return_value = "<html>BTC workspace</html>"
+
+    assert market_detail("btc") == "<html>BTC workspace</html>"
+    mock_render.assert_called_once_with(
+        SNAPSHOT["coins"][0],
+        generated_at=SNAPSHOT["generated_at"],
+    )
+
+
+@patch("app.main.load_current_snapshot")
+def test_should_return_not_found_for_unknown_market(mock_load):
+    mock_load.return_value = SNAPSHOT
+
+    try:
+        market_detail("UNKNOWN")
+    except HTTPException as error:
+        assert error.status_code == 404
+    else:
+        raise AssertionError("Unknown market should return 404.")
 
 
 @patch(
