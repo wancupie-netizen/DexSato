@@ -82,6 +82,8 @@ def serialize_founder_dashboard_results(
                     "price_change_24h": market.get("price_change_24h"),
                     "trading_venues": [],
                     "trading_venues_status": "NOT_APPLICABLE",
+                    "technical_evidence": {},
+                    "technical_evidence_status": "NOT_APPLICABLE",
                     "asset_class": "commodities",
                     "available": True,
                     "decision": "REFERENCE",
@@ -128,6 +130,8 @@ def serialize_founder_dashboard_results(
                     "price_change_24h": None,
                     "trading_venues": [],
                     "trading_venues_status": "UNAVAILABLE",
+                    "technical_evidence": {},
+                    "technical_evidence_status": "UNAVAILABLE",
                     "asset_class": None,
                     "available": False,
                     "decision": None,
@@ -178,6 +182,15 @@ def serialize_founder_dashboard_results(
                 "trading_venues": list(result.get("trading_venues", [])),
                 "trading_venues_status": result.get(
                     "trading_venues_status",
+                    "NOT_REQUESTED",
+                ),
+                "technical_evidence": dict(
+                    result.get("technical_evidence", {})
+                    if isinstance(result.get("technical_evidence"), dict)
+                    else {}
+                ),
+                "technical_evidence_status": result.get(
+                    "technical_evidence_status",
                     "NOT_REQUESTED",
                 ),
                 "asset_class": "crypto",

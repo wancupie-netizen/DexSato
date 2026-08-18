@@ -44,6 +44,27 @@ SNAPSHOT = {
             "historical_success": 66.67,
             "reasons": ["MOMENTUM_STRENGTHENED"],
             "summary": "BTC remains under observation.",
+            "technical_evidence_status": "AVAILABLE",
+            "technical_evidence": {
+                "status": "AVAILABLE",
+                "timeframe": "4H",
+                "source": "GeckoTerminal",
+                "candle_closed_at": "2026-07-30T12:00:00+00:00",
+                "metrics": {
+                    "rsi_14": {
+                        "value": 56.8,
+                        "previous": 43.2,
+                        "state": "NEUTRAL",
+                        "direction": "RISING",
+                    },
+                    "ema_50": {"price_distance_pct": 1.8},
+                    "ema_200": {"price_distance_pct": -2.4},
+                    "relative_volume_20": {"value": 1.7},
+                    "market_structure": {
+                        "state": "HIGHER_HIGH_HIGHER_LOW",
+                    },
+                },
+            },
         },
         {
             "token": "SUI",
@@ -131,6 +152,15 @@ def test_should_render_dedicated_market_detail_page():
     assert "BSC" in html
     assert "PancakeSwap" in html
     assert "ranked by 24h volume" in html
+    assert "Technical Evidence · 4H" in html
+    assert "56.80" in html
+    assert "previously 43.20" in html
+    assert "+1.80%" in html
+    assert "-2.40%" in html
+    assert "1.70×" in html
+    assert "Higher High Higher Low" in html
+    assert "GeckoTerminal" in html
+    assert 'data-technical-at="2026-07-30T12:00:00+00:00"' in html
     assert 'id="copy-summary"' in html
     assert 'href="/"' in html
     assert "market-drawer" not in html

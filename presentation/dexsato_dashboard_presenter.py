@@ -173,6 +173,86 @@ def _format_network(value: object) -> str:
     return labels.get(normalized, normalized.replace("-", " ").title()) or "Not available"
 
 
+def _metric_number(value: object, digits: int = 2) -> str:
+    try:
+        return f"{float(value):,.{digits}f}"
+    except (TypeError, ValueError):
+        return "Not available"
+
+
+def _render_technical_evidence(coin: dict[str, object]) -> str:
+    """Render deterministic indicator values from exact-pool OHLCV."""
+    status = _status(coin.get("technical_evidence_status"), "NOT_REQUESTED")
+    evidence = coin.get("technical_evidence", {})
+    if not isinstance(evidence, dict):
+        evidence = {}
+    if status != "AVAILABLE":
+        messages = {
+            "INSUFFICIENT_DATA": (
+                "At least 200 closed 4H candles are required before "
+                "RSI and long-term EMA evidence can be reported."
+            ),
+            "UNAVAILABLE": (
+                "Technical candle data is temporarily unavailable. "
+                "The existing DexSato decision has not been changed."
+            ),
+            "NOT_REQUESTED": "Technical evidence has not been collected for this snapshot.",
+        }
+        return (
+            '<div class="technical-empty"><strong>Technical Evidence · 4H</strong>'
+            f'<p>{_text(messages.get(status, messages["UNAVAILABLE"]))}</p></div>'
+        )
+
+    metrics = evidence.get("metrics", {})
+    if not isinstance(metrics, dict):
+        metrics = {}
+    rsi = metrics.get("rsi_14", {})
+    ema_50 = metrics.get("ema_50", {})
+    ema_200 = metrics.get("ema_200", {})
+    volume = metrics.get("relative_volume_20", {})
+    structure = metrics.get("market_structure", {})
+    rsi = rsi if isinstance(rsi, dict) else {}
+    ema_50 = ema_50 if isinstance(ema_50, dict) else {}
+    ema_200 = ema_200 if isinstance(ema_200, dict) else {}
+    volume = volume if isinstance(volume, dict) else {}
+    structure = structure if isinstance(structure, dict) else {}
+
+    rsi_value = _metric_number(rsi.get("value"))
+    rsi_previous = _metric_number(rsi.get("previous"))
+    rsi_state = str(rsi.get("state", "UNKNOWN")).replace("_", " ").title()
+    rsi_direction = str(rsi.get("direction", "UNKNOWN")).replace("_", " ").lower()
+    ema50_distance = format_percentage(ema_50.get("price_distance_pct"))
+    ema200_distance = format_percentage(ema_200.get("price_distance_pct"))
+    volume_ratio = _metric_number(volume.get("value"))
+    structure_state = str(structure.get("state", "UNKNOWN")).replace("_", " ").title()
+    timeframe = _text(evidence.get("timeframe"), "4H")
+    source = _text(evidence.get("source"), "GeckoTerminal")
+    candle_closed_at = _text(evidence.get("candle_closed_at"), "Not available")
+
+    return f"""
+        <div class="technical-heading">
+          <div><h4>Technical Evidence · {timeframe}</h4>
+          <p>Calculated from closed candles for this exact DEX pool.</p></div>
+          <span>Source: {source}</span>
+        </div>
+        <div class="technical-grid">
+          <div class="technical-metric"><span>RSI(14)</span><strong>{_text(rsi_value)}</strong>
+            <p>{_text(rsi_state)} · {_text(rsi_direction)}, previously {_text(rsi_previous)}</p></div>
+          <div class="technical-metric"><span>EMA50 distance</span><strong>{_text(ema50_distance)}</strong>
+            <p>Positive means price closed above the 4H EMA50.</p></div>
+          <div class="technical-metric"><span>EMA200 distance</span><strong>{_text(ema200_distance)}</strong>
+            <p>Shows price position against the longer 4H trend.</p></div>
+          <div class="technical-metric"><span>Relative volume</span><strong>{_text(volume_ratio)}×</strong>
+            <p>Latest closed candle versus the previous 20-candle average.</p></div>
+          <div class="technical-metric technical-structure"><span>Market structure</span>
+            <strong>{_text(structure_state)}</strong><p>Compared with the previous closed 4H candle.</p></div>
+        </div>
+        <p class="technical-freshness" data-technical-at="{candle_closed_at}">
+          Latest closed candle <strong class="technical-updated">{candle_closed_at}</strong>
+        </p>
+    """
+
+
 def _render_market_detail_content(coin: dict[str, object]) -> str:
     """Render reusable market-detail content from one stored snapshot."""
     token = _status(coin.get("token"))
@@ -265,7 +345,8 @@ def _render_market_detail_content(coin: dict[str, object]) -> str:
       <section class="detail-section">
         <h3>DexSato Decision</h3>
         <div class="drawer-decision"><span>{decision}</span><strong>Confidence {confidence}</strong></div>
-        <ul>{evidence}</ul>
+        <div class="engine-evidence"><strong>Engine signals</strong><ul>{evidence}</ul></div>
+        {_render_technical_evidence(coin)}
         <p class="drawer-risk"><strong>Risk note</strong>{risk_note}</p>
       </section>
       <section class="detail-section">
@@ -400,29 +481,33 @@ def render_market_detail_page(
   </script>
   <style>
     :root{{--bg:#06111f;--panel:#0b1a2c;--panel2:#0f2238;--line:#1d3852;--text:#f5f8ff;--muted:#91a8c1;--cyan:#23d9d2;--blue:#5394ff;--amber:#f7b928}}
-    *{{box-sizing:border-box}} html{{color-scheme:dark}} body{{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -20%,#102746 0,transparent 35%),var(--bg);color:var(--text);font-family:"Segoe UI Variable","Segoe UI",Inter,system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.55;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}}
+    *{{box-sizing:border-box}} html{{color-scheme:dark}} body{{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -20%,#102746 0,transparent 35%),var(--bg);color:var(--text);font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",Inter,system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.6;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}}
     button{{font:inherit}} .market-page{{width:min(1180px,calc(100% - 36px));margin:0 auto;padding:24px 0 42px}}
     .market-page-header{{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--line)}}
     .page-brand{{display:flex;align-items:center;gap:15px}} .page-brand img{{width:150px;border-radius:9px}} .page-brand span{{color:var(--muted);font-size:14px;font-weight:600;letter-spacing:.01em}}
     .page-actions{{display:flex;align-items:center;gap:9px}} .page-action{{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);font-size:14px;font-weight:700;text-decoration:none;cursor:pointer}}
     .page-action:hover{{border-color:var(--blue)}} .theme-switcher{{display:flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}}
     .theme-option{{min-height:34px;padding:7px 11px;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer}} .theme-option.active{{background:#1b1d4e;color:#fff}}
-    .page-intro{{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:20px}} .page-intro h1{{margin:0;font-size:32px;line-height:1.2;letter-spacing:-.025em}} .page-intro p{{max-width:700px;margin:8px 0 0;color:var(--muted);font-size:16px;line-height:1.5}} .snapshot-time{{color:var(--muted);font-size:12.5px;line-height:1.45;text-align:right}}
+    .page-intro{{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:20px}} .page-intro h1{{margin:0;font-size:32px;line-height:1.2;letter-spacing:-.025em;font-weight:750}} .page-intro p{{max-width:700px;margin:8px 0 0;color:var(--muted);font-size:16px;line-height:1.55}} .snapshot-time{{color:var(--muted);font-size:13px;font-weight:500;line-height:1.5;text-align:right}}
     #market-page-content{{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(350px,.75fr);gap:18px;align-items:start}}
     .drawer-heading{{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:20px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}}
     .drawer-heading small{{color:var(--muted);font-size:13px;font-weight:750;text-transform:uppercase;letter-spacing:.09em}} .drawer-heading h2{{margin:3px 0 0;font-size:31px;line-height:1.2;letter-spacing:-.02em}} .drawer-heading p{{margin:5px 0 0;color:var(--muted);font-size:15px}}
     .drawer-logo{{display:grid;place-items:center;flex:0 0 72px;width:72px;height:72px;border:1px solid var(--line);border-radius:50%;background:#10253c;overflow:hidden}} .drawer-logo img{{width:100%;height:100%;object-fit:cover}} .coin-fallback,.commodity-fallback{{font-weight:900}} .commodity-fallback{{color:#f7c948;font-size:25px}} .market-change{{color:var(--cyan);font-size:13px;font-weight:700}}
-    .detail-section{{padding:22px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}} .detail-section>h3,.detail-title-row h3{{margin:0 0 16px;font-size:18px;line-height:1.35;letter-spacing:-.01em}}
+    .detail-section{{padding:24px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}} .detail-section>h3,.detail-title-row h3{{margin:0 0 17px;font-size:19px;font-weight:750;line-height:1.35;letter-spacing:-.012em}}
     .detail-section:nth-of-type(1),.detail-section:nth-of-type(2){{grid-column:1}} .detail-section:nth-of-type(3){{grid-column:2;grid-row:2/span 2}}
-    .detail-metrics{{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}} .detail-metrics div{{min-height:72px;padding:14px;border-radius:9px;background:var(--panel2)}} .detail-metrics span,.venue-row small{{display:block;color:var(--muted);font-size:12px;line-height:1.4}} .detail-metrics strong{{display:block;margin-top:6px;font-size:15.5px;line-height:1.35;overflow-wrap:anywhere}}
-    ul{{margin:0;padding-left:20px;color:var(--text);font-size:15px;line-height:1.55}} li{{margin:8px 0}} .drawer-decision{{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}} .drawer-decision span{{padding:5px 10px;border:1px solid var(--blue);border-radius:6px;color:var(--blue);font-size:13px;font-weight:800}} .drawer-decision strong{{font-size:13px;color:var(--amber)}}
-    .drawer-risk{{margin:16px 0 0;padding:14px;border-radius:8px;background:rgba(247,185,40,.08);color:#e9d39c;font-size:14px;line-height:1.6}} .drawer-risk strong{{display:block;margin-bottom:4px;color:var(--amber);text-transform:uppercase;font-size:12px;letter-spacing:.03em}}
+    .detail-metrics{{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}} .detail-metrics div{{min-height:76px;padding:15px;border-radius:9px;background:var(--panel2)}} .detail-metrics span,.venue-row small{{display:block;color:var(--muted);font-size:12.5px;font-weight:500;line-height:1.45}} .detail-metrics strong{{display:block;margin-top:6px;font-size:16.5px;font-weight:750;line-height:1.35;overflow-wrap:anywhere}}
+    ul{{margin:0;padding-left:21px;color:var(--text);font-size:15.5px;line-height:1.6}} li{{margin:8px 0}} .drawer-decision{{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}} .drawer-decision span{{padding:5px 10px;border:1px solid var(--blue);border-radius:6px;color:var(--blue);font-size:13px;font-weight:800}} .drawer-decision strong{{font-size:13.5px;color:var(--amber)}}
+    .engine-evidence{{margin-bottom:20px}} .engine-evidence>strong{{display:block;margin-bottom:8px;color:var(--muted);font-size:12.5px;font-weight:750;text-transform:uppercase;letter-spacing:.055em}}
+    .technical-heading{{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}} .technical-heading h4{{margin:0;font-size:17px;font-weight:750;letter-spacing:-.008em}} .technical-heading p{{max-width:470px;margin:5px 0 0;color:var(--muted);font-size:13.5px;font-weight:500;line-height:1.5}} .technical-heading span{{margin:3px 0 0;color:var(--muted);font-size:12.5px;font-weight:600;white-space:nowrap}}
+    .technical-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:14px}} .technical-metric{{min-height:106px;padding:16px;border:1px solid transparent;border-radius:10px;background:var(--panel2)}} .technical-metric span{{display:block;color:var(--muted);font-size:13px;font-weight:600;line-height:1.4}} .technical-metric strong{{display:block;margin-top:5px;font-size:19px;font-weight:780;line-height:1.3;letter-spacing:-.01em}} .technical-metric p{{margin:7px 0 0;color:var(--muted);font-size:13.25px;font-weight:500;line-height:1.5}} .technical-structure{{grid-column:1/-1;min-height:96px}} .technical-empty{{margin-top:20px;padding:16px;border:1px dashed var(--line);border-radius:9px}} .technical-empty strong{{font-size:15px}} .technical-empty p,.technical-freshness{{margin:6px 0 0;color:var(--muted);font-size:12.75px;font-weight:500;line-height:1.5}} .technical-freshness{{margin-top:10px;text-align:right}}
+    .drawer-risk{{margin:18px 0 0;padding:16px;border-radius:8px;background:rgba(247,185,40,.08);color:#e9d39c;font-size:14.5px;font-weight:500;line-height:1.65}} .drawer-risk strong{{display:block;margin-bottom:5px;color:var(--amber);text-transform:uppercase;font-size:12.5px;font-weight:800;letter-spacing:.04em}}
     .detail-title-row{{display:flex;align-items:start;justify-content:space-between;gap:12px}} .detail-title-row span{{color:var(--muted);font-size:12px;line-height:1.4;text-align:right}} .venue-list{{display:grid;gap:9px}} .venue-row{{display:grid;grid-template-columns:28px minmax(110px,1fr) 96px 96px;align-items:center;gap:10px;min-height:62px;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}}
     .venue-rank{{display:grid;place-items:center;width:24px;height:24px;border-radius:6px;background:#182b43;color:var(--cyan);font-size:12px;font-weight:800}} .venue-row strong{{display:block;font-size:13.5px;line-height:1.4;overflow-wrap:anywhere}} .venue-row a{{color:var(--cyan);font-weight:750;text-decoration:none}} .venue-row a:hover{{text-decoration:underline}} .detail-empty,.data-note{{margin:0;color:var(--muted);font-size:13px;line-height:1.5}} .data-note{{margin-top:13px}}
-    .detail-source{{grid-column:1/-1;display:flex;justify-content:space-between;gap:15px;padding:16px 3px;color:var(--muted);font-size:12.5px;line-height:1.45}} .detail-source strong{{color:var(--text)}} .copy-status{{min-height:20px;margin:10px 0 0;color:var(--cyan);font-size:13px;text-align:right}}
-    html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f4f6f8;--line:#dfe3e8;--text:#172033;--muted:#64748b;--cyan:#087f8c;--blue:#2869c7;--amber:#a86100}}
-    html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff8e7;color:#75591e}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}}
+    .detail-source{{grid-column:1/-1;display:flex;justify-content:space-between;gap:15px;padding:18px 3px;color:var(--muted);font-size:13px;font-weight:500;line-height:1.5}} .detail-source strong{{color:var(--text);font-weight:750}} .copy-status{{min-height:20px;margin:10px 0 0;color:var(--cyan);font-size:13px;text-align:right}}
+    html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f3f5f7;--line:#d9dfe6;--text:#111c30;--muted:#53657a;--cyan:#087783;--blue:#245fb5;--amber:#985800}}
+    html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff7e3;color:#674b13}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}} html[data-theme="plain"] .technical-metric{{border-color:#e4e8ed}}
     @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.detail-section:nth-of-type(1),.detail-section:nth-of-type(2),.detail-section:nth-of-type(3){{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
+    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading{{flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}}}
   </style>
 </head>
 <body>
@@ -444,7 +529,7 @@ def render_market_detail_page(
     function applyTheme(theme){{const resolved=theme==="plain"?"plain":"current";if(resolved==="plain")document.documentElement.dataset.theme="plain";else delete document.documentElement.dataset.theme;themeOptions.forEach(button=>button.classList.toggle("active",button.dataset.themeOption===resolved));try{{localStorage.setItem("dexsato-theme",resolved);}}catch(error){{}}}}
     let savedTheme="current";try{{savedTheme=localStorage.getItem("dexsato-theme")||"current";}}catch(error){{}}applyTheme(savedTheme);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
     function formatMYT(raw){{const time=new Date(raw);if(Number.isNaN(time.getTime()))return"Not available";return new Intl.DateTimeFormat("en-MY",{{timeZone:"Asia/Kuala_Lumpur",day:"2-digit",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true}}).format(time)+" MYT";}}
-    document.querySelectorAll("[data-scanned-at]").forEach(item=>{{const strong=item.querySelector(".detail-updated");if(strong)strong.textContent=formatMYT(item.dataset.scannedAt);}});const snapshot=document.querySelector("[data-snapshot-at] strong");if(snapshot)snapshot.textContent=formatMYT(snapshot.parentElement.dataset.snapshotAt);
+    document.querySelectorAll("[data-scanned-at]").forEach(item=>{{const strong=item.querySelector(".detail-updated");if(strong)strong.textContent=formatMYT(item.dataset.scannedAt);}});document.querySelectorAll("[data-technical-at]").forEach(item=>{{const strong=item.querySelector(".technical-updated");if(strong)strong.textContent=formatMYT(item.dataset.technicalAt);}});const snapshot=document.querySelector("[data-snapshot-at] strong");if(snapshot)snapshot.textContent=formatMYT(snapshot.parentElement.dataset.snapshotAt);
     document.getElementById("copy-summary").addEventListener("click",async()=>{{const status=document.getElementById("copy-status");try{{await navigator.clipboard.writeText(document.getElementById("market-page-content").innerText.trim());status.textContent="Market summary copied.";}}catch(error){{status.textContent="Copy is unavailable in this browser.";}}}});
   </script>
 </body>
