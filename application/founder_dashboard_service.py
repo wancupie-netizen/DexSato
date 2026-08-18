@@ -74,6 +74,7 @@ def build_founder_dashboard_results(
     tokens: Iterable[str] | None = None,
     scan: Callable[[str], dict] = run_scan,
     venue_lookup: Callable[[str], list[dict[str, object]]] | None = None,
+    technical_lookup: Callable[[str], dict[str, object]] | None = None,
 ) -> list[dict[str, object]]:
     """
     Run sequential DexSato scans.
@@ -135,6 +136,8 @@ def build_founder_dashboard_results(
 
         trading_venues: list[dict[str, object]] = []
         trading_venues_status = "NOT_REQUESTED"
+        technical_evidence: dict[str, object] = {}
+        technical_evidence_status = "NOT_REQUESTED"
 
         if venue_lookup is not None:
             try:
@@ -147,6 +150,17 @@ def build_founder_dashboard_results(
                 # must never fail a market scan or affect its decision.
                 trading_venues_status = "UNAVAILABLE"
 
+        if technical_lookup is not None:
+            try:
+                technical_evidence = technical_lookup(normalized_token)
+                technical_evidence_status = str(
+                    technical_evidence.get("status", "UNAVAILABLE")
+                ).upper()
+            except Exception:
+                # Technical evidence is read-only enrichment. Provider
+                # failure must not alter or suppress the engine decision.
+                technical_evidence_status = "UNAVAILABLE"
+
         results.append(
             {
                 "token": normalized_token,
@@ -156,6 +170,8 @@ def build_founder_dashboard_results(
                 ),
                 "trading_venues": trading_venues,
                 "trading_venues_status": trading_venues_status,
+                "technical_evidence": technical_evidence,
+                "technical_evidence_status": technical_evidence_status,
                 "error": None,
             }
         )

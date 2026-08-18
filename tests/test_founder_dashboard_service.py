@@ -193,6 +193,51 @@ def test_should_keep_scan_when_optional_venue_lookup_fails():
     assert results[0]["trading_venues_status"] == "UNAVAILABLE"
 
 
+def test_should_add_optional_technical_evidence_without_changing_decision():
+    def fake_scan(token: str) -> dict:
+        return {
+            "success": True,
+            "event": {"pair": f"{token}/USDT"},
+            "dashboard": build_test_card(token),
+        }
+
+    results = build_founder_dashboard_results(
+        tokens=["BTC"],
+        scan=fake_scan,
+        technical_lookup=lambda token: {
+            "status": "AVAILABLE",
+            "timeframe": "4H",
+            "metrics": {"rsi_14": {"value": 54.2}},
+        },
+    )
+
+    assert results[0]["card"].decision == "WATCH"
+    assert results[0]["technical_evidence_status"] == "AVAILABLE"
+    assert results[0]["technical_evidence"]["timeframe"] == "4H"
+
+
+def test_should_keep_decision_when_technical_provider_fails():
+    def fake_scan(token: str) -> dict:
+        return {
+            "success": True,
+            "event": {"pair": f"{token}/USDT"},
+            "dashboard": build_test_card(token),
+        }
+
+    def failed_lookup(token: str):
+        raise RuntimeError("OHLCV unavailable")
+
+    results = build_founder_dashboard_results(
+        tokens=["BTC"],
+        scan=fake_scan,
+        technical_lookup=failed_lookup,
+    )
+
+    assert results[0]["card"].decision == "WATCH"
+    assert results[0]["technical_evidence"] == {}
+    assert results[0]["technical_evidence_status"] == "UNAVAILABLE"
+
+
 def test_should_preserve_failed_coin_and_continue():
     """
     One failed coin must not hide remaining coins.

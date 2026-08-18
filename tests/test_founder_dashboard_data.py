@@ -70,6 +70,12 @@ def test_should_serialize_available_coin():
                     }
                 ],
                 "trading_venues_status": "AVAILABLE",
+                "technical_evidence": {
+                    "status": "AVAILABLE",
+                    "timeframe": "4H",
+                    "metrics": {"rsi_14": {"value": 54.2}},
+                },
+                "technical_evidence_status": "AVAILABLE",
                 "error": None,
             }
         ]
@@ -92,6 +98,10 @@ def test_should_serialize_available_coin():
     assert result["trading_venues_status"] == "AVAILABLE"
 
     assert result["trading_venues"][0]["name"] == "PancakeSwap"
+
+    assert result["technical_evidence_status"] == "AVAILABLE"
+
+    assert result["technical_evidence"]["metrics"]["rsi_14"]["value"] == 54.2
 
     assert result["decision"] == "WATCH"
 

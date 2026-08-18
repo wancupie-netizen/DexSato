@@ -41,6 +41,9 @@ from application.commodity_dashboard_service import (
 from application.trading_venue_service import (
     fetch_trading_venues,
 )
+from application.technical_evidence_service import (
+    fetch_technical_evidence,
+)
 
 
 LATEST_SNAPSHOT_FILE = Path(
@@ -55,6 +58,7 @@ def build_complete_dashboard_results() -> list[dict[str, object]]:
     return [
         *build_founder_dashboard_results(
             venue_lookup=fetch_trading_venues,
+            technical_lookup=fetch_technical_evidence,
         ),
         *build_commodity_reference_results(),
     ]
