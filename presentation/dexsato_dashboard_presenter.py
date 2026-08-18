@@ -313,7 +313,12 @@ def render_dexsato_dashboard(
       border-radius:12px;background:#09182a}} .engine-card strong,.engine-card small{{display:block}}
     .engine-card b{{color:var(--green)}} .engine-card small{{margin-top:10px;color:var(--muted)}}
     .content{{min-width:0;padding:22px 28px 18px}} .topbar{{display:flex;justify-content:space-between;gap:20px;align-items:start}}
-    h1{{margin:0;font-size:30px}} .subtitle{{margin:7px 0 0;color:var(--muted)}} .top-status{{display:flex;gap:10px}}
+    h1{{margin:0;font-size:30px}} .subtitle{{margin:7px 0 0;color:var(--muted)}} .top-actions{{display:flex;align-items:center;gap:10px}}
+    .top-status{{display:flex;gap:10px}}
+    .theme-switcher{{display:flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:#091625}}
+    .theme-option{{padding:7px 10px;border:0;border-radius:7px;background:transparent;color:#91a8c1;font-size:12px;font-weight:700;cursor:pointer}}
+    .theme-option.active{{background:#1b1d4e;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25)}}
+    .theme-option:focus-visible{{outline:2px solid var(--cyan);outline-offset:2px}}
     .status-chip{{padding:11px 14px;border:1px solid var(--line);border-radius:9px;background:#091625;color:#cbd6e4}}
     .status-chip b{{color:var(--green)}} .workspace{{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;margin-top:22px}}
     .metrics{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}}
@@ -357,8 +362,40 @@ def render_dexsato_dashboard(
     .footer{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px;padding:15px;border:1px solid var(--line);
       border-radius:11px;color:var(--muted);text-align:center}} .footer b{{color:var(--green)}} .dedication{{grid-column:1/-1;color:#fff}}
     .mobile-toggle{{display:none}} [hidden]{{display:none!important}}
+    html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#fff;--line:#dfe3e8;
+      --text:#172033;--muted:#64748b;--violet:#6558d9;--cyan:#087f8c;--green:#14804a;--amber:#a86100;
+      --red:#c83242;--blue:#2869c7}}
+    html[data-theme="plain"] body{{background:#f7f8fa;color:var(--text)}}
+    html[data-theme="plain"] .sidebar{{border-right-color:#e3e7ec;background:#fff;box-shadow:1px 0 0 rgba(15,23,42,.02)}}
+    html[data-theme="plain"] .brand{{margin-right:0;margin-left:0;padding:7px;border-radius:9px;background:#071525}}
+    html[data-theme="plain"] nav a{{color:#526071}}
+    html[data-theme="plain"] nav a.active{{background:#eef0ff;color:#5548c8}}
+    html[data-theme="plain"] .engine-card,
+    html[data-theme="plain"] .status-chip,
+    html[data-theme="plain"] .theme-switcher,
+    html[data-theme="plain"] .rail-card{{border-color:#dfe3e8;background:#fff;color:#334155;box-shadow:0 1px 3px rgba(15,23,42,.04)}}
+    html[data-theme="plain"] .theme-option{{color:#64748b}}
+    html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff;box-shadow:none}}
+    html[data-theme="plain"] .metric{{border-color:#dfe3e8;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.04)}}
+    html[data-theme="plain"] .search-wrap:before{{color:#8290a3}}
+    html[data-theme="plain"] .search-wrap input{{border-color:#cfd6df;background:#fff;color:#172033}}
+    html[data-theme="plain"] .search-wrap input::placeholder{{color:#8a96a6}}
+    html[data-theme="plain"] .filters button{{border-color:#dfe3e8;background:#fff;color:#526071}}
+    html[data-theme="plain"] .filters button.active{{border-color:#172033;background:#172033;color:#fff}}
+    html[data-theme="plain"] .decision-card{{border-color:#dfe3e8;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.04)}}
+    html[data-theme="plain"] .coin-logo{{border-color:#d7dde5;background:#f2f5f8}}
+    html[data-theme="plain"] .evidence-column,
+    html[data-theme="plain"] .summary-column{{border-color:#e6e9ee}}
+    html[data-theme="plain"] ul{{color:#435166}}
+    html[data-theme="plain"] .summary-column p,
+    html[data-theme="plain"] .decision-detail p{{color:#526071}}
+    html[data-theme="plain"] .risk-note{{color:#805f1d!important}}
+    html[data-theme="plain"] .decision-detail{{border-color:#e6e9ee;background:#f8fafc}}
+    html[data-theme="plain"] .timeline li:before{{background:#d7dde5}}
+    html[data-theme="plain"] .footer{{border-color:#dfe3e8;background:#fff}}
+    html[data-theme="plain"] .dedication{{color:#172033}}
     @media(max-width:1180px){{.workspace{{grid-template-columns:1fr}}.rail{{position:static;grid-template-columns:repeat(3,1fr)}}.decision-card{{grid-template-columns:220px 1fr 1fr}}.decision-button{{grid-column:1/-1;margin:0 18px 16px}}}}
-    @media(max-width:820px){{.app{{grid-template-columns:1fr}}.sidebar{{position:relative;height:auto}}nav,.engine-card{{display:none}}.content{{padding:18px}}.topbar{{display:block}}.top-status{{margin-top:14px;overflow:auto}}.metrics{{grid-template-columns:repeat(2,1fr)}}.section-title{{align-items:start;flex-direction:column;gap:12px}}.search-wrap{{width:100%}}.decision-card{{grid-template-columns:1fr}}.evidence-column,.summary-column{{border-top:1px solid #183149;border-left:0}}.decision-button{{width:calc(100% - 36px)}}.decision-detail{{grid-template-columns:repeat(2,1fr)}}.rail{{grid-template-columns:1fr}}.footer{{grid-template-columns:1fr}}}}
+    @media(max-width:820px){{.app{{grid-template-columns:1fr}}.sidebar{{position:relative;height:auto}}nav,.engine-card{{display:none}}.content{{padding:18px}}.topbar{{display:block}}.top-actions{{align-items:flex-start;flex-direction:column;margin-top:14px}}.top-status{{overflow:auto;width:100%}}.metrics{{grid-template-columns:repeat(2,1fr)}}.section-title{{align-items:start;flex-direction:column;gap:12px}}.search-wrap{{width:100%}}.decision-card{{grid-template-columns:1fr}}.evidence-column,.summary-column{{border-top:1px solid #183149;border-left:0}}html[data-theme="plain"] .evidence-column,html[data-theme="plain"] .summary-column{{border-top-color:#e6e9ee}}.decision-button{{width:calc(100% - 36px)}}.decision-detail{{grid-template-columns:repeat(2,1fr)}}.rail{{grid-template-columns:1fr}}.footer{{grid-template-columns:1fr}}}}
   </style>
 </head>
 <body>
@@ -380,7 +417,13 @@ def render_dexsato_dashboard(
   <main class="content">
     <header class="topbar">
       <div><h1>Market Decision Intelligence</h1><p class="subtitle">Evidence-led decisions across the Founder V1 market universe.</p></div>
-      <div class="top-status"><span class="status-chip">● <b>System {_text(effective_health.title())}</b></span><span class="status-chip">Last scan <b id="last-scan-age">calculating…</b></span></div>
+      <div class="top-actions">
+        <div class="theme-switcher" role="group" aria-label="Dashboard theme">
+          <button class="theme-option active" type="button" data-theme-option="current" aria-pressed="true">Current</button>
+          <button class="theme-option" type="button" data-theme-option="plain" aria-pressed="false">Plain White</button>
+        </div>
+        <div class="top-status"><span class="status-chip">● <b>System {_text(effective_health.title())}</b></span><span class="status-chip">Last scan <b id="last-scan-age">calculating…</b></span></div>
+      </div>
     </header>
     <div class="workspace">
       <section>
@@ -417,6 +460,18 @@ def render_dexsato_dashboard(
   </main>
 </div>
 <script>
+  const themeOptions=[...document.querySelectorAll("[data-theme-option]")];
+  function applyTheme(theme){{
+    const resolved=theme==="plain"?"plain":"current";
+    if(resolved==="plain")document.documentElement.dataset.theme="plain";
+    else delete document.documentElement.dataset.theme;
+    themeOptions.forEach(button=>{{const active=button.dataset.themeOption===resolved;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));}});
+    try{{localStorage.setItem("dexsato-theme",resolved);}}catch(error){{}}
+  }}
+  let savedTheme="current";
+  try{{savedTheme=localStorage.getItem("dexsato-theme")||"current";}}catch(error){{}}
+  applyTheme(savedTheme);
+  themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
   const cards=[...document.querySelectorAll(".decision-card")];
   const search=document.getElementById("token-search");
   const clearSearch=document.getElementById("clear-search");

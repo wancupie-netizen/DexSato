@@ -152,6 +152,21 @@ def test_should_keep_dashboard_search_and_filters():
     assert "formatMYT" in html
 
 
+def test_should_offer_current_and_plain_white_themes():
+    html = render_dexsato_dashboard(
+        SNAPSHOT,
+        system_status=STATUS,
+    )
+
+    assert 'data-theme-option="current"' in html
+    assert 'data-theme-option="plain"' in html
+    assert "Plain White" in html
+    assert 'html[data-theme="plain"]' in html
+    assert 'localStorage.setItem("dexsato-theme",resolved)' in html
+    assert 'localStorage.getItem("dexsato-theme")' in html
+    assert 'data-theme-option="current" aria-pressed="true"' in html
+
+
 def test_should_use_canonical_snapshot_time_when_latest_run_is_older():
     stale_run_status = {
         **STATUS,
