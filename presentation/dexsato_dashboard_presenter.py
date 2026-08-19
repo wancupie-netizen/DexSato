@@ -171,6 +171,17 @@ def _safe_bls_url(value: object) -> str:
     return escape(candidate, quote=True)
 
 
+def _safe_official_news_url(value: object) -> str:
+    candidate = str(value or "").strip()
+    parsed = urlparse(candidate)
+    if parsed.scheme != "https" or parsed.hostname not in {
+        "www.bls.gov", "bls.gov", "www.federalreserve.gov",
+        "federalreserve.gov", "www.sec.gov", "sec.gov",
+    }:
+        return "#"
+    return escape(candidate, quote=True)
+
+
 def _format_network(value: object) -> str:
     """Format known network identifiers without damaging brand casing."""
     normalized = str(value or "").strip().lower()
@@ -378,6 +389,51 @@ def _render_fundamental_context(coin: dict[str, object]) -> str:
     """
 
 
+def _render_market_catalysts(coin: dict[str, object]) -> str:
+    """Render recent official announcements without inferring causality."""
+    status = _status(coin.get("market_catalysts_status"), "NOT_REQUESTED")
+    context = coin.get("market_catalysts", {})
+    if not isinstance(context, dict):
+        context = {}
+    catalysts = context.get("catalysts", [])
+    if status not in {"AVAILABLE", "NO_RECENT_CATALYSTS"} or not isinstance(catalysts, list):
+        return (
+            '<div class="catalyst-empty"><strong>Verified Market Catalysts</strong>'
+            '<p>Official announcement feeds are temporarily unavailable.</p></div>'
+        )
+    rows = []
+    for catalyst in catalysts[:6]:
+        if not isinstance(catalyst, dict):
+            continue
+        url = _safe_official_news_url(catalyst.get("url"))
+        if url == "#":
+            continue
+        rows.append(
+            '<article class="catalyst-row">'
+            f'<div><span>{_text(catalyst.get("category"), "OFFICIAL").replace("_", " ")}</span>'
+            f'<h5><a href="{url}" target="_blank" rel="noopener noreferrer">'
+            f'{_text(catalyst.get("title"))}</a></h5></div>'
+            f'<p>{_text(catalyst.get("source"))}</p>'
+            f'<time data-catalyst-at="{_text(catalyst.get("published_at"))}">'
+            f'{_text(catalyst.get("published_at"))}</time></article>'
+        )
+    if not rows:
+        return (
+            '<div class="catalyst-empty"><strong>Verified Market Catalysts</strong>'
+            '<p>No relevant official announcement was published within the last 45 days.</p></div>'
+        )
+    return f"""
+        <div class="market-catalysts">
+          <div class="catalyst-heading"><div><span>Official announcements</span>
+            <h4>Verified Market Catalysts</h4></div>
+            <strong>Contextual · not proof of cause</strong></div>
+          <p>Recent primary-source releases relevant to macro or digital-asset regulation.</p>
+          <div class="catalyst-list">{"".join(rows)}</div>
+          <p class="catalyst-policy">Headlines are shown verbatim from official feeds. DexSato does not infer sentiment or causality.</p>
+        </div>
+    """
+
+
 def _render_market_detail_content(coin: dict[str, object]) -> str:
     """Render reusable market-detail content from one stored snapshot."""
     token = _status(coin.get("token"))
@@ -473,6 +529,7 @@ def _render_market_detail_content(coin: dict[str, object]) -> str:
         <div class="engine-evidence"><strong>Engine signals</strong><ul>{evidence}</ul></div>
         {_render_technical_evidence(coin)}
         {_render_fundamental_context(coin)}
+        {_render_market_catalysts(coin)}
         <p class="drawer-risk"><strong>Risk note</strong>{risk_note}</p>
       </section>
       <section class="detail-section">
@@ -628,6 +685,7 @@ def render_market_detail_page(
     .technical-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:15px}} .technical-metric{{min-height:112px;padding:17px;border:1px solid transparent;border-radius:10px;background:var(--panel2)}} .technical-metric span{{display:block;color:var(--muted);font-size:13.5px;font-weight:650;line-height:1.4}} .technical-metric strong{{display:block;margin-top:6px;font-size:20px;font-weight:780;line-height:1.3;letter-spacing:-.012em}} .technical-metric p{{margin:8px 0 0;color:var(--muted);font-size:14px;font-weight:500;line-height:1.55}} .technical-structure{{grid-column:1/-1;min-height:100px}} .technical-empty{{margin-top:20px;padding:17px;border:1px dashed var(--line);border-radius:9px}} .technical-empty strong{{font-size:16px}} .technical-empty p,.technical-freshness{{margin:7px 0 0;color:var(--muted);font-size:13.25px;font-weight:550;line-height:1.55}} .technical-freshness{{margin-top:12px;text-align:right}}
     .technical-outlook{{margin-top:20px;padding:20px;border:1px solid var(--line);border-radius:11px;background:rgba(83,148,255,.035)}} .outlook-heading{{display:flex;align-items:center;justify-content:space-between;gap:16px}} .outlook-heading span{{display:block;color:var(--muted);font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}} .outlook-heading h4{{margin:4px 0 0;font-size:18.5px;font-weight:780}} .bias-badge{{padding:7px 11px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-weight:850}} .bias-bullish_developing{{border-color:var(--cyan);color:var(--cyan)}} .bias-bearish_developing{{border-color:#ff6b78;color:#ff8792}} .bias-mixed{{color:var(--amber)}} .outlook-summary{{margin:14px 0 0;color:var(--text);font-size:15px;font-weight:550;line-height:1.65}}
     .fundamental-context,.fundamental-empty{{margin-top:22px;padding-top:21px;border-top:1px solid var(--line)}} .fundamental-heading{{display:flex;align-items:center;justify-content:space-between;gap:15px}} .fundamental-heading span{{color:var(--muted);font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}} .fundamental-heading h4{{margin:5px 0 0;font-size:18.5px;font-weight:800}} .fundamental-heading>strong{{max-width:230px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;color:var(--amber);font-size:12px;text-align:center}} .fundamental-context>h5{{margin:17px 0 0;font-size:17px}} .fundamental-summary{{margin:7px 0 0;font-size:14.5px;font-weight:520;line-height:1.65}} .fundamental-list{{display:grid;gap:9px;margin-top:15px}} .fundamental-row{{display:grid;grid-template-columns:minmax(190px,1fr) 90px 90px 70px;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}} .fundamental-row span,.fundamental-row small{{display:block;margin-top:3px;color:var(--muted);font-size:12px}} .fundamental-row>div>strong{{font-size:14px}} .fundamental-row a,.fundamental-source a{{color:var(--cyan);font-weight:700;text-decoration:none}} .fundamental-row>a{{font-size:12px;text-align:right}} .fundamental-source,.fundamental-empty p{{margin:11px 0 0;color:var(--muted);font-size:12.5px;line-height:1.55}}
+    .market-catalysts,.catalyst-empty{{margin-top:22px;padding-top:21px;border-top:1px solid var(--line)}} .catalyst-heading{{display:flex;align-items:center;justify-content:space-between;gap:15px}} .catalyst-heading span{{color:var(--muted);font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}} .catalyst-heading h4{{margin:5px 0 0;font-size:18.5px}} .catalyst-heading>strong{{max-width:220px;color:var(--amber);font-size:12px;text-align:right}} .market-catalysts>p,.catalyst-empty p{{color:var(--muted);font-size:13px;line-height:1.55}} .catalyst-list{{display:grid;gap:9px;margin-top:14px}} .catalyst-row{{display:grid;grid-template-columns:minmax(0,1fr) 155px 115px;align-items:center;gap:13px;padding:14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}} .catalyst-row span{{color:var(--cyan);font-size:11px;font-weight:800;letter-spacing:.05em}} .catalyst-row h5{{margin:4px 0 0;font-size:14px;line-height:1.45}} .catalyst-row a{{color:var(--text);text-decoration:none}} .catalyst-row p,.catalyst-row time{{margin:0;color:var(--muted);font-size:12px;line-height:1.45}} .catalyst-policy{{text-align:right}}
     .rule-groups{{display:grid;grid-template-columns:1fr;gap:14px;margin-top:18px}} .rule-group{{padding:17px;border-radius:10px;background:var(--panel2)}} .rule-group h5{{margin:0;font-size:16.5px;font-weight:780}} .rule-group>p{{margin:5px 0 13px;color:var(--muted);font-size:13.5px;font-weight:500;line-height:1.5}} .rule-row{{display:grid;grid-template-columns:28px minmax(0,1fr);gap:11px;padding:13px 0;border-top:1px solid var(--line)}} .rule-icon{{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:rgba(145,168,193,.12);color:var(--muted);font-size:13px;font-weight:900}} .rule-copy>div{{display:flex;align-items:start;justify-content:space-between;gap:12px}} .rule-copy>div>strong{{font-size:14px;font-weight:750;line-height:1.45}} .rule-copy b{{color:var(--muted);font-size:11.5px;font-weight:800;line-height:1.5;text-transform:uppercase;white-space:nowrap}} .rule-copy p{{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.45}} .rule-copy p strong{{color:var(--text);font-size:13px}} .rule-copy small{{display:block;margin-top:4px;color:var(--muted);font-size:12.5px;font-weight:500;line-height:1.5}} .rule-met .rule-icon,.rule-clear .rule-icon{{background:rgba(35,217,210,.12);color:var(--cyan)}} .rule-triggered .rule-icon{{background:rgba(255,83,100,.13);color:#ff6b78}} .rule-triggered .rule-copy b{{color:#ff8792}} .rule-pending .rule-icon{{background:rgba(247,185,40,.12);color:var(--amber)}} .outlook-policy{{margin:14px 0 0;color:var(--muted);font-size:12.5px;font-weight:550;text-align:right}} .outlook-empty{{margin-top:17px;padding:15px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:13.5px}}
     .drawer-risk{{margin:18px 0 0;padding:16px;border-radius:8px;background:rgba(247,185,40,.08);color:#e9d39c;font-size:14.5px;font-weight:500;line-height:1.65}} .drawer-risk strong{{display:block;margin-bottom:5px;color:var(--amber);text-transform:uppercase;font-size:12.5px;font-weight:800;letter-spacing:.04em}}
     .detail-title-row{{display:flex;align-items:start;justify-content:space-between;gap:12px}} .detail-title-row span{{color:var(--muted);font-size:12px;line-height:1.4;text-align:right}} .venue-list{{display:grid;gap:9px}} .venue-row{{display:grid;grid-template-columns:28px minmax(110px,1fr) 96px 96px;align-items:center;gap:10px;min-height:62px;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}}
@@ -636,7 +694,7 @@ def render_market_detail_page(
     html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f3f5f7;--line:#d9dfe6;--text:#111c30;--muted:#53657a;--cyan:#087783;--blue:#245fb5;--amber:#985800}}
     html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff7e3;color:#674b13}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}} html[data-theme="plain"] .technical-metric{{border-color:#e4e8ed}} html[data-theme="plain"] .technical-outlook{{background:#f9fbfd}} html[data-theme="plain"] .rule-met .rule-icon,html[data-theme="plain"] .rule-clear .rule-icon{{background:#e6f7f5}} html[data-theme="plain"] .rule-pending .rule-icon{{background:#fff4d9}}
     @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.detail-section:nth-of-type(1),.detail-section:nth-of-type(2),.detail-section:nth-of-type(3){{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.rule-groups{{grid-template-columns:1fr}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
-    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading,.outlook-heading,.fundamental-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}}}
+    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading,.outlook-heading,.fundamental-heading,.catalyst-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}.catalyst-row{{grid-template-columns:1fr}}}}
   </style>
 </head>
 <body>
@@ -658,7 +716,7 @@ def render_market_detail_page(
     function applyTheme(theme){{const resolved=theme==="plain"?"plain":"current";if(resolved==="plain")document.documentElement.dataset.theme="plain";else delete document.documentElement.dataset.theme;themeOptions.forEach(button=>button.classList.toggle("active",button.dataset.themeOption===resolved));try{{localStorage.setItem("dexsato-theme",resolved);}}catch(error){{}}}}
     let savedTheme="current";try{{savedTheme=localStorage.getItem("dexsato-theme")||"current";}}catch(error){{}}applyTheme(savedTheme);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
     function formatMYT(raw){{const time=new Date(raw);if(Number.isNaN(time.getTime()))return"Not available";return new Intl.DateTimeFormat("en-MY",{{timeZone:"Asia/Kuala_Lumpur",day:"2-digit",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true}}).format(time)+" MYT";}}
-    document.querySelectorAll("[data-scanned-at]").forEach(item=>{{const strong=item.querySelector(".detail-updated");if(strong)strong.textContent=formatMYT(item.dataset.scannedAt);}});document.querySelectorAll("[data-technical-at]").forEach(item=>{{const strong=item.querySelector(".technical-updated");if(strong)strong.textContent=formatMYT(item.dataset.technicalAt);}});const snapshot=document.querySelector("[data-snapshot-at] strong");if(snapshot)snapshot.textContent=formatMYT(snapshot.parentElement.dataset.snapshotAt);
+    document.querySelectorAll("[data-scanned-at]").forEach(item=>{{const strong=item.querySelector(".detail-updated");if(strong)strong.textContent=formatMYT(item.dataset.scannedAt);}});document.querySelectorAll("[data-technical-at]").forEach(item=>{{const strong=item.querySelector(".technical-updated");if(strong)strong.textContent=formatMYT(item.dataset.technicalAt);}});document.querySelectorAll("[data-catalyst-at]").forEach(item=>{{item.textContent=formatMYT(item.dataset.catalystAt);}});const snapshot=document.querySelector("[data-snapshot-at] strong");if(snapshot)snapshot.textContent=formatMYT(snapshot.parentElement.dataset.snapshotAt);
     document.getElementById("copy-summary").addEventListener("click",async()=>{{const status=document.getElementById("copy-status");try{{await navigator.clipboard.writeText(document.getElementById("market-page-content").innerText.trim());status.textContent="Market summary copied.";}}catch(error){{status.textContent="Copy is unavailable in this browser.";}}}});
   </script>
 </body>

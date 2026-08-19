@@ -86,6 +86,8 @@ def serialize_founder_dashboard_results(
                     "technical_evidence_status": "NOT_APPLICABLE",
                     "fundamental_context": {},
                     "fundamental_context_status": "NOT_APPLICABLE",
+                    "market_catalysts": {},
+                    "market_catalysts_status": "NOT_APPLICABLE",
                     "asset_class": "commodities",
                     "available": True,
                     "decision": "REFERENCE",
@@ -136,6 +138,8 @@ def serialize_founder_dashboard_results(
                     "technical_evidence_status": "UNAVAILABLE",
                     "fundamental_context": {},
                     "fundamental_context_status": "UNAVAILABLE",
+                    "market_catalysts": {},
+                    "market_catalysts_status": "UNAVAILABLE",
                     "asset_class": None,
                     "available": False,
                     "decision": None,
@@ -204,6 +208,14 @@ def serialize_founder_dashboard_results(
                 ),
                 "fundamental_context_status": result.get(
                     "fundamental_context_status", "NOT_REQUESTED"
+                ),
+                "market_catalysts": dict(
+                    result.get("market_catalysts", {})
+                    if isinstance(result.get("market_catalysts"), dict)
+                    else {}
+                ),
+                "market_catalysts_status": result.get(
+                    "market_catalysts_status", "NOT_REQUESTED"
                 ),
                 "asset_class": "crypto",
                 "available": True,
