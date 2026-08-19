@@ -235,6 +235,50 @@ def _render_rule_conditions(
     return "".join(rows) or '<p class="rule-empty">No rule conditions available.</p>'
 
 
+def _render_trader_decision_brief(coin: dict[str, object]) -> str:
+    brief = coin.get("trader_decision_brief", {})
+    if not isinstance(brief, dict) or brief.get("status") != "AVAILABLE":
+        return ""
+    confirmations = brief.get("pending_confirmation", [])
+    invalidations = brief.get("invalidation", [])
+    contexts = brief.get("context_notes", [])
+
+    def rows(values: object, empty: str) -> str:
+        if not isinstance(values, list):
+            return f"<li>{_text(empty)}</li>"
+        rendered = "".join(
+            f'<li><strong>{_text(value.get("label"))}</strong>'
+            f'<span>{_text(value.get("actual"))} · {_text(value.get("requirement"))}</span></li>'
+            for value in values if isinstance(value, dict)
+        )
+        return rendered or f"<li>{_text(empty)}</li>"
+
+    context_html = ""
+    if isinstance(contexts, list):
+        context_html = "".join(
+            f'<li><strong>{_text(value.get("type"), "CONTEXT").replace("_", " ")}</strong>'
+            f'<span>{_text(value.get("text"))}</span></li>'
+            for value in contexts if isinstance(value, dict)
+        )
+    return f"""
+      <div class="trader-brief">
+        <div class="trader-brief-heading"><div><span>Evidence-led synthesis</span>
+          <h4>Trader Decision Brief</h4></div>
+          <strong>{_text(brief.get("state"), "NO THESIS").replace("_", " ").title()}</strong></div>
+        <h5>{_text(brief.get("headline"))}</h5>
+        <p>{_text(brief.get("summary"))}</p>
+        <div class="brief-action"><strong>What this means now</strong>
+          <p>{_text(brief.get("next_action"))}</p></div>
+        <div class="brief-columns">
+          <section><h6>Still needed</h6><ul>{rows(confirmations, "No pending confirmation recorded.")}</ul></section>
+          <section><h6>View changes if</h6><ul>{rows(invalidations, "No directional invalidation applies yet.")}</ul></section>
+        </div>
+        {f'<div class="brief-context"><strong>Context, not cause</strong><ul>{context_html}</ul></div>' if context_html else ''}
+        <small>{_text(brief.get("policy"))}</small>
+      </div>
+    """
+
+
 def _render_technical_outlook(evidence: dict[str, object]) -> str:
     outlook = evidence.get("outlook", {})
     if not isinstance(outlook, dict) or not outlook:
@@ -526,6 +570,7 @@ def _render_market_detail_content(coin: dict[str, object]) -> str:
       <section class="detail-section">
         <h3>DexSato Decision</h3>
         <div class="drawer-decision"><span>{decision}</span><strong>Confidence {confidence}</strong></div>
+        {_render_trader_decision_brief(coin)}
         <div class="engine-evidence"><strong>Engine signals</strong><ul>{evidence}</ul></div>
         {_render_technical_evidence(coin)}
         {_render_fundamental_context(coin)}
@@ -682,6 +727,7 @@ def render_market_detail_page(
     ul{{margin:0;padding-left:21px;color:var(--text);font-size:15.5px;line-height:1.6}} li{{margin:8px 0}} .drawer-decision{{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}} .drawer-decision span{{padding:5px 10px;border:1px solid var(--blue);border-radius:6px;color:var(--blue);font-size:13px;font-weight:800}} .drawer-decision strong{{font-size:13.5px;color:var(--amber)}}
     .engine-evidence{{margin-bottom:20px}} .engine-evidence>strong{{display:block;margin-bottom:8px;color:var(--muted);font-size:12.5px;font-weight:750;text-transform:uppercase;letter-spacing:.055em}}
     .technical-heading{{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}} .technical-heading h4{{margin:0;font-size:17px;font-weight:750;letter-spacing:-.008em}} .technical-heading p{{max-width:470px;margin:5px 0 0;color:var(--muted);font-size:13.5px;font-weight:500;line-height:1.5}} .technical-heading span{{margin:3px 0 0;color:var(--muted);font-size:12.5px;font-weight:600;white-space:nowrap}}
+    .trader-brief{{margin:20px 0 23px;padding:23px;border:1px solid var(--line);border-radius:12px;background:rgba(35,217,210,.035)}} .trader-brief-heading{{display:flex;align-items:center;justify-content:space-between;gap:16px}} .trader-brief-heading span{{color:var(--muted);font-size:12.75px;font-weight:800;letter-spacing:.065em;text-transform:uppercase}} .trader-brief-heading h4{{margin:5px 0 0;font-size:21px;font-weight:800;line-height:1.3}} .trader-brief-heading>strong{{max-width:240px;padding:8px 12px;border:1px solid var(--line);border-radius:7px;color:var(--amber);font-size:13px;font-weight:800;line-height:1.4;text-align:center}} .trader-brief>h5{{margin:19px 0 0;font-size:18px;font-weight:760;line-height:1.5}} .trader-brief>p{{margin:8px 0 0;font-size:15px;font-weight:520;line-height:1.7}} .brief-action{{margin-top:17px;padding:17px 18px;border-left:4px solid var(--cyan);border-radius:6px;background:var(--panel2)}} .brief-action>strong{{font-size:14.5px;font-weight:800}} .brief-action p{{margin:6px 0 0;font-size:15px;font-weight:520;line-height:1.65}} .brief-columns{{display:grid;grid-template-columns:1fr;gap:12px;margin-top:15px}} .brief-columns section,.brief-context{{padding:17px 18px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}} .brief-columns h6{{margin:0;font-size:16px;font-weight:800}} .brief-columns ul,.brief-context ul{{margin:10px 0 0;padding:0;list-style:none}} .brief-columns li,.brief-context li{{margin:11px 0;font-size:14.5px;line-height:1.55}} .brief-columns li+li,.brief-context li+li{{padding-top:11px;border-top:1px solid var(--line)}} .brief-columns li strong,.brief-context li strong{{font-weight:750}} .brief-columns li span,.brief-context li span{{display:block;margin-top:4px;color:var(--muted);font-size:13.5px;font-weight:500;line-height:1.55}} .brief-context{{margin-top:12px}} .brief-context>strong{{font-size:14.5px;font-weight:800}} .trader-brief>small{{display:block;margin-top:13px;color:var(--muted);font-size:12.5px;font-weight:550;text-align:right}}
     .technical-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:15px}} .technical-metric{{min-height:112px;padding:17px;border:1px solid transparent;border-radius:10px;background:var(--panel2)}} .technical-metric span{{display:block;color:var(--muted);font-size:13.5px;font-weight:650;line-height:1.4}} .technical-metric strong{{display:block;margin-top:6px;font-size:20px;font-weight:780;line-height:1.3;letter-spacing:-.012em}} .technical-metric p{{margin:8px 0 0;color:var(--muted);font-size:14px;font-weight:500;line-height:1.55}} .technical-structure{{grid-column:1/-1;min-height:100px}} .technical-empty{{margin-top:20px;padding:17px;border:1px dashed var(--line);border-radius:9px}} .technical-empty strong{{font-size:16px}} .technical-empty p,.technical-freshness{{margin:7px 0 0;color:var(--muted);font-size:13.25px;font-weight:550;line-height:1.55}} .technical-freshness{{margin-top:12px;text-align:right}}
     .technical-outlook{{margin-top:20px;padding:20px;border:1px solid var(--line);border-radius:11px;background:rgba(83,148,255,.035)}} .outlook-heading{{display:flex;align-items:center;justify-content:space-between;gap:16px}} .outlook-heading span{{display:block;color:var(--muted);font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}} .outlook-heading h4{{margin:4px 0 0;font-size:18.5px;font-weight:780}} .bias-badge{{padding:7px 11px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-weight:850}} .bias-bullish_developing{{border-color:var(--cyan);color:var(--cyan)}} .bias-bearish_developing{{border-color:#ff6b78;color:#ff8792}} .bias-mixed{{color:var(--amber)}} .outlook-summary{{margin:14px 0 0;color:var(--text);font-size:15px;font-weight:550;line-height:1.65}}
     .fundamental-context,.fundamental-empty{{margin-top:22px;padding-top:21px;border-top:1px solid var(--line)}} .fundamental-heading{{display:flex;align-items:center;justify-content:space-between;gap:15px}} .fundamental-heading span{{color:var(--muted);font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}} .fundamental-heading h4{{margin:5px 0 0;font-size:18.5px;font-weight:800}} .fundamental-heading>strong{{max-width:230px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;color:var(--amber);font-size:12px;text-align:center}} .fundamental-context>h5{{margin:17px 0 0;font-size:17px}} .fundamental-summary{{margin:7px 0 0;font-size:14.5px;font-weight:520;line-height:1.65}} .fundamental-list{{display:grid;gap:9px;margin-top:15px}} .fundamental-row{{display:grid;grid-template-columns:minmax(190px,1fr) 90px 90px 70px;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}} .fundamental-row span,.fundamental-row small{{display:block;margin-top:3px;color:var(--muted);font-size:12px}} .fundamental-row>div>strong{{font-size:14px}} .fundamental-row a,.fundamental-source a{{color:var(--cyan);font-weight:700;text-decoration:none}} .fundamental-row>a{{font-size:12px;text-align:right}} .fundamental-source,.fundamental-empty p{{margin:11px 0 0;color:var(--muted);font-size:12.5px;line-height:1.55}}
@@ -694,7 +740,7 @@ def render_market_detail_page(
     html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f3f5f7;--line:#d9dfe6;--text:#111c30;--muted:#53657a;--cyan:#087783;--blue:#245fb5;--amber:#985800}}
     html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff7e3;color:#674b13}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}} html[data-theme="plain"] .technical-metric{{border-color:#e4e8ed}} html[data-theme="plain"] .technical-outlook{{background:#f9fbfd}} html[data-theme="plain"] .rule-met .rule-icon,html[data-theme="plain"] .rule-clear .rule-icon{{background:#e6f7f5}} html[data-theme="plain"] .rule-pending .rule-icon{{background:#fff4d9}}
     @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.detail-section:nth-of-type(1),.detail-section:nth-of-type(2),.detail-section:nth-of-type(3){{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.rule-groups{{grid-template-columns:1fr}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
-    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading,.outlook-heading,.fundamental-heading,.catalyst-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}.catalyst-row{{grid-template-columns:1fr}}}}
+    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading,.outlook-heading,.fundamental-heading,.catalyst-heading,.trader-brief-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}.catalyst-row,.brief-columns{{grid-template-columns:1fr}}}}
   </style>
 </head>
 <body>

@@ -17,6 +17,7 @@ from adaptive.dashboard.dashboard_card import (
     DashboardCard,
 )
 from application.risk_note import build_market_risk_note
+from application.trader_decision_brief import build_trader_decision_brief
 
 
 def serialize_founder_dashboard_results(
@@ -88,6 +89,7 @@ def serialize_founder_dashboard_results(
                     "fundamental_context_status": "NOT_APPLICABLE",
                     "market_catalysts": {},
                     "market_catalysts_status": "NOT_APPLICABLE",
+                    "trader_decision_brief": {},
                     "asset_class": "commodities",
                     "available": True,
                     "decision": "REFERENCE",
@@ -140,6 +142,7 @@ def serialize_founder_dashboard_results(
                     "fundamental_context_status": "UNAVAILABLE",
                     "market_catalysts": {},
                     "market_catalysts_status": "UNAVAILABLE",
+                    "trader_decision_brief": {},
                     "asset_class": None,
                     "available": False,
                     "decision": None,
@@ -173,6 +176,18 @@ def serialize_founder_dashboard_results(
         ):
             market = {}
 
+        technical_evidence = (
+            result.get("technical_evidence", {})
+            if isinstance(result.get("technical_evidence"), dict) else {}
+        )
+        fundamental_context = (
+            result.get("fundamental_context", {})
+            if isinstance(result.get("fundamental_context"), dict) else {}
+        )
+        market_catalysts = (
+            result.get("market_catalysts", {})
+            if isinstance(result.get("market_catalysts"), dict) else {}
+        )
         serialized.append(
             {
                 "token": card.token,
@@ -192,28 +207,16 @@ def serialize_founder_dashboard_results(
                     "trading_venues_status",
                     "NOT_REQUESTED",
                 ),
-                "technical_evidence": dict(
-                    result.get("technical_evidence", {})
-                    if isinstance(result.get("technical_evidence"), dict)
-                    else {}
-                ),
+                "technical_evidence": dict(technical_evidence),
                 "technical_evidence_status": result.get(
                     "technical_evidence_status",
                     "NOT_REQUESTED",
                 ),
-                "fundamental_context": dict(
-                    result.get("fundamental_context", {})
-                    if isinstance(result.get("fundamental_context"), dict)
-                    else {}
-                ),
+                "fundamental_context": dict(fundamental_context),
                 "fundamental_context_status": result.get(
                     "fundamental_context_status", "NOT_REQUESTED"
                 ),
-                "market_catalysts": dict(
-                    result.get("market_catalysts", {})
-                    if isinstance(result.get("market_catalysts"), dict)
-                    else {}
-                ),
+                "market_catalysts": dict(market_catalysts),
                 "market_catalysts_status": result.get(
                     "market_catalysts_status", "NOT_REQUESTED"
                 ),
@@ -229,6 +232,13 @@ def serialize_founder_dashboard_results(
                     card.reasons,
                 ),
                 "summary": card.summary,
+                "trader_decision_brief": build_trader_decision_brief(
+                    decision=card.decision,
+                    confidence=card.confidence,
+                    technical_evidence=technical_evidence,
+                    fundamental_context=fundamental_context,
+                    market_catalysts=market_catalysts,
+                ),
                 "risk_note": build_market_risk_note(
                     asset_class="crypto",
                     reasons=list(card.reasons),

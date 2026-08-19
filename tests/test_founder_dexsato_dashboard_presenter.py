@@ -376,3 +376,25 @@ def test_market_detail_renders_verified_official_catalysts():
     assert "Federal Reserve issues FOMC statement" in html
     assert "Contextual · not proof of cause" in html
     assert "DexSato does not infer sentiment or causality" in html
+
+
+def test_market_detail_renders_trader_decision_brief():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["trader_decision_brief"] = {
+        "status": "AVAILABLE", "state": "DOWNSIDE_EVIDENCE_DEVELOPING",
+        "headline": "Downside evidence is developing",
+        "summary": "Technical confirmation remains incomplete.",
+        "next_action": "Wait for pending conditions before treating this as a setup.",
+        "pending_confirmation": [{"label": "RSI confirms bearish momentum",
+            "actual": "47.60", "requirement": "RSI below 45.00"}],
+        "invalidation": [{"label": "4H close recovers above EMA50",
+            "actual": "-0.28%", "requirement": "Triggered above 0.00%"}],
+        "context_notes": [{"type": "MACRO", "text": "Official macro signals are mixed"}],
+        "policy": "Evidence synthesis only; not a trade instruction.",
+    }
+    html = render_market_detail_page(coin, generated_at="2026-08-19T00:00:00+00:00")
+    assert "Trader Decision Brief" in html
+    assert "What this means now" in html
+    assert "RSI confirms bearish momentum" in html
+    assert "Context, not cause" in html
+    assert "not a trade instruction" in html
