@@ -9,6 +9,7 @@ from application.technical_evidence_service import (
     calculate_ema,
     calculate_rsi,
     calculate_technical_evidence,
+    build_technical_outlook,
     fetch_technical_evidence,
     normalize_closed_candles,
 )
@@ -62,6 +63,92 @@ def test_should_build_auditable_four_hour_evidence():
         "LOWER_HIGH_LOWER_LOW",
         "MIXED",
     }
+    assert result["outlook"]["policy"] == "READ_ONLY_TECHNICAL_CONTEXT"
+
+
+def _metrics(*, rsi, ema50, ema200, distance50, distance200, volume, structure):
+    return {
+        "rsi_14": {"value": rsi},
+        "ema_50": {
+            "value": ema50,
+            "price_distance_pct": distance50,
+        },
+        "ema_200": {
+            "value": ema200,
+            "price_distance_pct": distance200,
+        },
+        "relative_volume_20": {"value": volume},
+        "market_structure": {"state": structure},
+    }
+
+
+def test_should_build_bullish_confirmation_and_invalidation_rules():
+    outlook = build_technical_outlook(
+        _metrics(
+            rsi=58,
+            ema50=105,
+            ema200=100,
+            distance50=1.8,
+            distance200=6.9,
+            volume=1.7,
+            structure="HIGHER_HIGH_HIGHER_LOW",
+        )
+    )
+
+    assert outlook["bias"] == "BULLISH_DEVELOPING"
+    assert all(item["status"] == "MET" for item in outlook["confirmation"])
+    assert all(item["status"] == "CLEAR" for item in outlook["invalidation"])
+    assert outlook["confirmation"][0]["actual"] == "+1.80%"
+    assert outlook["confirmation"][2]["requirement"] == (
+        "Relative volume at least 1.50×"
+    )
+
+
+def test_should_build_bearish_confirmation_and_invalidation_rules():
+    outlook = build_technical_outlook(
+        _metrics(
+            rsi=41,
+            ema50=95,
+            ema200=100,
+            distance50=-1.4,
+            distance200=-6.3,
+            volume=1.8,
+            structure="LOWER_HIGH_LOWER_LOW",
+        )
+    )
+
+    assert outlook["bias"] == "BEARISH_DEVELOPING"
+    assert all(item["status"] == "MET" for item in outlook["confirmation"])
+    assert all(item["status"] == "CLEAR" for item in outlook["invalidation"])
+    assert outlook["confirmation"][0]["actual"] == "-1.40%"
+
+
+def test_should_refuse_to_invent_invalidation_for_mixed_evidence():
+    outlook = build_technical_outlook(
+        _metrics(
+            rsi=56,
+            ema50=101,
+            ema200=100,
+            distance50=-0.1,
+            distance200=0.2,
+            volume=1.0,
+            structure="MIXED",
+        )
+    )
+
+    assert outlook["bias"] == "MIXED"
+    assert "No directional 4H thesis" in outlook["summary"]
+    assert outlook["bullish_checks"] == 2
+    assert outlook["invalidation"] == [
+        {
+            "label": "Directional thesis not established",
+            "status": "NOT_APPLICABLE",
+            "actual": "No active thesis",
+            "requirement": (
+                "Invalidation begins after a directional bias forms"
+            ),
+        }
+    ]
 
 
 def test_should_report_insufficient_history_without_fabricating_metrics():

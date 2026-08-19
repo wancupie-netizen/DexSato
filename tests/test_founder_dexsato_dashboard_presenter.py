@@ -1,5 +1,7 @@
 """Tests for the DexSato Founder V1 dashboard."""
 
+from copy import deepcopy
+
 from presentation.dexsato_dashboard_presenter import (
     build_intelligence_summary,
     format_compact_usd,
@@ -63,6 +65,36 @@ SNAPSHOT = {
                     "market_structure": {
                         "state": "HIGHER_HIGH_HIGHER_LOW",
                     },
+                },
+                "outlook": {
+                    "bias": "BULLISH_DEVELOPING",
+                    "summary": (
+                        "Bullish 4H evidence is developing: 3/4 "
+                        "directional checks are positive."
+                    ),
+                    "confirmation": [
+                        {
+                            "label": "Price holds above EMA50",
+                            "status": "MET",
+                            "actual": "+1.80%",
+                            "requirement": "4H close above EMA50 (> 0.00%)",
+                        },
+                        {
+                            "label": "Volume confirms participation",
+                            "status": "PENDING",
+                            "actual": "1.20×",
+                            "requirement": "Relative volume at least 1.50×",
+                        },
+                    ],
+                    "invalidation": [
+                        {
+                            "label": "4H close falls below EMA50",
+                            "status": "CLEAR",
+                            "actual": "+1.80%",
+                            "requirement": "Triggered below 0.00%",
+                        }
+                    ],
+                    "policy": "READ_ONLY_TECHNICAL_CONTEXT",
                 },
             },
         },
@@ -161,6 +193,14 @@ def test_should_render_dedicated_market_detail_page():
     assert "Higher High Higher Low" in html
     assert "GeckoTerminal" in html
     assert 'data-technical-at="2026-07-30T12:00:00+00:00"' in html
+    assert "Current technical bias" in html
+    assert "Bullish Developing" in html
+    assert "Confirmation" in html
+    assert "Invalidation" in html
+    assert "Price holds above EMA50" in html
+    assert "Actual: <strong>+1.80%</strong>" in html
+    assert "Relative volume at least 1.50×" in html
+    assert "does not override the DexSato decision" in html
     assert 'id="copy-summary"' in html
     assert 'href="/"' in html
     assert "market-drawer" not in html
@@ -293,3 +333,28 @@ def test_should_build_grounded_intelligence_summary():
     assert "Early Momentum" in summary
     assert "Strong Liquidity" in summary
     assert "Confidence is HIGH" in summary
+
+
+def test_market_detail_renders_verified_fundamental_context():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["fundamental_context_status"] = "AVAILABLE"
+    coin["fundamental_context"] = {
+        "headline": "Official macro signals are mixed",
+        "summary": "Context only; causality is not established.",
+        "source": "U.S. Bureau of Labor Statistics",
+        "source_url": "https://www.bls.gov/data/",
+        "indicators": [{
+            "label": "US CPI inflation (YoY)", "actual_display": "2.7%",
+            "previous_display": "2.9%", "reference_period": "July 2026",
+            "direction": "COOLING",
+            "source_url": "https://data.bls.gov/timeseries/CUUR0000SA0",
+        }],
+    }
+    html = render_market_detail_page(
+        coin, generated_at="2026-08-19T00:00:00+00:00"
+    )
+    assert "Verified Fundamental Context" in html
+    assert "Contextual · causality not established" in html
+    assert "US CPI inflation (YoY)" in html
+    assert "2.7%" in html and "2.9%" in html
+    assert "U.S. Bureau of Labor Statistics" in html
