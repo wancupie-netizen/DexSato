@@ -413,3 +413,22 @@ def test_market_detail_renders_change_since_previous_scan():
     assert "4H bias changed from Mixed to Bearish Developing" in html
     assert "54.39" in html and "47.60" in html
     assert "no causal inference" in html
+
+
+def test_market_detail_renders_recent_scan_trail():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["recent_scan_history"] = [{
+        "recorded_at": "2026-08-19T04:00:00+00:00", "decision": "REVIEW",
+        "confidence": "MEDIUM", "technical_bias": "BEARISH_DEVELOPING",
+        "rsi_14": 47.6, "relative_volume": .78, "price": 64300,
+    }, {
+        "recorded_at": "2026-08-19T08:00:00+00:00", "decision": "ALERT",
+        "confidence": "HIGH", "technical_bias": "BULLISH_DEVELOPING",
+        "rsi_14": 56.2, "relative_volume": 1.6, "price": 65100,
+    }]
+    html = render_market_detail_page(coin, generated_at="2026-08-19T08:00:00+00:00")
+    assert "Recent Scan Trail" in html
+    assert "2 stored scans" in html
+    assert "Bearish Developing" in html and "Bullish Developing" in html
+    assert "RSI 56.20" in html and "Vol 1.60×" in html
+    assert "maximum 12 stored" in html
