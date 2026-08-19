@@ -75,6 +75,7 @@ def build_founder_dashboard_results(
     scan: Callable[[str], dict] = run_scan,
     venue_lookup: Callable[[str], list[dict[str, object]]] | None = None,
     technical_lookup: Callable[[str], dict[str, object]] | None = None,
+    fundamental_context: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
     """
     Run sequential DexSato scans.
@@ -172,6 +173,10 @@ def build_founder_dashboard_results(
                 "trading_venues_status": trading_venues_status,
                 "technical_evidence": technical_evidence,
                 "technical_evidence_status": technical_evidence_status,
+                "fundamental_context": dict(fundamental_context or {}),
+                "fundamental_context_status": str(
+                    (fundamental_context or {}).get("status", "NOT_REQUESTED")
+                ).upper(),
                 "error": None,
             }
         )

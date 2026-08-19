@@ -160,6 +160,17 @@ def _safe_market_url(value: object) -> str | None:
     return escape(candidate, quote=True)
 
 
+def _safe_bls_url(value: object) -> str:
+    """Allow links only to official BLS HTTPS hosts."""
+    candidate = str(value or "").strip()
+    parsed = urlparse(candidate)
+    if parsed.scheme != "https" or parsed.hostname not in {
+        "www.bls.gov", "bls.gov", "data.bls.gov",
+    }:
+        return "https://www.bls.gov/data/"
+    return escape(candidate, quote=True)
+
+
 def _format_network(value: object) -> str:
     """Format known network identifiers without damaging brand casing."""
     normalized = str(value or "").strip().lower()
@@ -178,6 +189,73 @@ def _metric_number(value: object, digits: int = 2) -> str:
         return f"{float(value):,.{digits}f}"
     except (TypeError, ValueError):
         return "Not available"
+
+
+def _render_rule_conditions(
+    conditions: object,
+    *,
+    group: str,
+) -> str:
+    """Render auditable rule states with actual values and thresholds."""
+    if not isinstance(conditions, list):
+        return '<p class="rule-empty">No rule conditions available.</p>'
+    icons = {
+        "MET": "✓",
+        "PENDING": "○",
+        "CLEAR": "✓",
+        "TRIGGERED": "!",
+        "NOT_APPLICABLE": "—",
+    }
+    rows: list[str] = []
+    for condition in conditions:
+        if not isinstance(condition, dict):
+            continue
+        status = _status(condition.get("status"), "UNKNOWN")
+        rows.append(
+            f'<div class="rule-row rule-{_text(status.lower())}">'
+            f'<span class="rule-icon" aria-hidden="true">{icons.get(status, "?")}</span>'
+            '<div class="rule-copy">'
+            f'<div><strong>{_text(condition.get("label"))}</strong>'
+            f'<b>{_text(status.replace("_", " ").title())}</b></div>'
+            f'<p>Actual: <strong>{_text(condition.get("actual"))}</strong></p>'
+            f'<small>Rule: {_text(condition.get("requirement"))}</small>'
+            "</div></div>"
+        )
+    return "".join(rows) or '<p class="rule-empty">No rule conditions available.</p>'
+
+
+def _render_technical_outlook(evidence: dict[str, object]) -> str:
+    outlook = evidence.get("outlook", {})
+    if not isinstance(outlook, dict) or not outlook:
+        return (
+            '<div class="outlook-empty">Confirmation and invalidation '
+            "rules will be available after the next snapshot.</div>"
+        )
+    bias = _status(outlook.get("bias"), "MIXED")
+    bias_label = bias.replace("_", " ").title()
+    summary = _text(outlook.get("summary"), "Technical outlook is unavailable.")
+    confirmation = _render_rule_conditions(
+        outlook.get("confirmation"), group="confirmation"
+    )
+    invalidation = _render_rule_conditions(
+        outlook.get("invalidation"), group="invalidation"
+    )
+    return f"""
+        <div class="technical-outlook">
+          <div class="outlook-heading"><div><span>Evidence assessment</span>
+            <h4>Current technical bias</h4></div>
+            <strong class="bias-badge bias-{_text(bias.lower())}">{_text(bias_label)}</strong>
+          </div>
+          <p class="outlook-summary">{summary}</p>
+          <div class="rule-groups">
+            <section class="rule-group confirmation-rules"><h5>Confirmation</h5>
+              <p>Conditions required to strengthen this technical thesis.</p>{confirmation}</section>
+            <section class="rule-group invalidation-rules"><h5>Invalidation</h5>
+              <p>Conditions that weaken or cancel the active thesis.</p>{invalidation}</section>
+          </div>
+          <p class="outlook-policy">Technical context only · does not override the DexSato decision.</p>
+        </div>
+    """
 
 
 def _render_technical_evidence(coin: dict[str, object]) -> str:
@@ -247,9 +325,56 @@ def _render_technical_evidence(coin: dict[str, object]) -> str:
           <div class="technical-metric technical-structure"><span>Market structure</span>
             <strong>{_text(structure_state)}</strong><p>Compared with the previous closed 4H candle.</p></div>
         </div>
+        {_render_technical_outlook(evidence)}
         <p class="technical-freshness" data-technical-at="{candle_closed_at}">
           Latest closed candle <strong class="technical-updated">{candle_closed_at}</strong>
         </p>
+    """
+
+
+def _render_fundamental_context(coin: dict[str, object]) -> str:
+    """Render official macro readings without claiming price causality."""
+    status = _status(coin.get("fundamental_context_status"), "NOT_REQUESTED")
+    context = coin.get("fundamental_context", {})
+    if not isinstance(context, dict) or status != "AVAILABLE":
+        message = (
+            "Official macro data is temporarily unavailable. No fundamental "
+            "cause has been assigned to this market move."
+            if status == "UNAVAILABLE"
+            else "Verified fundamental context will be collected in the next snapshot."
+        )
+        return (
+            '<div class="fundamental-empty"><strong>Verified Fundamental Context</strong>'
+            f"<p>{_text(message)}</p></div>"
+        )
+    rows = []
+    indicators = context.get("indicators", [])
+    if isinstance(indicators, list):
+        for indicator in indicators:
+            if not isinstance(indicator, dict):
+                continue
+            rows.append(
+                '<div class="fundamental-row">'
+                f'<div><strong>{_text(indicator.get("label"))}</strong>'
+                f'<span>{_text(indicator.get("reference_period"))} · '
+                f'{_text(indicator.get("direction"), "MIXED").title()}</span></div>'
+                f'<div><small>Latest</small><strong>{_text(indicator.get("actual_display"))}</strong></div>'
+                f'<div><small>Previous</small><strong>{_text(indicator.get("previous_display"))}</strong></div>'
+                f'<a href="{_safe_bls_url(indicator.get("source_url"))}" target="_blank" '
+                'rel="noopener noreferrer">BLS series</a></div>'
+            )
+    return f"""
+        <div class="fundamental-context">
+          <div class="fundamental-heading"><div><span>Primary official source</span>
+            <h4>Verified Fundamental Context</h4></div>
+            <strong>Contextual · causality not established</strong></div>
+          <h5>{_text(context.get("headline"))}</h5>
+          <p class="fundamental-summary">{_text(context.get("summary"))}</p>
+          <div class="fundamental-list">{"".join(rows)}</div>
+          <p class="fundamental-source">Source: <a href="{_safe_bls_url(context.get("source_url"))}"
+            target="_blank" rel="noopener noreferrer">{_text(context.get("source"))}</a> ·
+            Official data may be revised after publication.</p>
+        </div>
     """
 
 
@@ -347,6 +472,7 @@ def _render_market_detail_content(coin: dict[str, object]) -> str:
         <div class="drawer-decision"><span>{decision}</span><strong>Confidence {confidence}</strong></div>
         <div class="engine-evidence"><strong>Engine signals</strong><ul>{evidence}</ul></div>
         {_render_technical_evidence(coin)}
+        {_render_fundamental_context(coin)}
         <p class="drawer-risk"><strong>Risk note</strong>{risk_note}</p>
       </section>
       <section class="detail-section">
@@ -499,15 +625,18 @@ def render_market_detail_page(
     ul{{margin:0;padding-left:21px;color:var(--text);font-size:15.5px;line-height:1.6}} li{{margin:8px 0}} .drawer-decision{{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}} .drawer-decision span{{padding:5px 10px;border:1px solid var(--blue);border-radius:6px;color:var(--blue);font-size:13px;font-weight:800}} .drawer-decision strong{{font-size:13.5px;color:var(--amber)}}
     .engine-evidence{{margin-bottom:20px}} .engine-evidence>strong{{display:block;margin-bottom:8px;color:var(--muted);font-size:12.5px;font-weight:750;text-transform:uppercase;letter-spacing:.055em}}
     .technical-heading{{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}} .technical-heading h4{{margin:0;font-size:17px;font-weight:750;letter-spacing:-.008em}} .technical-heading p{{max-width:470px;margin:5px 0 0;color:var(--muted);font-size:13.5px;font-weight:500;line-height:1.5}} .technical-heading span{{margin:3px 0 0;color:var(--muted);font-size:12.5px;font-weight:600;white-space:nowrap}}
-    .technical-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:14px}} .technical-metric{{min-height:106px;padding:16px;border:1px solid transparent;border-radius:10px;background:var(--panel2)}} .technical-metric span{{display:block;color:var(--muted);font-size:13px;font-weight:600;line-height:1.4}} .technical-metric strong{{display:block;margin-top:5px;font-size:19px;font-weight:780;line-height:1.3;letter-spacing:-.01em}} .technical-metric p{{margin:7px 0 0;color:var(--muted);font-size:13.25px;font-weight:500;line-height:1.5}} .technical-structure{{grid-column:1/-1;min-height:96px}} .technical-empty{{margin-top:20px;padding:16px;border:1px dashed var(--line);border-radius:9px}} .technical-empty strong{{font-size:15px}} .technical-empty p,.technical-freshness{{margin:6px 0 0;color:var(--muted);font-size:12.75px;font-weight:500;line-height:1.5}} .technical-freshness{{margin-top:10px;text-align:right}}
+    .technical-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:15px}} .technical-metric{{min-height:112px;padding:17px;border:1px solid transparent;border-radius:10px;background:var(--panel2)}} .technical-metric span{{display:block;color:var(--muted);font-size:13.5px;font-weight:650;line-height:1.4}} .technical-metric strong{{display:block;margin-top:6px;font-size:20px;font-weight:780;line-height:1.3;letter-spacing:-.012em}} .technical-metric p{{margin:8px 0 0;color:var(--muted);font-size:14px;font-weight:500;line-height:1.55}} .technical-structure{{grid-column:1/-1;min-height:100px}} .technical-empty{{margin-top:20px;padding:17px;border:1px dashed var(--line);border-radius:9px}} .technical-empty strong{{font-size:16px}} .technical-empty p,.technical-freshness{{margin:7px 0 0;color:var(--muted);font-size:13.25px;font-weight:550;line-height:1.55}} .technical-freshness{{margin-top:12px;text-align:right}}
+    .technical-outlook{{margin-top:20px;padding:20px;border:1px solid var(--line);border-radius:11px;background:rgba(83,148,255,.035)}} .outlook-heading{{display:flex;align-items:center;justify-content:space-between;gap:16px}} .outlook-heading span{{display:block;color:var(--muted);font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}} .outlook-heading h4{{margin:4px 0 0;font-size:18.5px;font-weight:780}} .bias-badge{{padding:7px 11px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-weight:850}} .bias-bullish_developing{{border-color:var(--cyan);color:var(--cyan)}} .bias-bearish_developing{{border-color:#ff6b78;color:#ff8792}} .bias-mixed{{color:var(--amber)}} .outlook-summary{{margin:14px 0 0;color:var(--text);font-size:15px;font-weight:550;line-height:1.65}}
+    .fundamental-context,.fundamental-empty{{margin-top:22px;padding-top:21px;border-top:1px solid var(--line)}} .fundamental-heading{{display:flex;align-items:center;justify-content:space-between;gap:15px}} .fundamental-heading span{{color:var(--muted);font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}} .fundamental-heading h4{{margin:5px 0 0;font-size:18.5px;font-weight:800}} .fundamental-heading>strong{{max-width:230px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;color:var(--amber);font-size:12px;text-align:center}} .fundamental-context>h5{{margin:17px 0 0;font-size:17px}} .fundamental-summary{{margin:7px 0 0;font-size:14.5px;font-weight:520;line-height:1.65}} .fundamental-list{{display:grid;gap:9px;margin-top:15px}} .fundamental-row{{display:grid;grid-template-columns:minmax(190px,1fr) 90px 90px 70px;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}} .fundamental-row span,.fundamental-row small{{display:block;margin-top:3px;color:var(--muted);font-size:12px}} .fundamental-row>div>strong{{font-size:14px}} .fundamental-row a,.fundamental-source a{{color:var(--cyan);font-weight:700;text-decoration:none}} .fundamental-row>a{{font-size:12px;text-align:right}} .fundamental-source,.fundamental-empty p{{margin:11px 0 0;color:var(--muted);font-size:12.5px;line-height:1.55}}
+    .rule-groups{{display:grid;grid-template-columns:1fr;gap:14px;margin-top:18px}} .rule-group{{padding:17px;border-radius:10px;background:var(--panel2)}} .rule-group h5{{margin:0;font-size:16.5px;font-weight:780}} .rule-group>p{{margin:5px 0 13px;color:var(--muted);font-size:13.5px;font-weight:500;line-height:1.5}} .rule-row{{display:grid;grid-template-columns:28px minmax(0,1fr);gap:11px;padding:13px 0;border-top:1px solid var(--line)}} .rule-icon{{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:rgba(145,168,193,.12);color:var(--muted);font-size:13px;font-weight:900}} .rule-copy>div{{display:flex;align-items:start;justify-content:space-between;gap:12px}} .rule-copy>div>strong{{font-size:14px;font-weight:750;line-height:1.45}} .rule-copy b{{color:var(--muted);font-size:11.5px;font-weight:800;line-height:1.5;text-transform:uppercase;white-space:nowrap}} .rule-copy p{{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.45}} .rule-copy p strong{{color:var(--text);font-size:13px}} .rule-copy small{{display:block;margin-top:4px;color:var(--muted);font-size:12.5px;font-weight:500;line-height:1.5}} .rule-met .rule-icon,.rule-clear .rule-icon{{background:rgba(35,217,210,.12);color:var(--cyan)}} .rule-triggered .rule-icon{{background:rgba(255,83,100,.13);color:#ff6b78}} .rule-triggered .rule-copy b{{color:#ff8792}} .rule-pending .rule-icon{{background:rgba(247,185,40,.12);color:var(--amber)}} .outlook-policy{{margin:14px 0 0;color:var(--muted);font-size:12.5px;font-weight:550;text-align:right}} .outlook-empty{{margin-top:17px;padding:15px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:13.5px}}
     .drawer-risk{{margin:18px 0 0;padding:16px;border-radius:8px;background:rgba(247,185,40,.08);color:#e9d39c;font-size:14.5px;font-weight:500;line-height:1.65}} .drawer-risk strong{{display:block;margin-bottom:5px;color:var(--amber);text-transform:uppercase;font-size:12.5px;font-weight:800;letter-spacing:.04em}}
     .detail-title-row{{display:flex;align-items:start;justify-content:space-between;gap:12px}} .detail-title-row span{{color:var(--muted);font-size:12px;line-height:1.4;text-align:right}} .venue-list{{display:grid;gap:9px}} .venue-row{{display:grid;grid-template-columns:28px minmax(110px,1fr) 96px 96px;align-items:center;gap:10px;min-height:62px;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}}
     .venue-rank{{display:grid;place-items:center;width:24px;height:24px;border-radius:6px;background:#182b43;color:var(--cyan);font-size:12px;font-weight:800}} .venue-row strong{{display:block;font-size:13.5px;line-height:1.4;overflow-wrap:anywhere}} .venue-row a{{color:var(--cyan);font-weight:750;text-decoration:none}} .venue-row a:hover{{text-decoration:underline}} .detail-empty,.data-note{{margin:0;color:var(--muted);font-size:13px;line-height:1.5}} .data-note{{margin-top:13px}}
     .detail-source{{grid-column:1/-1;display:flex;justify-content:space-between;gap:15px;padding:18px 3px;color:var(--muted);font-size:13px;font-weight:500;line-height:1.5}} .detail-source strong{{color:var(--text);font-weight:750}} .copy-status{{min-height:20px;margin:10px 0 0;color:var(--cyan);font-size:13px;text-align:right}}
     html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f3f5f7;--line:#d9dfe6;--text:#111c30;--muted:#53657a;--cyan:#087783;--blue:#245fb5;--amber:#985800}}
-    html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff7e3;color:#674b13}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}} html[data-theme="plain"] .technical-metric{{border-color:#e4e8ed}}
-    @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.detail-section:nth-of-type(1),.detail-section:nth-of-type(2),.detail-section:nth-of-type(3){{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
-    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading{{flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}}}
+    html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff7e3;color:#674b13}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}} html[data-theme="plain"] .technical-metric{{border-color:#e4e8ed}} html[data-theme="plain"] .technical-outlook{{background:#f9fbfd}} html[data-theme="plain"] .rule-met .rule-icon,html[data-theme="plain"] .rule-clear .rule-icon{{background:#e6f7f5}} html[data-theme="plain"] .rule-pending .rule-icon{{background:#fff4d9}}
+    @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.detail-section:nth-of-type(1),.detail-section:nth-of-type(2),.detail-section:nth-of-type(3){{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.rule-groups{{grid-template-columns:1fr}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
+    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading,.outlook-heading,.fundamental-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}}}
   </style>
 </head>
 <body>

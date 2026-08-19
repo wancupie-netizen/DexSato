@@ -84,6 +84,8 @@ def serialize_founder_dashboard_results(
                     "trading_venues_status": "NOT_APPLICABLE",
                     "technical_evidence": {},
                     "technical_evidence_status": "NOT_APPLICABLE",
+                    "fundamental_context": {},
+                    "fundamental_context_status": "NOT_APPLICABLE",
                     "asset_class": "commodities",
                     "available": True,
                     "decision": "REFERENCE",
@@ -132,6 +134,8 @@ def serialize_founder_dashboard_results(
                     "trading_venues_status": "UNAVAILABLE",
                     "technical_evidence": {},
                     "technical_evidence_status": "UNAVAILABLE",
+                    "fundamental_context": {},
+                    "fundamental_context_status": "UNAVAILABLE",
                     "asset_class": None,
                     "available": False,
                     "decision": None,
@@ -192,6 +196,14 @@ def serialize_founder_dashboard_results(
                 "technical_evidence_status": result.get(
                     "technical_evidence_status",
                     "NOT_REQUESTED",
+                ),
+                "fundamental_context": dict(
+                    result.get("fundamental_context", {})
+                    if isinstance(result.get("fundamental_context"), dict)
+                    else {}
+                ),
+                "fundamental_context_status": result.get(
+                    "fundamental_context_status", "NOT_REQUESTED"
                 ),
                 "asset_class": "crypto",
                 "available": True,

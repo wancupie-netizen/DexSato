@@ -44,6 +44,7 @@ from application.trading_venue_service import (
 from application.technical_evidence_service import (
     fetch_technical_evidence,
 )
+from application.fundamental_context_service import fetch_fundamental_context
 
 
 LATEST_SNAPSHOT_FILE = Path(
@@ -53,12 +54,20 @@ LATEST_SNAPSHOT_FILE = Path(
 )
 
 
-def build_complete_dashboard_results() -> list[dict[str, object]]:
+def build_complete_dashboard_results(
+    *, fundamental_lookup: Callable[[], dict[str, object]] = fetch_fundamental_context,
+) -> list[dict[str, object]]:
     """Build crypto decisions plus commodity reference markets."""
+    try:
+        fundamental_context = fundamental_lookup()
+    except Exception:
+        # Official macro context is optional, read-only enrichment.
+        fundamental_context = {"status": "UNAVAILABLE"}
     return [
         *build_founder_dashboard_results(
             venue_lookup=fetch_trading_venues,
             technical_lookup=fetch_technical_evidence,
+            fundamental_context=fundamental_context,
         ),
         *build_commodity_reference_results(),
     ]

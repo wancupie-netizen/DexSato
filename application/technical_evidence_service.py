@@ -143,6 +143,247 @@ def _market_structure(candles: Sequence[dict[str, float | int]]) -> str:
     return "MIXED"
 
 
+def _metric_value(metrics: dict[str, object], key: str, field: str) -> float:
+    metric = metrics.get(key)
+    if not isinstance(metric, dict):
+        raise ValueError(f"Technical metric is missing: {key}")
+    return _number(metric.get(field))
+
+
+def _condition(
+    label: str,
+    status: str,
+    actual: str,
+    requirement: str,
+) -> dict[str, str]:
+    return {
+        "label": label,
+        "status": status,
+        "actual": actual,
+        "requirement": requirement,
+    }
+
+
+def build_technical_outlook(metrics: dict[str, object]) -> dict[str, object]:
+    """Build explicit confirmation and invalidation checks from metrics.
+
+    The outlook is descriptive evidence only.  It cannot override the
+    Decision Engine decision or confidence.
+    """
+    if not isinstance(metrics, dict):
+        raise ValueError("Technical metrics must be an object.")
+
+    rsi = _metric_value(metrics, "rsi_14", "value")
+    ema50 = _metric_value(metrics, "ema_50", "value")
+    ema200 = _metric_value(metrics, "ema_200", "value")
+    ema50_distance = _metric_value(
+        metrics, "ema_50", "price_distance_pct"
+    )
+    ema200_distance = _metric_value(
+        metrics, "ema_200", "price_distance_pct"
+    )
+    relative_volume = _metric_value(
+        metrics, "relative_volume_20", "value"
+    )
+    structure_metric = metrics.get("market_structure")
+    if not isinstance(structure_metric, dict):
+        raise ValueError("Technical metric is missing: market_structure")
+    structure = str(structure_metric.get("state", "")).upper()
+
+    bullish_checks = sum(
+        (
+            ema50_distance > 0,
+            ema50 > ema200,
+            rsi >= 55,
+            structure == "HIGHER_HIGH_HIGHER_LOW",
+        )
+    )
+    bearish_checks = sum(
+        (
+            ema50_distance < 0,
+            ema50 < ema200,
+            rsi <= 45,
+            structure == "LOWER_HIGH_LOWER_LOW",
+        )
+    )
+
+    price_vs_ema50 = f"{ema50_distance:+.2f}%"
+    price_vs_ema200 = f"{ema200_distance:+.2f}%"
+    rsi_actual = f"{rsi:.2f}"
+    volume_actual = f"{relative_volume:.2f}×"
+    structure_actual = structure.replace("_", " ").title()
+
+    if bullish_checks >= 3 and bullish_checks > bearish_checks:
+        bias = "BULLISH_DEVELOPING"
+        summary = (
+            f"Bullish 4H evidence is developing: {bullish_checks}/4 "
+            "directional checks are positive. Treat it as unconfirmed "
+            "until the conditions below are met."
+        )
+        confirmation = [
+            _condition(
+                "Price holds above EMA50",
+                "MET" if ema50_distance > 0 else "PENDING",
+                price_vs_ema50,
+                "4H close above EMA50 (> 0.00%)",
+            ),
+            _condition(
+                "RSI confirms bullish momentum",
+                "MET" if 55 <= rsi < 70 else "PENDING",
+                rsi_actual,
+                "RSI(14) between 55.00 and 69.99",
+            ),
+            _condition(
+                "Volume confirms participation",
+                "MET" if relative_volume >= 1.5 else "PENDING",
+                volume_actual,
+                "Relative volume at least 1.50×",
+            ),
+            _condition(
+                "Price structure remains constructive",
+                "MET" if structure == "HIGHER_HIGH_HIGHER_LOW" else "PENDING",
+                structure_actual,
+                "Higher high and higher low",
+            ),
+        ]
+        invalidation = [
+            _condition(
+                "4H close falls below EMA50",
+                "TRIGGERED" if ema50_distance < 0 else "CLEAR",
+                price_vs_ema50,
+                "Triggered below 0.00%",
+            ),
+            _condition(
+                "RSI loses momentum support",
+                "TRIGGERED" if rsi < 45 else "CLEAR",
+                rsi_actual,
+                "Triggered below RSI 45.00",
+            ),
+            _condition(
+                "Structure turns lower",
+                "TRIGGERED" if structure == "LOWER_HIGH_LOWER_LOW" else "CLEAR",
+                structure_actual,
+                "Triggered by lower high and lower low",
+            ),
+        ]
+    elif bearish_checks >= 3 and bearish_checks > bullish_checks:
+        bias = "BEARISH_DEVELOPING"
+        summary = (
+            f"Bearish 4H evidence is developing: {bearish_checks}/4 "
+            "directional checks are negative. Treat it as unconfirmed "
+            "until the conditions below are met."
+        )
+        confirmation = [
+            _condition(
+                "Price holds below EMA50",
+                "MET" if ema50_distance < 0 else "PENDING",
+                price_vs_ema50,
+                "4H close below EMA50 (< 0.00%)",
+            ),
+            _condition(
+                "RSI confirms bearish momentum",
+                "MET" if 30 < rsi <= 45 else "PENDING",
+                rsi_actual,
+                "RSI(14) between 30.01 and 45.00",
+            ),
+            _condition(
+                "Volume confirms participation",
+                "MET" if relative_volume >= 1.5 else "PENDING",
+                volume_actual,
+                "Relative volume at least 1.50×",
+            ),
+            _condition(
+                "Price structure remains weak",
+                "MET" if structure == "LOWER_HIGH_LOWER_LOW" else "PENDING",
+                structure_actual,
+                "Lower high and lower low",
+            ),
+        ]
+        invalidation = [
+            _condition(
+                "4H close recovers above EMA50",
+                "TRIGGERED" if ema50_distance > 0 else "CLEAR",
+                price_vs_ema50,
+                "Triggered above 0.00%",
+            ),
+            _condition(
+                "RSI regains bullish momentum",
+                "TRIGGERED" if rsi > 55 else "CLEAR",
+                rsi_actual,
+                "Triggered above RSI 55.00",
+            ),
+            _condition(
+                "Structure turns higher",
+                "TRIGGERED" if structure == "HIGHER_HIGH_HIGHER_LOW" else "CLEAR",
+                structure_actual,
+                "Triggered by higher high and higher low",
+            ),
+        ]
+    else:
+        bias = "MIXED"
+        summary = (
+            "No directional 4H thesis is confirmed. "
+            f"Bullish checks: {bullish_checks}/4; bearish checks: "
+            f"{bearish_checks}/4. Wait for price structure, momentum, "
+            "and volume to align."
+        )
+        aligned_ema = (
+            (ema50_distance > 0 and ema200_distance > 0 and ema50 > ema200)
+            or (
+                ema50_distance < 0
+                and ema200_distance < 0
+                and ema50 < ema200
+            )
+        )
+        confirmation = [
+            _condition(
+                "EMA trend alignment",
+                "MET" if aligned_ema else "PENDING",
+                f"EMA50 {price_vs_ema50}; EMA200 {price_vs_ema200}",
+                "Price and EMA50 align on one side of EMA200",
+            ),
+            _condition(
+                "Directional RSI zone",
+                "MET" if rsi >= 55 or rsi <= 45 else "PENDING",
+                rsi_actual,
+                "RSI(14) at least 55.00 or at most 45.00",
+            ),
+            _condition(
+                "Volume expansion",
+                "MET" if relative_volume >= 1.5 else "PENDING",
+                volume_actual,
+                "Relative volume at least 1.50×",
+            ),
+            _condition(
+                "Directional market structure",
+                "MET" if structure in {
+                    "HIGHER_HIGH_HIGHER_LOW",
+                    "LOWER_HIGH_LOWER_LOW",
+                } else "PENDING",
+                structure_actual,
+                "Higher-high/higher-low or lower-high/lower-low",
+            ),
+        ]
+        invalidation = [
+            _condition(
+                "Directional thesis not established",
+                "NOT_APPLICABLE",
+                "No active thesis",
+                "Invalidation begins after a directional bias forms",
+            )
+        ]
+
+    return {
+        "bias": bias,
+        "summary": summary,
+        "bullish_checks": bullish_checks,
+        "bearish_checks": bearish_checks,
+        "confirmation": confirmation,
+        "invalidation": invalidation,
+        "policy": "READ_ONLY_TECHNICAL_CONTEXT",
+    }
+
+
 def calculate_technical_evidence(
     candles: Sequence[dict[str, float | int]],
     *,
@@ -177,6 +418,43 @@ def calculate_technical_evidence(
         timezone.utc,
     )
 
+    metrics = {
+        "rsi_14": {
+            "value": round(float(rsi_current), 2),
+            "previous": round(float(rsi_previous), 2),
+            "state": _rsi_state(float(rsi_current)),
+            "direction": (
+                "RISING" if rsi_current > rsi_previous
+                else "FALLING" if rsi_current < rsi_previous
+                else "FLAT"
+            ),
+        },
+        "ema_50": {
+            "value": round(float(ema_50), 8),
+            "price_distance_pct": round(
+                float(_percent_from(current_price, ema_50)), 2
+            ),
+        },
+        "ema_200": {
+            "value": round(float(ema_200), 8),
+            "price_distance_pct": round(
+                float(_percent_from(current_price, ema_200)), 2
+            ),
+        },
+        "relative_volume_20": {
+            "value": (
+                round(relative_volume, 2)
+                if relative_volume is not None
+                else None
+            ),
+            "current_volume": round(volumes[-1], 2),
+            "average_volume": round(previous_volume_average, 2),
+        },
+        "market_structure": {
+            "state": _market_structure(candles),
+        },
+    }
+
     return {
         "status": "AVAILABLE",
         "timeframe": PRIMARY_TIMEFRAME,
@@ -185,42 +463,8 @@ def calculate_technical_evidence(
         "candle_closed_at": (
             candle_time.replace(microsecond=0).isoformat()
         ),
-        "metrics": {
-            "rsi_14": {
-                "value": round(float(rsi_current), 2),
-                "previous": round(float(rsi_previous), 2),
-                "state": _rsi_state(float(rsi_current)),
-                "direction": (
-                    "RISING" if rsi_current > rsi_previous
-                    else "FALLING" if rsi_current < rsi_previous
-                    else "FLAT"
-                ),
-            },
-            "ema_50": {
-                "value": round(float(ema_50), 8),
-                "price_distance_pct": round(
-                    float(_percent_from(current_price, ema_50)), 2
-                ),
-            },
-            "ema_200": {
-                "value": round(float(ema_200), 8),
-                "price_distance_pct": round(
-                    float(_percent_from(current_price, ema_200)), 2
-                ),
-            },
-            "relative_volume_20": {
-                "value": (
-                    round(relative_volume, 2)
-                    if relative_volume is not None
-                    else None
-                ),
-                "current_volume": round(volumes[-1], 2),
-                "average_volume": round(previous_volume_average, 2),
-            },
-            "market_structure": {
-                "state": _market_structure(candles),
-            },
-        },
+        "metrics": metrics,
+        "outlook": build_technical_outlook(metrics),
     }
 
 
