@@ -398,3 +398,18 @@ def test_market_detail_renders_trader_decision_brief():
     assert "RSI confirms bearish momentum" in html
     assert "Context, not cause" in html
     assert "not a trade instruction" in html
+
+
+def test_market_detail_renders_change_since_previous_scan():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["change_since_previous"] = {
+        "status": "CHANGED",
+        "headline": "4H bias changed from Mixed to Bearish Developing",
+        "changes": [{"label": "RSI(14)", "previous": "54.39", "current": "47.60"}],
+        "policy": "Observed snapshot differences only; no causal inference.",
+    }
+    html = render_market_detail_page(coin, generated_at="2026-08-19T00:00:00+00:00")
+    assert "Since previous completed scan" in html
+    assert "4H bias changed from Mixed to Bearish Developing" in html
+    assert "54.39" in html and "47.60" in html
+    assert "no causal inference" in html

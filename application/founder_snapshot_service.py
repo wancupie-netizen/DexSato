@@ -46,6 +46,7 @@ from application.technical_evidence_service import (
 )
 from application.fundamental_context_service import fetch_fundamental_context
 from application.market_catalyst_service import fetch_market_catalysts
+from application.market_change_summary import attach_market_change_summaries
 
 
 LATEST_SNAPSHOT_FILE = Path(
@@ -252,12 +253,19 @@ def generate_latest_snapshot(
     Run one full scan and replace the latest snapshot.
     """
 
+    try:
+        previous_snapshot = read_latest_snapshot(snapshot_file=snapshot_file)
+    except (FileNotFoundError, RuntimeError, ValueError):
+        previous_snapshot = None
+
     results = build_results()
 
     payload = build_snapshot_payload(
         results=results,
         generated_at=generated_at,
     )
+
+    attach_market_change_summaries(payload, previous_snapshot)
 
     output_file = write_latest_snapshot(
         payload=payload,
