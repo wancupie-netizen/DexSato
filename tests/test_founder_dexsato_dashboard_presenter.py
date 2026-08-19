@@ -358,3 +358,21 @@ def test_market_detail_renders_verified_fundamental_context():
     assert "US CPI inflation (YoY)" in html
     assert "2.7%" in html and "2.9%" in html
     assert "U.S. Bureau of Labor Statistics" in html
+
+
+def test_market_detail_renders_verified_official_catalysts():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["market_catalysts_status"] = "AVAILABLE"
+    coin["market_catalysts"] = {"catalysts": [{
+        "title": "Federal Reserve issues FOMC statement",
+        "source": "Federal Reserve", "category": "MONETARY_POLICY",
+        "published_at": "2026-08-18T18:00:00+00:00",
+        "url": "https://www.federalreserve.gov/newsevents/pressreleases/a.htm",
+    }]}
+    html = render_market_detail_page(
+        coin, generated_at="2026-08-19T00:00:00+00:00"
+    )
+    assert "Verified Market Catalysts" in html
+    assert "Federal Reserve issues FOMC statement" in html
+    assert "Contextual · not proof of cause" in html
+    assert "DexSato does not infer sentiment or causality" in html
