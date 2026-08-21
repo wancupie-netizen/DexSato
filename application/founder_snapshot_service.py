@@ -50,6 +50,7 @@ from application.market_change_summary import attach_market_change_summaries
 from application.market_scan_history import attach_recent_scan_history
 from application.evidence_follow_through import attach_evidence_follow_through
 from application.evidence_health_service import attach_evidence_health
+from application.decision_readiness_service import attach_decision_readiness
 
 
 LATEST_SNAPSHOT_FILE = Path(
@@ -272,6 +273,7 @@ def generate_latest_snapshot(
     attach_recent_scan_history(payload, previous_snapshot)
     attach_evidence_follow_through(payload)
     attach_evidence_health(payload)
+    attach_decision_readiness(payload)
 
     output_file = write_latest_snapshot(
         payload=payload,

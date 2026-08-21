@@ -267,6 +267,54 @@ def _render_evidence_health(coin: dict[str, object]) -> str:
     )
 
 
+def _render_decision_readiness(coin: dict[str, object]) -> str:
+    readiness = coin.get("decision_readiness", {})
+    if not isinstance(readiness, dict) or not readiness.get("status"):
+        return ""
+    status = _status(readiness.get("status"))
+    confirmation = readiness.get("confirmation", {})
+    if not isinstance(confirmation, dict):
+        confirmation = {}
+
+    def condition_rows(values: object, empty: str) -> str:
+        if not isinstance(values, list) or not values:
+            return f'<li class="readiness-empty">{_text(empty)}</li>'
+        return "".join(f"<li>{_text(value)}</li>" for value in values[:4])
+
+    supporting = condition_rows(
+        readiness.get("supporting_conditions"), "No confirmation conditions are met yet."
+    )
+    pending = condition_rows(
+        readiness.get("pending_conditions"), "No pending confirmation conditions."
+    )
+    conflicts = readiness.get("conflicts", [])
+    conflict_html = ""
+    if isinstance(conflicts, list) and conflicts:
+        conflict_html = (
+            '<div class="readiness-conflict"><strong>Conflict detected</strong><ul>'
+            + "".join(f"<li>{_text(value)}</li>" for value in conflicts[:3])
+            + "</ul></div>"
+        )
+    label = status.replace("_", " ").title()
+    return (
+        f'<section class="decision-readiness readiness-{_text(status.lower())}">'
+        '<div class="readiness-heading"><div><small>Evidence maturity audit</small>'
+        f'<h4>Decision Readiness</h4></div><strong>{_text(label)}</strong></div>'
+        f'<h5>{_text(readiness.get("headline"))}</h5>'
+        f'<p>{_text(readiness.get("summary"))}</p>'
+        '<div class="readiness-counts">'
+        f'<div><strong>{_text(confirmation.get("met"), "0")}</strong><span>Met</span></div>'
+        f'<div><strong>{_text(confirmation.get("pending"), "0")}</strong><span>Pending</span></div>'
+        f'<div><strong>{_text(confirmation.get("total"), "0")}</strong><span>Total</span></div>'
+        '</div>'
+        f'{conflict_html}<div class="readiness-columns">'
+        f'<div><strong>Supporting now</strong><ul>{supporting}</ul></div>'
+        f'<div><strong>Still required</strong><ul>{pending}</ul></div></div>'
+        '<small class="readiness-policy">Decision support only · not trade readiness or a trade instruction.</small>'
+        '</section>'
+    )
+
+
 def _render_trader_decision_brief(coin: dict[str, object]) -> str:
     brief = coin.get("trader_decision_brief", {})
     if not isinstance(brief, dict) or brief.get("status") != "AVAILABLE":
@@ -698,6 +746,7 @@ def _render_market_detail_content(coin: dict[str, object]) -> str:
         <h3>DexSato Decision</h3>
         <div class="drawer-decision"><span>{decision}</span><strong>Confidence {confidence}</strong></div>
         {_render_evidence_health(coin)}
+        {_render_decision_readiness(coin)}
         {_render_change_since_previous(coin)}
         {_render_recent_scan_history(coin)}
         {_render_evidence_follow_through(coin)}
@@ -886,6 +935,7 @@ def render_market_detail_page(
     .market-catalysts,.catalyst-empty{{margin-top:22px;padding-top:21px;border-top:1px solid var(--line)}} .catalyst-heading{{display:flex;align-items:center;justify-content:space-between;gap:15px}} .catalyst-heading span{{color:var(--muted);font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}} .catalyst-heading h4{{margin:5px 0 0;font-size:18.5px}} .catalyst-heading>strong{{max-width:220px;color:var(--amber);font-size:12px;text-align:right}} .market-catalysts>p,.catalyst-empty p{{color:var(--muted);font-size:13px;line-height:1.55}} .catalyst-list{{display:grid;gap:9px;margin-top:14px}} .catalyst-row{{display:grid;grid-template-columns:minmax(0,1fr) 155px 115px;align-items:center;gap:13px;padding:14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}} .catalyst-row span{{color:var(--cyan);font-size:11px;font-weight:800;letter-spacing:.05em}} .catalyst-row h5{{margin:4px 0 0;font-size:14px;line-height:1.45}} .catalyst-row a{{color:var(--text);text-decoration:none}} .catalyst-row p,.catalyst-row time{{margin:0;color:var(--muted);font-size:12px;line-height:1.45}} .catalyst-policy{{text-align:right}}
     .rule-groups{{display:grid;grid-template-columns:1fr;gap:14px;margin-top:18px}} .rule-group{{padding:17px;border-radius:10px;background:var(--panel2)}} .rule-group h5{{margin:0;font-size:16.5px;font-weight:780}} .rule-group>p{{margin:5px 0 13px;color:var(--muted);font-size:13.5px;font-weight:500;line-height:1.5}} .rule-row{{display:grid;grid-template-columns:28px minmax(0,1fr);gap:11px;padding:13px 0;border-top:1px solid var(--line)}} .rule-icon{{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:rgba(145,168,193,.12);color:var(--muted);font-size:13px;font-weight:900}} .rule-copy>div{{display:flex;align-items:start;justify-content:space-between;gap:12px}} .rule-copy>div>strong{{font-size:14px;font-weight:750;line-height:1.45}} .rule-copy b{{color:var(--muted);font-size:11.5px;font-weight:800;line-height:1.5;text-transform:uppercase;white-space:nowrap}} .rule-copy p{{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.45}} .rule-copy p strong{{color:var(--text);font-size:13px}} .rule-copy small{{display:block;margin-top:4px;color:var(--muted);font-size:12.5px;font-weight:500;line-height:1.5}} .rule-met .rule-icon,.rule-clear .rule-icon{{background:rgba(35,217,210,.12);color:var(--cyan)}} .rule-triggered .rule-icon{{background:rgba(255,83,100,.13);color:#ff6b78}} .rule-triggered .rule-copy b{{color:#ff8792}} .rule-pending .rule-icon{{background:rgba(247,185,40,.12);color:var(--amber)}} .outlook-policy{{margin:14px 0 0;color:var(--muted);font-size:12.5px;font-weight:550;text-align:right}} .outlook-empty{{margin-top:17px;padding:15px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:13.5px}}
     .evidence-health{{margin-top:18px;padding:16px;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:9px;background:var(--panel2)}} .evidence-health-aging,.evidence-health-partial{{border-left-color:var(--amber)}} .evidence-health-stale{{border-left-color:var(--red)}} .evidence-health-heading{{display:flex;align-items:start;justify-content:space-between;gap:14px}} .evidence-health-heading small{{color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.055em;text-transform:uppercase}} .evidence-health-heading h4{{margin:3px 0 0;font-size:17px}} .evidence-health-heading>strong{{padding:5px 9px;border:1px solid currentColor;border-radius:6px;color:var(--green);font-size:11px}} .evidence-health-aging .evidence-health-heading>strong,.evidence-health-partial .evidence-health-heading>strong{{color:var(--amber)}} .evidence-health-stale .evidence-health-heading>strong{{color:var(--red)}} .evidence-health>p{{margin:10px 0;color:var(--muted);font-size:13px;line-height:1.55}} .health-checks{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}} .health-check{{display:flex;justify-content:space-between;gap:8px;padding:8px 9px;border-radius:7px;background:rgba(145,168,193,.08);font-size:11px}} .health-check span{{color:var(--muted)}} .health-check strong{{font-size:10px;text-transform:uppercase}} .health-fresh strong{{color:var(--green)}} .health-aging strong{{color:var(--amber)}} .health-stale strong{{color:var(--red)}} .health-unavailable strong{{color:var(--muted)}} .health-policy{{display:block;margin-top:10px;color:var(--muted);font-size:10px;text-align:right}}
+    .decision-readiness{{margin-top:15px;padding:17px;border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:9px;background:var(--panel2)}} .readiness-well_supported{{border-left-color:var(--green)}} .readiness-conflicted,.readiness-stale{{border-left-color:var(--red)}} .readiness-context_only{{border-left-color:var(--cyan)}} .readiness-heading{{display:flex;align-items:start;justify-content:space-between;gap:14px}} .readiness-heading small{{color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.055em;text-transform:uppercase}} .readiness-heading h4{{margin:3px 0 0;font-size:17px}} .readiness-heading>strong{{padding:5px 9px;border:1px solid currentColor;border-radius:6px;color:var(--amber);font-size:11px}} .readiness-well_supported .readiness-heading>strong{{color:var(--green)}} .readiness-conflicted .readiness-heading>strong,.readiness-stale .readiness-heading>strong{{color:var(--red)}} .readiness-context_only .readiness-heading>strong{{color:var(--cyan)}} .decision-readiness h5{{margin:13px 0 0;font-size:15px}} .decision-readiness>p{{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.55}} .readiness-counts{{display:grid;grid-template-columns:repeat(3,1fr);margin-top:13px;border:1px solid var(--line);border-radius:8px;overflow:hidden}} .readiness-counts div{{padding:9px;text-align:center}} .readiness-counts div+div{{border-left:1px solid var(--line)}} .readiness-counts strong,.readiness-counts span{{display:block}} .readiness-counts strong{{font-size:17px}} .readiness-counts span{{color:var(--muted);font-size:10px;text-transform:uppercase}} .readiness-columns{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}} .readiness-columns>div{{padding:11px;border-radius:8px;background:rgba(145,168,193,.08)}} .readiness-columns>div>strong{{font-size:12px}} .readiness-columns ul,.readiness-conflict ul{{margin-top:5px;padding-left:16px;font-size:11px;line-height:1.45}} .readiness-columns li,.readiness-conflict li{{margin:4px 0}} .readiness-empty{{color:var(--muted)}} .readiness-conflict{{margin-top:10px;padding:10px;border-radius:8px;background:rgba(255,83,100,.08);color:var(--red)}} .readiness-conflict>strong{{font-size:12px}} .readiness-policy{{display:block;margin-top:10px;color:var(--muted);font-size:10px;text-align:right}}
     .drawer-risk{{margin:18px 0 0;padding:16px;border-radius:8px;background:rgba(247,185,40,.08);color:#e9d39c;font-size:14.5px;font-weight:500;line-height:1.65}} .drawer-risk strong{{display:block;margin-bottom:5px;color:var(--amber);text-transform:uppercase;font-size:12.5px;font-weight:800;letter-spacing:.04em}}
     .detail-title-row{{display:flex;align-items:start;justify-content:space-between;gap:12px}} .detail-title-row span{{color:var(--muted);font-size:12px;line-height:1.4;text-align:right}} .venue-list{{display:grid;gap:9px}} .venue-row{{display:grid;grid-template-columns:28px minmax(110px,1fr) 96px 96px;align-items:center;gap:10px;min-height:62px;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}}
     .venue-rank{{display:grid;place-items:center;width:24px;height:24px;border-radius:6px;background:#182b43;color:var(--cyan);font-size:12px;font-weight:800}} .venue-row strong{{display:block;font-size:13.5px;line-height:1.4;overflow-wrap:anywhere}} .venue-row a{{color:var(--cyan);font-weight:750;text-decoration:none}} .venue-row a:hover{{text-decoration:underline}} .detail-empty,.data-note{{margin:0;color:var(--muted);font-size:13px;line-height:1.5}} .data-note{{margin-top:13px}}
@@ -893,7 +943,7 @@ def render_market_detail_page(
     html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f3f5f7;--line:#d9dfe6;--text:#111c30;--muted:#53657a;--cyan:#087783;--blue:#245fb5;--amber:#985800}}
     html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff7e3;color:#674b13}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}} html[data-theme="plain"] .technical-metric{{border-color:#e4e8ed}} html[data-theme="plain"] .technical-outlook{{background:#f9fbfd}} html[data-theme="plain"] .rule-met .rule-icon,html[data-theme="plain"] .rule-clear .rule-icon{{background:#e6f7f5}} html[data-theme="plain"] .rule-pending .rule-icon{{background:#fff4d9}}
     @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.detail-section:nth-of-type(1),.detail-section:nth-of-type(2),.detail-section:nth-of-type(3){{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.rule-groups{{grid-template-columns:1fr}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
-    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading,.outlook-heading,.fundamental-heading,.catalyst-heading,.trader-brief-heading,.follow-heading,.evidence-health-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid,.health-checks{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}.catalyst-row,.brief-columns,.follow-row{{grid-template-columns:1fr}}.change-row{{grid-template-columns:1fr auto 20px auto}}.scan-trail-head{{display:none}}.scan-trail-row{{grid-template-columns:1fr 1fr}}}}
+    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading,.outlook-heading,.fundamental-heading,.catalyst-heading,.trader-brief-heading,.follow-heading,.evidence-health-heading,.readiness-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid,.health-checks,.readiness-columns{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}.catalyst-row,.brief-columns,.follow-row{{grid-template-columns:1fr}}.change-row{{grid-template-columns:1fr auto 20px auto}}.scan-trail-head{{display:none}}.scan-trail-row{{grid-template-columns:1fr 1fr}}}}
   </style>
 </head>
 <body>
