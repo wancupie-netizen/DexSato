@@ -405,11 +405,13 @@ def test_should_offer_current_and_plain_white_themes():
 
     assert 'data-theme-option="current"' in html
     assert 'data-theme-option="plain"' in html
-    assert "Plain White" in html
+    assert 'aria-label="Use current dark theme"' in html
+    assert 'aria-label="Use plain white theme"' in html
+    assert "🌙" in html and "☀️" in html
     assert 'html[data-theme="plain"]' in html
     assert 'localStorage.setItem("dexsato-theme",resolved)' in html
     assert 'localStorage.getItem("dexsato-theme")' in html
-    assert 'data-theme-option="current" aria-pressed="true"' in html
+    assert 'aria-pressed="true"' in html
 
 
 def test_should_use_canonical_snapshot_time_when_latest_run_is_older():

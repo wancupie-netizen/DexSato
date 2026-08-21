@@ -951,7 +951,7 @@ def render_market_detail_page(
     <header class="market-page-header">
       <div class="page-brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span>Market Workspace</span></div>
       <div class="page-actions">
-        <div class="theme-switcher" role="group" aria-label="Page theme"><button class="theme-option active" type="button" data-theme-option="current">Current</button><button class="theme-option" type="button" data-theme-option="plain">Plain White</button></div>
+        <div class="theme-switcher" role="group" aria-label="Page theme"><button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button></div>
         <button id="copy-summary" class="page-action" type="button">Copy Summary</button>
         <a class="page-action" href="/">← Dashboard</a>
       </div>
@@ -1233,8 +1233,8 @@ def render_dexsato_dashboard(
       <div><h1>Market Decision Intelligence</h1><p class="subtitle">Evidence-led decisions across the Founder V1 market universe.</p></div>
       <div class="top-actions">
         <div class="theme-switcher" role="group" aria-label="Dashboard theme">
-          <button class="theme-option active" type="button" data-theme-option="current" aria-pressed="true">Current</button>
-          <button class="theme-option" type="button" data-theme-option="plain" aria-pressed="false">Plain White</button>
+          <button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button>
+          <button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button>
         </div>
         <div class="top-status"><span class="status-chip">● <b>System {_text(effective_health.title())}</b></span><span class="status-chip">Last scan <b id="last-scan-age">calculating…</b></span></div>
       </div>

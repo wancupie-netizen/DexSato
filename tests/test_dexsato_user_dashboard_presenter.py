@@ -59,6 +59,16 @@ def test_user_dashboard_discloses_freshness_and_policy():
     assert "Evidence synthesis only · not financial advice." in html
 
 
+def test_user_dashboard_uses_accessible_theme_icons():
+    html = render_user_dashboard(SNAPSHOT, system_status={})
+
+    assert 'data-theme-option="current"' in html
+    assert 'aria-label="Use current dark theme"' in html
+    assert 'aria-label="Use plain white theme"' in html
+    assert "🌙" in html and "☀️" in html
+    assert 'button.setAttribute("aria-pressed",String(active))' in html
+
+
 def test_user_dashboard_mobile_polish_prevents_clipping_and_improves_readability():
     html = render_user_dashboard(SNAPSHOT, system_status={})
 
@@ -70,3 +80,5 @@ def test_user_dashboard_mobile_polish_prevents_clipping_and_improves_readability
     assert "grid-column:1/-1" in html
     assert "width:calc(100% - 34px)" in html
     assert ".teaser-headline{font-size:16px" in html
+    assert ".topbar{flex-direction:row;align-items:center}" in html
+    assert ".top-actions{width:auto;margin-left:auto;justify-content:flex-end}" in html
