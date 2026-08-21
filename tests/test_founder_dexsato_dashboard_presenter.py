@@ -260,6 +260,48 @@ def test_stale_evidence_health_suppresses_current_technical_homepage_teaser():
     assert "56.80" not in html
 
 
+def test_market_detail_renders_decision_readiness_without_trade_claim():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["decision_readiness"] = {
+        "status": "DEVELOPING",
+        "headline": "The evidence case is still developing",
+        "summary": "One of two confirmation conditions is met.",
+        "confirmation": {"met": 1, "pending": 1, "total": 2},
+        "supporting_conditions": ["Price holds above EMA50"],
+        "pending_conditions": ["Volume confirms participation"],
+        "conflicts": [],
+    }
+
+    html = render_market_detail_page(coin, generated_at=SNAPSHOT["generated_at"])
+
+    assert "Decision Readiness" in html
+    assert "Developing" in html
+    assert "Supporting now" in html
+    assert "Price holds above EMA50" in html
+    assert "Still required" in html
+    assert "Volume confirms participation" in html
+    assert "not trade readiness or a trade instruction" in html
+
+
+def test_market_detail_discloses_directional_conflict():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["decision_readiness"] = {
+        "status": "CONFLICTED",
+        "headline": "Engine and technical direction do not align",
+        "summary": "Opposing directional evidence is present.",
+        "confirmation": {"met": 1, "pending": 2, "total": 3},
+        "supporting_conditions": ["Price structure"],
+        "pending_conditions": ["RSI", "Volume"],
+        "conflicts": ["Engine signals are bearish while 4H technical evidence is bullish."],
+    }
+
+    html = render_market_detail_page(coin, generated_at=SNAPSHOT["generated_at"])
+
+    assert "Conflicted" in html
+    assert "Conflict detected" in html
+    assert "Engine signals are bearish" in html
+
+
 def test_should_reject_untrusted_market_links():
     coin = {
         **SNAPSHOT["coins"][0],
