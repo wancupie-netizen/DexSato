@@ -6,6 +6,8 @@ from collections import Counter
 from html import escape
 from urllib.parse import urlparse
 
+from application.homepage_decision_teaser import build_homepage_decision_teaser
+
 
 COIN_LOGOS = {
     token: (
@@ -725,9 +727,22 @@ def render_decision_card(coin: dict[str, object]) -> str:
         coin.get("risk_note")
         or "Current risk information is unavailable."
     )
-    reason_items = "".join(
-        f"<li>{_reason_label(reason)}</li>" for reason in reasons[:3]
-    ) or "<li>No supporting evidence recorded.</li>"
+    teaser = build_homepage_decision_teaser(coin)
+    evidence_rows = "".join(
+        '<div class="evidence-row">'
+        f'<span>{_text(item.get("label"))}</span>'
+        f'<strong>{_text(item.get("value"))}</strong>'
+        f'<small>{_text(item.get("detail"), "")}</small>'
+        '</div>'
+        for item in teaser["evidence"]
+        if isinstance(item, dict)
+    )
+    if not evidence_rows:
+        evidence_rows = "".join(
+            f'<div class="evidence-fallback">{_reason_label(reason)}</div>'
+            for reason in reasons[:3]
+        ) or '<div class="evidence-fallback">Evidence collection pending</div>'
+    next_confirmation = teaser["next_confirmation"]
     memory = (
         "Known pattern"
         if coin.get("seen_before", False) is True
@@ -751,19 +766,24 @@ def render_decision_card(coin: dict[str, object]) -> str:
         </div>
       </div>
       <div class="evidence-column">
-        <h4>Decision Evidence</h4>
-        <ul>{reason_items}</ul>
+        <h4>Evidence Snapshot · 4H</h4>
+        <div class="evidence-snapshot">{evidence_rows}</div>
       </div>
       <div class="summary-column">
-        <h4>Intelligence Summary</h4>
-        <p>{summary}</p>
-        <h4 class="risk-note-heading">⚠ Risk Note</h4>
-        <p class="risk-note">{risk_note}</p>
+        <small class="teaser-context">{_text(teaser["context"])}</small>
+        <h4 class="teaser-title">Decision Brief</h4>
+        <strong class="teaser-headline">{_text(teaser["headline"])}</strong>
+        <p>{_text(teaser["summary"])}</p>
+        <div class="next-confirmation">
+          <small>Next confirmation</small>
+          <strong>{_text(next_confirmation["label"])}</strong>
+          <span>{_text(next_confirmation["actual"])} · {_text(next_confirmation["requirement"])}</span>
+        </div>
       </div>
-      <button class="decision-button" type="button"
-          data-open-token="{_text(token)}" aria-expanded="false">
-        View Decision
-      </button>
+      <a class="decision-button" href="/market/{_text(token.lower())}">
+        <span class="decision-button-label">Review Evidence &amp; Conditions</span>
+        <span class="decision-button-arrow" aria-hidden="true">→</span>
+      </a>
       <div class="decision-detail" hidden>
         <div><span>Market</span><strong>{_text(pair)}</strong></div>
         <div><span>Price</span><strong>{_text(price)}</strong></div>
@@ -953,7 +973,8 @@ def render_dexsato_dashboard(
       --green:#39df9a;--amber:#f7b928;--red:#ff5364;--blue:#5394ff}}
     *{{box-sizing:border-box}} html{{color-scheme:dark}}
     body{{margin:0;background:radial-gradient(circle at 50% -20%,#102746 0,transparent 35%),var(--bg);
-      color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}}
+      color:var(--text);font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",Inter,system-ui,-apple-system,sans-serif;
+      font-size:16px;line-height:1.55;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;overflow-x:hidden}}
     button,input{{font:inherit}} .app{{min-height:100vh;display:grid;grid-template-columns:230px 1fr}}
     .sidebar{{position:sticky;top:0;height:100vh;padding:26px 16px;border-right:1px solid #132941;
       background:linear-gradient(180deg,#06101d,#071525)}}
@@ -1002,8 +1023,12 @@ def render_dexsato_dashboard(
     .tone-alert .decision-pill{{color:var(--red)}} .tone-watch .decision-pill{{color:var(--amber)}}
     .tone-review .decision-pill{{color:var(--blue)}} .tone-reference .decision-pill{{color:var(--cyan)}} .confidence{{margin:12px 0 3px;color:var(--muted);font-size:12px}}
     .confidence strong{{display:block;color:#f2c94c;font-size:13px}} .coin-column small{{display:block;margin-top:4px;color:var(--muted)}}
-    ul{{margin:0;padding-left:18px;color:#cad7e5;font-size:14px}} li{{margin:8px 0}} .summary-column p{{margin:0;color:#bdcada;font-size:14px;line-height:1.55}} .risk-note-heading{{margin-top:14px!important;color:#ffbf3c}} .risk-note{{color:#f0dca8!important}}
-    .decision-button{{margin-right:18px;padding:11px;border:1px solid var(--blue);border-radius:7px;background:transparent;color:#7fb0ff;cursor:pointer}}
+    ul{{margin:0;padding-left:18px;color:#cad7e5;font-size:14px}} li{{margin:8px 0}} .summary-column p{{margin:5px 0 0;color:#bdcada;font-size:13px;line-height:1.5}} .risk-note-heading{{margin-top:14px!important;color:#ffbf3c}} .risk-note{{color:#f0dca8!important}}
+    .evidence-snapshot{{display:grid;gap:8px}} .evidence-row{{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding-bottom:7px;border-bottom:1px solid #183149}}
+    .evidence-row:last-child{{padding-bottom:0;border-bottom:0}} .evidence-row span,.evidence-row small{{color:var(--muted);font-size:12px;line-height:1.4}} .evidence-row strong{{font-size:15px;font-weight:750;text-align:right}} .evidence-row small{{grid-column:1/-1}} .evidence-fallback{{margin:7px 0;color:#cad7e5;font-size:13px}}
+    .teaser-context{{display:block;margin-bottom:5px;color:var(--cyan);font-size:11px;font-weight:800;letter-spacing:.055em}} .teaser-title{{margin-bottom:7px;font-size:15px}} .teaser-headline{{display:block;font-size:16px;font-weight:750;line-height:1.4}}
+    .next-confirmation{{display:grid;min-width:0;gap:3px;margin-top:10px;padding:9px 11px;border-left:2px solid var(--amber);background:rgba(255,191,60,.07)}} .next-confirmation small{{color:var(--amber);font-size:10px;font-weight:800;letter-spacing:.035em;text-transform:uppercase}} .next-confirmation strong{{font-size:13px;line-height:1.4}} .next-confirmation span{{color:var(--muted);font-size:11px;line-height:1.45;overflow-wrap:anywhere}}
+    .decision-button{{display:flex;align-items:center;justify-content:center;gap:7px;margin-right:18px;padding:11px;border:1px solid var(--blue);border-radius:7px;background:transparent;color:#7fb0ff;cursor:pointer;text-align:center;text-decoration:none;font-size:12px;font-weight:750;line-height:1.35}}
     .decision-button:hover{{background:rgba(83,148,255,.1)}} .decision-detail{{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:15px;padding:17px 20px;border-top:1px solid #183149;background:#071522}}
     .decision-detail span{{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}} .decision-detail strong{{display:block;margin-top:4px}}
     .decision-detail p{{grid-column:1/-1;margin:0;color:#bdcada;line-height:1.55}}
@@ -1046,12 +1071,42 @@ def render_dexsato_dashboard(
     html[data-theme="plain"] .summary-column p,
     html[data-theme="plain"] .decision-detail p{{color:#526071}}
     html[data-theme="plain"] .risk-note{{color:#805f1d!important}}
+    html[data-theme="plain"] .evidence-row{{border-color:#e6e9ee}}
+    html[data-theme="plain"] .evidence-fallback{{color:#435166}}
+    html[data-theme="plain"] .next-confirmation{{background:#fff8e8}}
     html[data-theme="plain"] .decision-detail{{border-color:#e6e9ee;background:#f8fafc}}
     html[data-theme="plain"] .timeline li:before{{background:#d7dde5}}
     html[data-theme="plain"] .footer{{border-color:#dfe3e8;background:#fff}}
     html[data-theme="plain"] .dedication{{color:#172033}}
     @media(max-width:1180px){{.workspace{{grid-template-columns:1fr}}.rail{{position:static;grid-template-columns:repeat(3,1fr)}}.decision-card{{grid-template-columns:220px 1fr 1fr}}.decision-button{{grid-column:1/-1;margin:0 18px 16px}}}}
-    @media(max-width:820px){{.app{{grid-template-columns:1fr}}.sidebar{{position:relative;height:auto}}nav,.engine-card{{display:none}}.content{{padding:18px}}.topbar{{display:block}}.top-actions{{align-items:flex-start;flex-direction:column;margin-top:14px}}.top-status{{overflow:auto;width:100%}}.metrics{{grid-template-columns:repeat(2,1fr)}}.section-title{{align-items:start;flex-direction:column;gap:12px}}.search-wrap{{width:100%}}.decision-card{{grid-template-columns:1fr}}.evidence-column,.summary-column{{border-top:1px solid #183149;border-left:0}}html[data-theme="plain"] .evidence-column,html[data-theme="plain"] .summary-column{{border-top-color:#e6e9ee}}.decision-button{{width:calc(100% - 36px)}}.decision-detail{{grid-template-columns:repeat(2,1fr)}}.rail{{grid-template-columns:1fr}}.footer{{grid-template-columns:1fr}}}}
+    @media(max-width:820px){{
+      html,body,.app,.content,.workspace,.main-panel,.decision-list{{width:100%;max-width:100%;min-width:0}}
+      .app{{grid-template-columns:minmax(0,1fr);overflow:hidden}} .sidebar{{position:relative;width:100%;max-width:100%;height:auto}} nav,.engine-card{{display:none}}
+      .content{{min-width:0;max-width:100vw;padding:16px 12px;overflow:hidden}} .workspace,.main-panel,.decision-list{{overflow:hidden}}
+      .topbar{{display:block}} .top-actions{{align-items:flex-start;flex-direction:column;margin-top:14px}}
+      .top-status{{max-width:100%;overflow:auto}} .metrics{{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      .section-title{{align-items:start;flex-direction:column;gap:12px}} .search-wrap{{width:100%}}
+      .decision-list,.decision-card,.coin-column,.evidence-column,.summary-column{{min-width:0;width:100%}}
+      .decision-card{{grid-template-columns:minmax(0,1fr);max-width:calc(100vw - 24px);contain:inline-size}}
+      .coin-column,.evidence-column,.summary-column{{max-width:100%;padding:15px;overflow:hidden}}
+      .evidence-column,.summary-column{{border-top:1px solid #183149;border-left:0}}
+      html[data-theme="plain"] .evidence-column,html[data-theme="plain"] .summary-column{{border-top-color:#e6e9ee}}
+      .market-title-button{{font-size:22px}} .coin-logo{{flex-basis:64px;width:64px;height:64px}}
+      .evidence-row{{grid-template-columns:minmax(0,1fr);gap:2px;padding-bottom:9px}}
+      .evidence-row strong{{text-align:left}} .evidence-row small{{grid-column:1;overflow-wrap:anywhere}}
+      .summary-column>*,.summary-column p,.teaser-headline,.next-confirmation,.next-confirmation>*{{min-width:0;max-width:100%}}
+      .summary-column p,.teaser-headline,.next-confirmation strong,.next-confirmation span{{white-space:normal;overflow-wrap:anywhere;word-break:break-word}}
+      .next-confirmation{{width:100%;padding:10px 11px;overflow:hidden}} .next-confirmation span{{display:block}}
+      .decision-button{{display:grid;grid-template-columns:minmax(0,1fr) auto;width:calc(100% - 30px);max-width:calc(100% - 30px);min-height:46px;margin:0 15px 15px;padding:10px 12px;overflow:hidden;white-space:normal}}
+      .decision-button-label{{min-width:0;white-space:normal;overflow-wrap:anywhere}} .decision-button-arrow{{flex:0 0 auto}}
+      .decision-detail{{grid-template-columns:repeat(2,minmax(0,1fr))}} .rail{{grid-template-columns:1fr}} .footer{{grid-template-columns:1fr}}
+    }}
+    @media(max-width:430px){{
+      .content{{padding:14px 10px}} .decision-card{{max-width:calc(100vw - 20px)}} .metrics{{grid-template-columns:1fr}} .coin-column{{gap:13px}}
+      .coin-logo{{flex-basis:58px;width:58px;height:58px}} .market-title-button{{font-size:20px}}
+      .evidence-column h4{{font-size:14px}} .teaser-headline{{font-size:15px}} .summary-column p{{font-size:13px;line-height:1.55}}
+      .decision-detail{{grid-template-columns:1fr}}
+    }}
   </style>
 </head>
 <body>
@@ -1140,7 +1195,7 @@ def render_dexsato_dashboard(
   filters.forEach(button=>button.addEventListener("click",()=>{{filters.forEach(item=>item.classList.remove("active"));button.classList.add("active");selected=button.dataset.filter;applyFilters();}}));
   search.addEventListener("input",()=>{{clearSearch.hidden=!search.value;applyFilters();}});
   clearSearch.addEventListener("click",()=>{{search.value="";clearSearch.hidden=true;search.focus();applyFilters();}});
-  document.querySelectorAll(".decision-button").forEach(button=>button.addEventListener("click",()=>{{
+  document.querySelectorAll("button.decision-button").forEach(button=>button.addEventListener("click",()=>{{
     const detail=button.parentElement.querySelector(".decision-detail");
     const opening=detail.hidden;
     detail.hidden=!opening;

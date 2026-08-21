@@ -157,10 +157,14 @@ def test_should_render_real_decision_card():
     assert "$64,202.82" in html
     assert "Liquidity $15.15M" in html
     assert "WATCH" in html
-    assert "Decision Evidence" in html
-    assert "Intelligence Summary" in html
-    assert "Risk Note" in html
-    assert "View Decision" in html
+    assert "Evidence Snapshot · 4H" in html
+    assert "Decision Brief" in html
+    assert "Bullish Developing" in html
+    assert "56.80" in html
+    assert "Rising · previous 43.20" in html
+    assert "1.70×" in html
+    assert "Volume confirms participation" in html
+    assert "Review Evidence &amp; Conditions" in html
     assert "/1.png" in html
     assert "Historical" not in html
     assert "decision-detail" in html
@@ -168,6 +172,19 @@ def test_should_render_real_decision_card():
     assert 'href="/market/btc"' in html
     assert "market-detail-template" not in html
     assert "data-open-market" not in html
+
+
+def test_dashboard_contains_mobile_decision_card_overflow_guards():
+    html = render_dexsato_dashboard(SNAPSHOT, system_status=STATUS)
+
+    assert "@media(max-width:430px)" in html
+    assert "grid-template-columns:minmax(0,1fr)" in html
+    assert "overflow-wrap:anywhere" in html
+    assert "white-space:normal" in html
+    assert "max-width:calc(100vw - 24px)" in html
+    assert "contain:inline-size" in html
+    assert "decision-button-label" in html
+    assert 'querySelectorAll("button.decision-button")' in html
 
 
 def test_should_render_dedicated_market_detail_page():
