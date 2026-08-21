@@ -223,6 +223,43 @@ def test_should_render_dedicated_market_detail_page():
     assert "market-drawer" not in html
 
 
+def test_market_detail_renders_evidence_health_and_source_states():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["evidence_health"] = {
+        "status": "PARTIAL",
+        "summary": "Core evidence is fresh, but one contextual source is unavailable.",
+        "checks": {
+            "market_snapshot": {"label": "Market snapshot", "state": "FRESH"},
+            "technical_4h": {"label": "Technical evidence · 4H", "state": "AGING"},
+            "market_catalysts": {"label": "Official market catalysts", "state": "UNAVAILABLE"},
+        },
+    }
+
+    html = render_market_detail_page(coin, generated_at=SNAPSHOT["generated_at"])
+
+    assert "Evidence Health" in html
+    assert "Data quality &amp; freshness" in html
+    assert "Partial" in html
+    assert "Technical evidence · 4H" in html
+    assert "Aging" in html
+    assert "Unavailable" in html
+
+
+def test_stale_evidence_health_suppresses_current_technical_homepage_teaser():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["evidence_health"] = {
+        "status": "STALE", "technical_usable": False,
+        "summary": "A required evidence source is stale.",
+    }
+
+    html = render_decision_card(coin)
+
+    assert "DATA QUALITY NOTICE" in html
+    assert "Required evidence is stale" in html
+    assert "Fresh scan required" in html
+    assert "56.80" not in html
+
+
 def test_should_reject_untrusted_market_links():
     coin = {
         **SNAPSHOT["coins"][0],
