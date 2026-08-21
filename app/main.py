@@ -1,4 +1,4 @@
-"""
+﻿"""
 DexSato V1 FastAPI Application.
 
 Official launcher:
@@ -16,6 +16,7 @@ Responsibilities
 - Expose snapshot JSON
 - Send snapshot data to Telegram
 - Expose application health
+- Expose the founder-only Content Control Center
 
 This module does NOT:
 - run scans when pages are opened
@@ -32,12 +33,26 @@ import requests
 from fastapi import (
     FastAPI,
     HTTPException,
+    Request,
 )
 from fastapi.responses import (
     HTMLResponse,
+    JSONResponse,
 )
 from fastapi.staticfiles import StaticFiles
 
+from application.content_control_service import (
+    COOKIE_NAME,
+    ai_enabled as content_ai_enabled,
+    ai_model as content_ai_model,
+    build_content_facts,
+    content_control_configured,
+    create_session_token,
+    find_market,
+    generate_x_draft,
+    password_matches,
+    session_is_valid,
+)
 from application.founder_snapshot_service import (
     read_latest_snapshot,
 )
@@ -49,6 +64,10 @@ from application.system_health_dashboard import (
     collect_system_dashboard_status,
 )
 
+from presentation.content_control_presenter import (
+    render_content_control,
+    render_content_login,
+)
 from presentation.dexsato_dashboard_presenter import (
     render_dexsato_dashboard,
     render_market_detail_page,
@@ -111,6 +130,15 @@ def build_current_dashboard_data() -> list[dict[str, object]]:
         )
 
     return coins
+
+
+def _content_session_valid(request: Request) -> bool:
+    return session_is_valid(request.cookies.get(COOKIE_NAME))
+
+
+def _content_cookie_secure(request: Request) -> bool:
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    return request.url.scheme == "https" or forwarded.lower() == "https"
 
 
 @app.get(
@@ -178,6 +206,104 @@ def market_detail(token: str) -> str:
         coin,
         generated_at=snapshot.get("generated_at"),
     )
+
+
+@app.get(
+    "/content-control",
+    response_class=HTMLResponse,
+)
+def content_control(request: Request) -> str:
+    """Display the private founder Content Control Center."""
+    if not _content_session_valid(request):
+        return render_content_login(configured=content_control_configured())
+
+    try:
+        snapshot = load_current_snapshot()
+    except (FileNotFoundError, RuntimeError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    return render_content_control(
+        snapshot,
+        ai_enabled=content_ai_enabled(),
+        ai_model=content_ai_model(),
+    )
+
+
+@app.post("/content-control/login")
+async def content_control_login(request: Request) -> JSONResponse:
+    """Create a signed founder session after password verification."""
+    if not content_control_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Content Control Center authentication is not configured.",
+        )
+    try:
+        payload = await request.json()
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Invalid login request.") from error
+    if not isinstance(payload, dict) or not password_matches(payload.get("password")):
+        raise HTTPException(status_code=401, detail="Invalid founder password.")
+
+    response = JSONResponse({"status": "ok"})
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=create_session_token(),
+        max_age=60 * 60 * 12,
+        httponly=True,
+        secure=_content_cookie_secure(request),
+        samesite="strict",
+        path="/content-control",
+    )
+    return response
+
+
+@app.post("/content-control/logout")
+def content_control_logout() -> JSONResponse:
+    """Clear the founder Content Control Center session."""
+    response = JSONResponse({"status": "ok"})
+    response.delete_cookie(key=COOKIE_NAME, path="/content-control")
+    return response
+
+
+@app.post("/content-control/generate")
+async def content_control_generate(request: Request) -> dict[str, object]:
+    """Generate one editable X draft from existing DexSato snapshot facts."""
+    if not _content_session_valid(request):
+        raise HTTPException(status_code=401, detail="Founder authentication required.")
+
+    try:
+        payload = await request.json()
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Invalid generation request.") from error
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid generation request.")
+
+    try:
+        snapshot = load_current_snapshot()
+    except (FileNotFoundError, RuntimeError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    coin = find_market(snapshot, payload.get("token"))
+    if coin is None:
+        raise HTTPException(status_code=404, detail="Market is not available.")
+
+    facts = build_content_facts(coin)
+    try:
+        result = generate_x_draft(
+            facts,
+            content_type=str(payload.get("content_type") or "current_update"),
+            style=str(payload.get("style") or "trader"),
+            length=str(payload.get("length") or "medium"),
+        )
+    except requests.RequestException as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI writing request failed: {error}",
+        ) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    return result
 
 
 @app.get(
