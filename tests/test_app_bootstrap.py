@@ -15,6 +15,7 @@ from app.main import (
     HOST,
     PORT,
     app,
+    admin_system,
     build_current_dashboard_data,
     dashboard_api,
     founder_home,
@@ -92,6 +93,21 @@ def test_should_render_snapshot_dashboard(
         system_status={
             "overall_health": "HEALTHY",
         },
+    )
+
+
+@patch("app.main.render_admin_system_page")
+@patch("app.main.collect_system_dashboard_status")
+@patch("app.main.load_current_snapshot")
+def test_should_render_admin_system_console(mock_load, mock_status, mock_render):
+    mock_load.return_value = SNAPSHOT
+    mock_status.return_value = {"overall_health": "HEALTHY"}
+    mock_render.return_value = "<html>Admin Operations</html>"
+
+    assert admin_system() == "<html>Admin Operations</html>"
+    mock_render.assert_called_once_with(
+        SNAPSHOT,
+        system_status={"overall_health": "HEALTHY"},
     )
 
 

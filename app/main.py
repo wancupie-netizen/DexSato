@@ -72,6 +72,9 @@ from presentation.dexsato_dashboard_presenter import (
     render_dexsato_dashboard,
     render_market_detail_page,
 )
+from presentation.dexsato_admin_presenter import (
+    render_admin_system_page,
+)
 
 render_founder_snapshot_dashboard = render_dexsato_dashboard
 
@@ -171,6 +174,23 @@ def founder_home() -> str:
     return render_founder_snapshot_dashboard(
         snapshot,
         system_status=system_status,
+    )
+
+
+@app.get(
+    "/admin/system",
+    response_class=HTMLResponse,
+)
+def admin_system() -> str:
+    """Display the internal operations console without running a scan."""
+    try:
+        snapshot = load_current_snapshot()
+    except (FileNotFoundError, RuntimeError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    return render_admin_system_page(
+        snapshot,
+        system_status=collect_system_dashboard_status(),
     )
 
 
