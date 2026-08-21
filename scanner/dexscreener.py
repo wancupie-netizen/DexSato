@@ -1,6 +1,10 @@
 """DexScreener exact-pair client with contract validation."""
 
+import time
+
 import requests
+
+from scanner.http_reliability import request_with_bounded_retry
 
 PAIR_URL = "https://api.dexscreener.com/latest/dex/pairs/{chain_id}/{pair_address}"
 
@@ -9,10 +13,18 @@ def _same(value, expected):
     return str(value).strip().casefold() == str(expected).strip().casefold()
 
 
-def fetch_registered_pair(market, request_get=requests.get):
+def fetch_registered_pair(
+    market, request_get=requests.get, *, retry_sleep=time.sleep,
+):
     """Fetch one exact pool and reject unexpected identities."""
     url = PAIR_URL.format(chain_id=market["chain_id"], pair_address=market["pair_address"])
-    response = request_get(url, timeout=15)
+    response = request_with_bounded_retry(
+        lambda: request_get(url, timeout=15),
+        provider="DexScreener exact pair",
+        max_attempts=2,
+        backoff_seconds=0.4,
+        sleep=retry_sleep,
+    )
     response.raise_for_status()
     payload = response.json()
     pairs = payload.get("pairs", []) if isinstance(payload, dict) else payload

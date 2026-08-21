@@ -1,5 +1,7 @@
 """Tests for commodity reference dashboard results."""
 
+import requests
+
 from application.commodity_dashboard_service import (
     build_commodity_reference_results,
 )
@@ -39,3 +41,15 @@ def test_should_build_non_actionable_gold_reference():
     assert result["reference_intelligence"]["market_state"] == (
         "UPPER_RANGE"
     )
+
+
+def test_provider_timeout_degrades_only_reference_market():
+    def timed_out_scan(token):
+        raise requests.ReadTimeout("Twelve Data timed out")
+
+    result = build_commodity_reference_results(scan=timed_out_scan)[0]
+
+    assert result["token"] == "XAU"
+    assert result["reference_only"] is True
+    assert result["market"] is None
+    assert result["error"] == "Twelve Data timed out"

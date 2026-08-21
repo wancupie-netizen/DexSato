@@ -1,6 +1,7 @@
 """Tests for the Twelve Data commodities adapter."""
 
 import pytest
+import requests
 
 from scanner.twelve_data import (
     fetch_commodity_quote,
@@ -17,10 +18,13 @@ MARKET = {
 
 
 class FakeResponse:
-    def __init__(self, payload):
+    def __init__(self, payload, *, status_code=200):
         self.payload = payload
+        self.status_code = status_code
 
     def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.status_code}")
         return None
 
     def json(self):
@@ -57,6 +61,42 @@ def test_should_reject_provider_error():
             api_key="bad-key",
             request_get=fake_get,
         )
+
+
+def test_should_retry_twelve_data_timeout_once():
+    calls = []
+    delays = []
+
+    def fake_get(url, params, timeout):
+        calls.append(url)
+        if len(calls) == 1:
+            raise requests.ReadTimeout("temporary timeout")
+        return FakeResponse({"symbol": "XAU/USD", "close": "4050.25"})
+
+    quote = fetch_commodity_quote(
+        MARKET, api_key="test-key", request_get=fake_get,
+        retry_sleep=delays.append,
+    )
+
+    assert quote["close"] == "4050.25"
+    assert len(calls) == 2
+    assert delays == [0.4]
+
+
+def test_should_stop_after_two_twelve_data_timeouts():
+    calls = []
+
+    def fake_get(url, params, timeout):
+        calls.append(url)
+        raise requests.ReadTimeout("provider unavailable")
+
+    with pytest.raises(requests.ReadTimeout):
+        fetch_commodity_quote(
+            MARKET, api_key="test-key", request_get=fake_get,
+            retry_sleep=lambda delay: None,
+        )
+
+    assert len(calls) == 2
 
 
 def test_should_normalize_without_fake_liquidity():
