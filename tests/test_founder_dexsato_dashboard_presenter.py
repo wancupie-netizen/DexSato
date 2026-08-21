@@ -432,3 +432,24 @@ def test_market_detail_renders_recent_scan_trail():
     assert "Bearish Developing" in html and "Bullish Developing" in html
     assert "RSI 56.20" in html and "Vol 1.60×" in html
     assert "maximum 12 stored" in html
+
+
+def test_market_detail_renders_evidence_follow_through():
+    coin = deepcopy(SNAPSHOT["coins"][0])
+    coin["evidence_follow_through"] = {
+        "status": "AVAILABLE",
+        "message": "Price follow-through after previously recorded directional evidence.",
+        "policy": "Evidence follow-through only; not win rate, P&L or trade advice.",
+        "evaluations": [{
+            "horizon": "4H", "assessment": "SUPPORTIVE",
+            "recorded_bias": "BEARISH_DEVELOPING",
+            "anchor_at": "2026-08-19T00:00:00+00:00",
+            "price_change_pct": -2.0,
+        }],
+    }
+    html = render_market_detail_page(coin, generated_at="2026-08-19T04:00:00+00:00")
+    assert "Evidence Follow-Through" in html
+    assert "Supportive" in html
+    assert "Bearish Developing" in html
+    assert "-2.00%" in html
+    assert "not win rate, P&amp;L or trade advice" in html

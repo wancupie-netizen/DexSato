@@ -48,6 +48,7 @@ from application.fundamental_context_service import fetch_fundamental_context
 from application.market_catalyst_service import fetch_market_catalysts
 from application.market_change_summary import attach_market_change_summaries
 from application.market_scan_history import attach_recent_scan_history
+from application.evidence_follow_through import attach_evidence_follow_through
 
 
 LATEST_SNAPSHOT_FILE = Path(
@@ -268,6 +269,7 @@ def generate_latest_snapshot(
 
     attach_market_change_summaries(payload, previous_snapshot)
     attach_recent_scan_history(payload, previous_snapshot)
+    attach_evidence_follow_through(payload)
 
     output_file = write_latest_snapshot(
         payload=payload,
