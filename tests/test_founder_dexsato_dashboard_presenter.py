@@ -362,6 +362,25 @@ def test_should_render_dexsato_north_star_ui():
     assert "99.8%" not in html
 
 
+def test_dashboard_renders_provider_operations_from_snapshot():
+    snapshot = deepcopy(SNAPSHOT)
+    snapshot["provider_health"] = {
+        "status": "RECOVERED",
+        "providers": [{
+            "provider": "DexScreener exact pair", "status": "RECOVERED",
+            "logical_requests": 5, "attempts": 6, "retries": 1, "failures": 0,
+        }],
+    }
+
+    html = render_dexsato_dashboard(snapshot, system_status=STATUS)
+
+    assert 'Provider APIs</span><b class="provider-overall-recovered">RECOVERED' in html
+    assert "Provider Operations" in html
+    assert "DexScreener exact pair" in html
+    assert "5 requests · 1 retries · 0 failures" in html
+    assert "provider-recovered" in html
+
+
 def test_should_keep_dashboard_search_and_filters():
     html = render_dexsato_dashboard(
         SNAPSHOT,

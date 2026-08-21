@@ -142,6 +142,10 @@ def test_should_generate_latest_snapshot(
 
     assert snapshot_file.exists()
 
+    stored = read_latest_snapshot(snapshot_file=snapshot_file)
+    assert stored["provider_health"]["status"] == "NO_ACTIVITY"
+    assert stored["provider_health"]["providers"] == []
+
 
 def test_should_reject_naive_timestamp():
     """

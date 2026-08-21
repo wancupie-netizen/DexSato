@@ -51,6 +51,7 @@ from application.market_scan_history import attach_recent_scan_history
 from application.evidence_follow_through import attach_evidence_follow_through
 from application.evidence_health_service import attach_evidence_health
 from application.decision_readiness_service import attach_decision_readiness
+from scanner.http_reliability import get_provider_health, reset_provider_telemetry
 
 
 LATEST_SNAPSHOT_FILE = Path(
@@ -262,6 +263,7 @@ def generate_latest_snapshot(
     except (FileNotFoundError, RuntimeError, ValueError):
         previous_snapshot = None
 
+    reset_provider_telemetry()
     results = build_results()
 
     payload = build_snapshot_payload(
@@ -274,6 +276,7 @@ def generate_latest_snapshot(
     attach_evidence_follow_through(payload)
     attach_evidence_health(payload)
     attach_decision_readiness(payload)
+    payload["provider_health"] = get_provider_health()
 
     output_file = write_latest_snapshot(
         payload=payload,
