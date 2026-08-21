@@ -69,14 +69,16 @@ from presentation.content_control_presenter import (
     render_content_login,
 )
 from presentation.dexsato_dashboard_presenter import (
-    render_dexsato_dashboard,
     render_market_detail_page,
 )
 from presentation.dexsato_admin_presenter import (
     render_admin_system_page,
 )
+from presentation.dexsato_user_dashboard_presenter import (
+    render_user_dashboard,
+)
 
-render_founder_snapshot_dashboard = render_dexsato_dashboard
+render_founder_snapshot_dashboard = render_user_dashboard
 
 
 APP_TITLE = "DexSato V1"
