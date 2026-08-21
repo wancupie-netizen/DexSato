@@ -15,6 +15,9 @@ def _number(value: object) -> float | None:
 
 
 def _technical_evidence(coin: dict[str, object]) -> tuple[list[dict[str, str]], dict[str, object]]:
+    health = coin.get("evidence_health", {})
+    if isinstance(health, dict) and health.get("technical_usable") is False:
+        return [], {}
     technical = coin.get("technical_evidence", {})
     if not isinstance(technical, dict) or technical.get("status") != "AVAILABLE":
         return [], {}
@@ -74,6 +77,20 @@ def build_homepage_decision_teaser(coin: dict[str, object]) -> dict[str, object]
     headline = "Review the current market evidence"
     summary = f"DexSato marks this market {decision} with {confidence} confidence."
     context = "CURRENT SNAPSHOT"
+
+    health = coin.get("evidence_health", {})
+    if isinstance(health, dict) and health.get("status") == "STALE":
+        return {
+            "evidence": [],
+            "context": "DATA QUALITY NOTICE",
+            "headline": "Required evidence is stale",
+            "summary": str(health.get("summary") or "Wait for a fresh completed scan before relying on this evidence."),
+            "next_confirmation": {
+                "label": "Fresh scan required",
+                "actual": "Freshness limit exceeded",
+                "requirement": "Wait for the next completed market and 4H evidence collection",
+            },
+        }
 
     if isinstance(change, dict) and change.get("status") == "CHANGED":
         headline = str(change.get("headline") or "Material evidence changed since the previous scan")
