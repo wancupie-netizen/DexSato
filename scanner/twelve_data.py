@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
+
+from scanner.http_reliability import request_with_bounded_retry
 
 
 load_dotenv(
@@ -25,6 +28,7 @@ def fetch_commodity_quote(
     *,
     api_key=None,
     request_get=requests.get,
+    retry_sleep=time.sleep,
 ):
     """Fetch one registered reference quote from Twelve Data."""
     resolved_key = api_key or os.getenv("TWELVE_DATA_API_KEY")
@@ -32,13 +36,19 @@ def fetch_commodity_quote(
     if not resolved_key:
         raise RuntimeError("TWELVE_DATA_API_KEY is not configured.")
 
-    response = request_get(
-        QUOTE_URL,
-        params={
-            "symbol": market["provider_symbol"],
-            "apikey": resolved_key,
-        },
-        timeout=15,
+    response = request_with_bounded_retry(
+        lambda: request_get(
+            QUOTE_URL,
+            params={
+                "symbol": market["provider_symbol"],
+                "apikey": resolved_key,
+            },
+            timeout=15,
+        ),
+        provider="Twelve Data commodity quote",
+        max_attempts=2,
+        backoff_seconds=0.4,
+        sleep=retry_sleep,
     )
     response.raise_for_status()
     payload = response.json()

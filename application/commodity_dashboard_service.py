@@ -23,7 +23,9 @@ def build_commodity_reference_results(
             intelligence = build_gold_reference_intelligence(
                 scan_result.get("provider_quote", {})
             )
-        except (RuntimeError, ValueError) as error:
+        except Exception as error:
+            # Commodity reference data is optional. Provider timeouts or
+            # adapter failures must not cancel the complete crypto snapshot.
             results.append({"token": token, "card": None, "market": None, "reference_only": True, "error": str(error)})
             continue
 
