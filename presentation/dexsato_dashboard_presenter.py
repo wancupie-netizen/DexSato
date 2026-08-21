@@ -1020,6 +1020,26 @@ def render_dexsato_dashboard(
     if not isinstance(latest_run, dict):
         latest_run = {}
     telegram = _status(latest_run.get("telegram_status"), "NOT RUN YET")
+    provider_health = snapshot.get("provider_health", {})
+    if not isinstance(provider_health, dict):
+        provider_health = {}
+    provider_status = _status(provider_health.get("status"), "NO ACTIVITY")
+    provider_rows = []
+    providers = provider_health.get("providers", [])
+    if isinstance(providers, list):
+        for provider in providers:
+            if not isinstance(provider, dict):
+                continue
+            provider_rows.append(
+                '<div class="provider-row"><div>'
+                f'<strong>{_text(provider.get("provider"))}</strong>'
+                f'<small>{_text(provider.get("logical_requests"), "0")} requests · '
+                f'{_text(provider.get("retries"), "0")} retries · '
+                f'{_text(provider.get("failures"), "0")} failures</small></div>'
+                f'<b class="provider-{_text(str(provider.get("status", "unknown")).lower())}">'
+                f'{_text(str(provider.get("status", "UNKNOWN")).title())}</b></div>'
+            )
+    provider_operations = "".join(provider_rows) or '<p class="provider-empty">No provider activity recorded for this snapshot.</p>'
     generated_at = _text(
         snapshot.get("generated_at", latest_run.get("generated_at")),
         "Not available",
@@ -1121,7 +1141,8 @@ def render_dexsato_dashboard(
     .timeline-dot.neutral{{background:#7f91a5}} .timeline small{{display:block;margin-top:4px;color:var(--muted)}}
     .market-state{{display:grid;grid-template-columns:repeat(5,1fr);text-align:center}} .market-state div{{border-right:1px solid var(--line)}}
     .market-state div:last-child{{border:0}} .market-state span{{display:block;font-size:11px;color:var(--muted)}} .market-state strong{{font-size:25px}}
-    .health-list{{display:grid;gap:10px}} .health-row{{display:flex;justify-content:space-between;color:var(--muted)}} .health-row b{{color:var(--green)}}
+    .health-list{{display:grid;gap:10px}} .health-row{{display:flex;justify-content:space-between;color:var(--muted)}} .health-row b{{color:var(--green)}} .health-row .provider-overall-recovered{{color:var(--amber)}} .health-row .provider-overall-degraded{{color:var(--red)}} .health-row .provider-overall-no_activity{{color:var(--muted)}}
+    .provider-list{{display:grid;gap:9px}} .provider-row{{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:9px;border-top:1px solid var(--line)}} .provider-row:first-child{{padding-top:0;border-top:0}} .provider-row strong,.provider-row small{{display:block}} .provider-row strong{{font-size:12px}} .provider-row small,.provider-empty{{margin:3px 0 0;color:var(--muted);font-size:10px;line-height:1.4}} .provider-row b{{font-size:10px;text-transform:uppercase}} .provider-healthy{{color:var(--green)}} .provider-recovered{{color:var(--amber)}} .provider-degraded{{color:var(--red)}}
     .footer{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px;padding:15px;border:1px solid var(--line);
       border-radius:11px;color:var(--muted);text-align:center}} .footer b{{color:var(--green)}} .dedication{{grid-column:1/-1;color:#fff}}
     .mobile-toggle{{display:none}} [hidden]{{display:none!important}}
@@ -1245,7 +1266,9 @@ def render_dexsato_dashboard(
         <section class="rail-card"><h2>System Health</h2><div class="health-list">
           <div class="health-row"><span>Engine</span><b>ONLINE</b></div><div class="health-row"><span>Snapshot</span><b>{_text(freshness)}</b></div>
           <div class="health-row"><span>Telegram</span><b>{_text(telegram)}</b></div><div class="health-row"><span>Scheduler</span><b>{scheduler_label}</b></div>
+          <div class="health-row"><span>Provider APIs</span><b class="provider-overall-{_text(provider_status.lower().replace(" ", "_"))}">{_text(provider_status)}</b></div>
         </div></section>
+        <section class="rail-card"><h2>Provider Operations</h2><div class="provider-list">{provider_operations}</div></section>
       </aside>
     </div>
     <footer class="footer"><span>Engine <b>{_text(health)}</b></span><span>Last completed scan <b id="completed-scan" data-generated-at="{generated_at}">calculating…</b></span>
