@@ -225,3 +225,42 @@ def test_should_fetch_exact_registered_pool_with_four_hour_parameters():
         "token": "So11111111111111111111111111111111111111112",
     }
     assert calls[0][3] == 15
+
+
+def test_sui_technical_evidence_requests_registered_quote_side_asset():
+    rows = [
+        [
+            candle["timestamp"],
+            candle["open"],
+            candle["high"],
+            candle["low"],
+            candle["close"],
+            candle["volume"],
+        ]
+        for candle in reversed(_candles())
+    ]
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": {"attributes": {"ohlcv_list": rows}}}
+
+    calls = []
+
+    def fake_get(url, *, params, headers, timeout):
+        calls.append((url, params, headers, timeout))
+        return Response()
+
+    result = fetch_technical_evidence(
+        "SUI",
+        request_get=fake_get,
+        now=datetime.fromtimestamp(1_800_000_000, timezone.utc),
+    )
+
+    assert result["status"] == "AVAILABLE"
+    assert result["market"] == "SUI/USDC"
+    assert result["network"] == "sui-network"
+    assert "/networks/sui-network/pools/" in calls[0][0]
+    assert calls[0][1]["token"] == "quote"

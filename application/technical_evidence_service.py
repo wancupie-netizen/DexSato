@@ -494,7 +494,13 @@ def fetch_technical_evidence(
             "aggregate": 4,
             "limit": 240,
             "currency": "usd",
-            "token": market["base_address"],
+            # The registered SUI asset is the pool's quote token. Its Move
+            # address is not accepted as a GeckoTerminal token parameter.
+            "token": (
+                "quote"
+                if str(market["chain_id"]).lower() == "sui"
+                else market["base_address"]
+            ),
         },
         headers={"Accept": "application/json"},
         timeout=15,

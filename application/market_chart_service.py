@@ -148,7 +148,13 @@ def fetch_market_chart(
                     "aggregate": config["aggregate"],
                     "limit": config["limit"],
                     "currency": "usd",
-                    "token": market["base_address"],
+                    # GeckoTerminal rejects SUI Move-type addresses; SUI is
+                    # the quote-side asset in this registered exact pool.
+                    "token": (
+                        "quote"
+                        if str(market["chain_id"]).lower() == "sui"
+                        else market["base_address"]
+                    ),
                 },
                 headers={"Accept": "application/json"},
                 timeout=10,

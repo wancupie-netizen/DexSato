@@ -62,8 +62,28 @@ def test_chart_uses_exact_registered_pool_and_bounded_cache():
     assert "/networks/bsc/pools/" in calls[0][0]
     assert calls[0][0].endswith("/ohlcv/hour")
     assert calls[0][1]["params"]["aggregate"] == 4
+    assert calls[0][1]["params"]["token"] != "quote"
     assert second == first
     assert len(calls) == 1
+
+
+def test_sui_chart_requests_registered_quote_side_asset():
+    clear_market_chart_cache()
+    calls = []
+
+    def request_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return _Response(_payload())
+
+    result = fetch_market_chart(
+        "SUI", "4h", request_get=request_get, now=lambda: 30
+    )
+
+    assert result["status"] == "AVAILABLE"
+    assert result["token"] == "SUI"
+    assert result["network"] == "sui-network"
+    assert "/networks/sui-network/pools/" in calls[0][0]
+    assert calls[0][1]["params"]["token"] == "quote"
 
 
 def test_chart_rejects_non_crypto_and_unknown_timeframe():
