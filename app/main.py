@@ -77,6 +77,9 @@ from presentation.dexsato_admin_presenter import (
 from presentation.dexsato_user_dashboard_presenter import (
     render_user_dashboard,
 )
+from presentation.dexsato_solana_discovery_presenter import (
+    render_solana_discovery_page,
+)
 
 render_founder_snapshot_dashboard = render_user_dashboard
 
@@ -177,6 +180,15 @@ def founder_home() -> str:
         snapshot,
         system_status=system_status,
     )
+
+
+@app.get(
+    "/discovery/solana",
+    response_class=HTMLResponse,
+)
+def solana_discovery() -> str:
+    """Display the read-only Solana Discovery D1 prototype."""
+    return render_solana_discovery_page()
 
 
 @app.get(
