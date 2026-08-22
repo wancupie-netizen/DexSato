@@ -7,25 +7,24 @@ def test_solana_discovery_prototype_is_honest_and_read_only():
     html = render_solana_discovery_page()
 
     assert "Solana Discovery" in html
-    assert "Evidence-led token discovery" in html
-    assert "Discovery candidates are not connected yet." in html
+    assert "Evidence-led Solana intelligence" in html
+    assert "Feed unavailable" in html
     assert "No discovery tokens are available yet." in html
-    assert "Read-only preview" in html
-    assert "Jupiter execution · planned, not active" in html
-    assert "No wallet connection, quote or trading capability" in html
-    assert "will not hold your keys or funds" in html
+    assert "Jupiter execution" in html
+    assert "Planned, not active" in html
+    assert "No wallet connection, quote or trade capability" in html
+    assert "does not hold keys or funds" in html
 
 
 def test_solana_discovery_has_search_filters_and_no_fake_candidates():
     html = render_solana_discovery_page()
 
-    assert "Search token name, symbol, or contract address" in html
-    assert "Newly active" in html
-    assert "Volume rising" in html
-    assert "Liquidity improving" in html
-    assert "Higher risk" in html
+    assert "Search token, symbol, or address" in html
+    assert "New activity" in html
+    assert ">Volume<" in html
+    assert ">Liquidity<" in html
     assert "Tokens observed</span><strong>—" in html
-    assert "Qualified candidates</span><strong>—" in html
+    assert "Qualified now</span><strong>—" in html
     assert "data-token-address" not in html
 
 
@@ -41,6 +40,38 @@ def test_solana_discovery_is_responsive_and_supports_existing_themes():
     assert 'href="/"' in html
 
 
+def test_solana_discovery_uses_market_terminal_layout():
+    html = render_solana_discovery_page()
+
+    assert "Solana Discovery Terminal" in html
+    assert 'class="workspace"' in html
+    assert 'class="feed-panel"' in html
+    assert 'class="intel-rail"' in html
+    assert "Qualification rules" in html
+    assert "Pool verification is not token verification" in html
+    assert "Discovery rank reflects activity, not safety." in html
+    assert "grid-template-columns:minmax(0,1fr) 310px" in html
+
+
+def test_solana_discovery_uses_terminal_typography_stack():
+    html = render_solana_discovery_page()
+
+    assert '"Bahnschrift SemiBold"' in html
+    assert '"Cascadia Mono"' in html
+    assert "font-family:var(--font-display)" in html
+    assert "font-family:var(--font-mono)" in html
+
+
+def test_solana_discovery_enlarges_terminal_detail_text():
+    html = render_solana_discovery_page()
+
+    assert ".feed-head h2{font-size:24px" in html
+    assert ".token-cell strong{font-size:18px}" in html
+    assert ".market-cell strong{font-size:15px}" in html
+    assert ".evidence-cell p{font-size:12px" in html
+    assert ".rail-card h3{font-size:16px" in html
+
+
 def test_solana_discovery_renders_connected_telemetry_without_candidates():
     html = render_solana_discovery_page({
         "connected": True,
@@ -52,10 +83,10 @@ def test_solana_discovery_renders_connected_telemetry_without_candidates():
         "message": "Collector telemetry is connected; publication remains disabled.",
     })
 
-    assert "Collector telemetry is connected." in html
+    assert "Collector connected" in html
     assert "Tokens observed</span><strong>4742" in html
     assert "Pairs resolved</span><strong>3271" in html
-    assert "Qualified candidates</span><strong>—" in html
+    assert "Qualified now</span><strong>—" in html
     assert "5 min ago" in html
 
 
@@ -75,8 +106,11 @@ def test_solana_discovery_renders_qualified_candidate_and_explicit_risk():
         }],
     })
 
-    assert "Qualified candidates</span><strong>1" in html
+    assert "Qualified now</span><strong>1" in html
     assert "Example token" in html and "EX / SOL" in html
     assert "$12.00K" in html and "$4.50K" in html
     assert "Token security not independently verified" in html
     assert "data-token-address=\"token-address\"" in html
+    assert "Observed activity" in html
+    assert "Inspect pool" not in html
+    assert "Pool pool-address" in html
