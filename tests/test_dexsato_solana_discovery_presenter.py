@@ -72,6 +72,18 @@ def test_solana_discovery_enlarges_terminal_detail_text():
     assert ".rail-card h3{font-size:16px" in html
 
 
+def test_solana_discovery_candidates_open_internal_token_workspace():
+    html = render_solana_discovery_page({
+        "connected": True, "fresh": True, "candidates": [{
+            "token_address": "TokenAddressCaseSensitive123",
+            "pair_address": "PoolAddress123", "symbol": "TEST",
+        }],
+    })
+
+    assert 'href="/discovery/solana/TokenAddressCaseSensitive123"' in html
+    assert "Open workspace" in html
+
+
 def test_solana_discovery_renders_connected_telemetry_without_candidates():
     html = render_solana_discovery_page({
         "connected": True,
