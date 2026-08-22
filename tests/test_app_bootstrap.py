@@ -21,6 +21,7 @@ from app.main import (
     founder_home,
     health_check,
     market_detail,
+    solana_discovery,
     system_status_api,
     telegram_send,
 )
@@ -94,6 +95,14 @@ def test_should_render_snapshot_dashboard(
             "overall_health": "HEALTHY",
         },
     )
+
+
+@patch("app.main.render_solana_discovery_page")
+def test_should_render_read_only_solana_discovery(mock_render):
+    mock_render.return_value = "<html>Solana Discovery</html>"
+
+    assert solana_discovery() == "<html>Solana Discovery</html>"
+    mock_render.assert_called_once_with()
 
 
 @patch("app.main.render_admin_system_page")
