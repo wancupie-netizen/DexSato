@@ -1,4 +1,4 @@
-﻿"""
+"""
 DexSato V1 FastAPI Application.
 
 Official launcher:
@@ -229,6 +229,24 @@ def market_detail(token: str) -> str:
         generated_at=snapshot.get("generated_at"),
     )
 
+
+@app.get("/api/markets/{token}/chart")
+def market_chart_api(token: str, timeframe: str = "4h") -> dict[str, object]:
+    """Return registered-token chart candles without running a scan."""
+    from application.market_chart_service import (
+        MarketChartUnavailable,
+        fetch_market_chart,
+    )
+
+    try:
+        return fetch_market_chart(token, timeframe)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except MarketChartUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Live market chart is temporarily unavailable.",
+        ) from error
 
 @app.get(
     "/content-control",

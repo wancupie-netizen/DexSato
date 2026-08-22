@@ -653,6 +653,53 @@ def _render_market_catalysts(coin: dict[str, object]) -> str:
     """
 
 
+def _render_live_market_chart(coin: dict[str, object]) -> str:
+    """Render the read-only chart shell for the five crypto pilot markets."""
+    token = _status(coin.get("token"))
+    if token not in {"BTC", "ETH", "SOL", "XRP", "SUI"}:
+        return ""
+
+    technical = coin.get("technical_evidence", {})
+    if not isinstance(technical, dict):
+        technical = {}
+    pool = _text(technical.get("pool_address"), "Loaded with chart data")
+    network = _text(
+        technical.get("network") or _format_network(coin.get("chain")),
+        "Not available",
+    )
+    short_pool = pool
+    if len(pool) > 22:
+        short_pool = f"{pool[:10]}…{pool[-7:]}"
+
+    return f"""
+      <section class="detail-section live-market-chart" data-market-chart data-token="{_text(token.lower())}">
+        <div class="chart-heading">
+          <div><small>Exact-pool market data</small><h3>Live Market Chart</h3>
+            <p>Closed candles for this registered market pool. The displayed snapshot price remains the latest completed DexSato scan.</p></div>
+          <div class="chart-timeframes" role="group" aria-label="Chart timeframe">
+            <button type="button" data-chart-timeframe="1h" aria-pressed="false">1H</button>
+            <button type="button" data-chart-timeframe="4h" aria-pressed="true" class="active">4H</button>
+            <button type="button" data-chart-timeframe="1d" aria-pressed="false">1D</button>
+            <button type="button" data-chart-timeframe="1w" aria-pressed="false">1W</button>
+          </div>
+        </div>
+        <div class="chart-stage">
+          <canvas data-chart-canvas role="img" aria-label="Exact-pool candlestick chart"></canvas>
+          <div class="chart-loading" data-chart-loading>Loading exact-pool candles…</div>
+        </div>
+        <div class="chart-footer">
+          <div class="chart-meta">
+            <span>Source <strong data-chart-source>GeckoTerminal</strong></span>
+            <span>Network <strong data-chart-network>{network}</strong></span>
+            <span>Exact pool <strong data-chart-pool title="{pool}">{short_pool}</strong></span>
+          </div>
+          <span class="chart-status" data-chart-status role="status">Connecting to market data…</span>
+        </div>
+        <p class="chart-policy">Market Evidence Price · read-only chart, not a Jupiter execution quote or trade instruction.</p>
+      </section>
+    """
+
+
 def _render_market_detail_content(coin: dict[str, object]) -> str:
     """Render reusable market-detail content from one stored snapshot."""
     token = _status(coin.get("token"))
@@ -731,7 +778,8 @@ def _render_market_detail_content(coin: dict[str, object]) -> str:
         <div><small>Market Detail</small><h2>{pair}</h2>
           <p>{price} <span class="market-change">{change} · 24h</span></p></div>
       </div>
-      <section class="detail-section">
+      {_render_live_market_chart(coin)}
+      <section class="detail-section market-snapshot">
         <h3>Market Snapshot</h3>
         <div class="detail-metrics">
           <div><span>Price</span><strong>{price}</strong></div>
@@ -742,7 +790,7 @@ def _render_market_detail_content(coin: dict[str, object]) -> str:
           <div><span>Network</span><strong>{chain}</strong></div>
         </div>
       </section>
-      <section class="detail-section">
+      <section class="detail-section market-decision">
         <h3>DexSato Decision</h3>
         <div class="drawer-decision"><span>{decision}</span><strong>Confidence {confidence}</strong></div>
         {_render_evidence_health(coin)}
@@ -757,7 +805,7 @@ def _render_market_detail_content(coin: dict[str, object]) -> str:
         {_render_market_catalysts(coin)}
         <p class="drawer-risk"><strong>Risk note</strong>{risk_note}</p>
       </section>
-      <section class="detail-section">
+      <section class="detail-section trading-venues">
         <div class="detail-title-row"><h3>Top Trading Venues</h3><span>DEX · ranked by 24h volume</span></div>
         <div class="venue-list">{venue_html}</div>
         <p class="data-note">Venue ranking is informational and is not an endorsement.</p>
@@ -920,7 +968,11 @@ def render_market_detail_page(
     .drawer-heading small{{color:var(--muted);font-size:13px;font-weight:750;text-transform:uppercase;letter-spacing:.09em}} .drawer-heading h2{{margin:3px 0 0;font-size:31px;line-height:1.2;letter-spacing:-.02em}} .drawer-heading p{{margin:5px 0 0;color:var(--muted);font-size:15px}}
     .drawer-logo{{display:grid;place-items:center;flex:0 0 72px;width:72px;height:72px;border:1px solid var(--line);border-radius:50%;background:#10253c;overflow:hidden}} .drawer-logo img{{width:100%;height:100%;object-fit:cover}} .coin-fallback,.commodity-fallback{{font-weight:900}} .commodity-fallback{{color:#f7c948;font-size:25px}} .market-change{{color:var(--cyan);font-size:13px;font-weight:700}}
     .detail-section{{padding:24px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}} .detail-section>h3,.detail-title-row h3{{margin:0 0 17px;font-size:19px;font-weight:750;line-height:1.35;letter-spacing:-.012em}}
-    .detail-section:nth-of-type(1),.detail-section:nth-of-type(2){{grid-column:1}} .detail-section:nth-of-type(3){{grid-column:2;grid-row:2/span 2}}
+    .live-market-chart{{grid-column:1/-1;padding:22px 24px}} .market-snapshot,.market-decision{{grid-column:1}} .trading-venues{{grid-column:2;grid-row:3/span 2}}
+    .chart-heading{{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:16px}} .chart-heading small{{color:var(--cyan);font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}} .chart-heading h3{{margin:3px 0 0;font-size:19px;font-weight:780;letter-spacing:-.012em}} .chart-heading p{{max-width:660px;margin:5px 0 0;color:var(--muted);font-size:13px;line-height:1.5}}
+    .chart-timeframes{{display:flex;gap:5px;padding:4px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}} .chart-timeframes button{{min-width:44px;padding:7px 10px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:12px;font-weight:800;cursor:pointer}} .chart-timeframes button:hover{{color:var(--text)}} .chart-timeframes button.active{{background:var(--blue);color:#fff}}
+    .chart-stage{{position:relative;min-height:300px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(83,148,255,.035),transparent);overflow:hidden}} .chart-stage canvas{{display:block;width:100%;height:300px}} .chart-loading{{position:absolute;inset:0;display:grid;place-items:center;padding:20px;background:rgba(6,17,31,.74);color:var(--muted);font-size:14px;font-weight:650;text-align:center}} .chart-stage.ready .chart-loading{{display:none}} .chart-stage.error .chart-loading{{background:transparent;color:var(--amber)}}
+    .chart-footer{{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-top:12px}} .chart-meta{{display:flex;flex-wrap:wrap;gap:8px 18px}} .chart-meta span,.chart-status{{color:var(--muted);font-size:11.5px;line-height:1.5}} .chart-meta strong{{color:var(--text);font-weight:700;overflow-wrap:anywhere}} .chart-status{{text-align:right}} .chart-policy{{margin:8px 0 0;color:var(--muted);font-size:10.5px;text-align:right}}
     .detail-metrics{{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}} .detail-metrics div{{min-height:76px;padding:15px;border-radius:9px;background:var(--panel2)}} .detail-metrics span,.venue-row small{{display:block;color:var(--muted);font-size:12.5px;font-weight:500;line-height:1.45}} .detail-metrics strong{{display:block;margin-top:6px;font-size:16.5px;font-weight:750;line-height:1.35;overflow-wrap:anywhere}}
     ul{{margin:0;padding-left:21px;color:var(--text);font-size:15.5px;line-height:1.6}} li{{margin:8px 0}} .drawer-decision{{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}} .drawer-decision span{{padding:5px 10px;border:1px solid var(--blue);border-radius:6px;color:var(--blue);font-size:13px;font-weight:800}} .drawer-decision strong{{font-size:13.5px;color:var(--amber)}}
     .engine-evidence{{margin-bottom:20px}} .engine-evidence>strong{{display:block;margin-bottom:8px;color:var(--muted);font-size:12.5px;font-weight:750;text-transform:uppercase;letter-spacing:.055em}}
@@ -941,9 +993,9 @@ def render_market_detail_page(
     .venue-rank{{display:grid;place-items:center;width:24px;height:24px;border-radius:6px;background:#182b43;color:var(--cyan);font-size:12px;font-weight:800}} .venue-row strong{{display:block;font-size:13.5px;line-height:1.4;overflow-wrap:anywhere}} .venue-row a{{color:var(--cyan);font-weight:750;text-decoration:none}} .venue-row a:hover{{text-decoration:underline}} .detail-empty,.data-note{{margin:0;color:var(--muted);font-size:13px;line-height:1.5}} .data-note{{margin-top:13px}}
     .detail-source{{grid-column:1/-1;display:flex;justify-content:space-between;gap:15px;padding:18px 3px;color:var(--muted);font-size:13px;font-weight:500;line-height:1.5}} .detail-source strong{{color:var(--text);font-weight:750}} .copy-status{{min-height:20px;margin:10px 0 0;color:var(--cyan);font-size:13px;text-align:right}}
     html[data-theme="plain"]{{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f3f5f7;--line:#d9dfe6;--text:#111c30;--muted:#53657a;--cyan:#087783;--blue:#245fb5;--amber:#985800}}
-    html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff7e3;color:#674b13}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}} html[data-theme="plain"] .technical-metric{{border-color:#e4e8ed}} html[data-theme="plain"] .technical-outlook{{background:#f9fbfd}} html[data-theme="plain"] .rule-met .rule-icon,html[data-theme="plain"] .rule-clear .rule-icon{{background:#e6f7f5}} html[data-theme="plain"] .rule-pending .rule-icon{{background:#fff4d9}}
-    @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.detail-section:nth-of-type(1),.detail-section:nth-of-type(2),.detail-section:nth-of-type(3){{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.rule-groups{{grid-template-columns:1fr}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
-    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.technical-heading,.outlook-heading,.fundamental-heading,.catalyst-heading,.trader-brief-heading,.follow-heading,.evidence-health-heading,.readiness-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid,.health-checks,.readiness-columns{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}.catalyst-row,.brief-columns,.follow-row{{grid-template-columns:1fr}}.change-row{{grid-template-columns:1fr auto 20px auto}}.scan-trail-head{{display:none}}.scan-trail-row{{grid-template-columns:1fr 1fr}}}}
+    html[data-theme="plain"] body{{background:#f7f8fa}} html[data-theme="plain"] .theme-option.active{{background:#172033;color:#fff}} html[data-theme="plain"] .drawer-logo{{background:#f2f5f8}} html[data-theme="plain"] .drawer-risk{{background:#fff7e3;color:#674b13}} html[data-theme="plain"] .venue-rank{{background:#e9f7f7;color:#087f8c}} html[data-theme="plain"] .technical-metric{{border-color:#e4e8ed}} html[data-theme="plain"] .technical-outlook{{background:#f9fbfd}} html[data-theme="plain"] .rule-met .rule-icon,html[data-theme="plain"] .rule-clear .rule-icon{{background:#e6f7f5}} html[data-theme="plain"] .rule-pending .rule-icon{{background:#fff4d9}} html[data-theme="plain"] .chart-loading{{background:rgba(255,255,255,.82)}}
+    @media(max-width:860px){{.market-page-header,.page-intro{{align-items:flex-start;flex-direction:column}}.page-actions{{flex-wrap:wrap}}#market-page-content{{grid-template-columns:1fr}}.live-market-chart,.market-snapshot,.market-decision,.trading-venues{{grid-column:1;grid-row:auto}}.detail-metrics{{grid-template-columns:repeat(2,1fr)}}.rule-groups{{grid-template-columns:1fr}}.venue-row{{grid-template-columns:26px 1fr 88px}}.venue-row>div:last-child{{display:none}}.detail-source{{flex-direction:column}}.snapshot-time{{text-align:left}}}}
+    @media(max-width:560px){{.market-page{{width:min(100% - 24px,1180px)}}.detail-section{{padding:19px}}.chart-heading,.chart-footer{{align-items:stretch;flex-direction:column}}.chart-timeframes{{display:grid;grid-template-columns:repeat(4,1fr);width:100%}}.chart-timeframes button{{min-width:0}}.chart-stage{{min-height:230px}}.chart-stage canvas{{height:230px}}.chart-status,.chart-policy{{text-align:left}}.technical-heading,.outlook-heading,.fundamental-heading,.catalyst-heading,.trader-brief-heading,.follow-heading,.evidence-health-heading,.readiness-heading{{align-items:flex-start;flex-direction:column}}.technical-heading span{{white-space:normal}}.technical-grid,.health-checks,.readiness-columns{{grid-template-columns:1fr}}.technical-structure{{grid-column:auto}}.technical-outlook{{padding:16px}}.rule-group{{padding:15px}}.rule-copy>div{{flex-direction:column;gap:2px}}.fundamental-row{{grid-template-columns:1fr 1fr}}.fundamental-row>div:first-child{{grid-column:1/-1}}.fundamental-row>a{{text-align:left}}.catalyst-row,.brief-columns,.follow-row{{grid-template-columns:1fr}}.change-row{{grid-template-columns:1fr auto 20px auto}}.scan-trail-head{{display:none}}.scan-trail-row{{grid-template-columns:1fr 1fr}}}}
   </style>
 </head>
 <body>
@@ -966,6 +1018,28 @@ def render_market_detail_page(
     let savedTheme="current";try{{savedTheme=localStorage.getItem("dexsato-theme")||"current";}}catch(error){{}}applyTheme(savedTheme);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
     function formatMYT(raw){{const time=new Date(raw);if(Number.isNaN(time.getTime()))return"Not available";return new Intl.DateTimeFormat("en-MY",{{timeZone:"Asia/Kuala_Lumpur",day:"2-digit",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true}}).format(time)+" MYT";}}
     document.querySelectorAll("[data-scanned-at]").forEach(item=>{{const strong=item.querySelector(".detail-updated");if(strong)strong.textContent=formatMYT(item.dataset.scannedAt);}});document.querySelectorAll("[data-technical-at]").forEach(item=>{{const strong=item.querySelector(".technical-updated");if(strong)strong.textContent=formatMYT(item.dataset.technicalAt);}});document.querySelectorAll("[data-catalyst-at]").forEach(item=>{{item.textContent=formatMYT(item.dataset.catalystAt);}});document.querySelectorAll("[data-scan-history-at]").forEach(item=>{{item.textContent=formatMYT(item.dataset.scanHistoryAt);}});document.querySelectorAll("[data-follow-at]").forEach(item=>{{item.textContent=formatMYT(item.dataset.followAt);}});const snapshot=document.querySelector("[data-snapshot-at] strong");if(snapshot)snapshot.textContent=formatMYT(snapshot.parentElement.dataset.snapshotAt);
+    const chartRoot=document.querySelector("[data-market-chart]");
+    if(chartRoot){{
+      const stage=chartRoot.querySelector(".chart-stage"),canvas=chartRoot.querySelector("[data-chart-canvas]"),loading=chartRoot.querySelector("[data-chart-loading]"),status=chartRoot.querySelector("[data-chart-status]");
+      const timeframeButtons=[...chartRoot.querySelectorAll("[data-chart-timeframe]")];let chartCandles=[];
+      function drawMarketChart(){{
+        if(!chartCandles.length)return;const rect=stage.getBoundingClientRect(),width=Math.max(280,Math.floor(rect.width)),height=window.innerWidth<=560?230:300,dpr=Math.min(window.devicePixelRatio||1,2),ctx=canvas.getContext("2d");
+        canvas.width=width*dpr;canvas.height=height*dpr;canvas.style.width=width+"px";canvas.style.height=height+"px";ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+        const css=getComputedStyle(document.documentElement),line=css.getPropertyValue("--line").trim(),muted=css.getPropertyValue("--muted").trim(),up=css.getPropertyValue("--cyan").trim(),down="#ff6474";
+        const left=12,right=66,top=16,bottom=30,plotWidth=width-left-right,plotHeight=height-top-bottom,lows=chartCandles.map(c=>Number(c.low)),highs=chartCandles.map(c=>Number(c.high));let min=Math.min(...lows),max=Math.max(...highs);const padding=(max-min||Math.abs(max)*.01||1)*.08;min-=padding;max+=padding;const y=value=>top+(max-value)/(max-min)*plotHeight;
+        ctx.font='11px "Segoe UI",sans-serif';ctx.textAlign="left";ctx.textBaseline="middle";
+        for(let index=0;index<5;index++){{const py=top+plotHeight*index/4,value=max-(max-min)*index/4;ctx.strokeStyle=line;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(left,py);ctx.lineTo(width-right,py);ctx.stroke();ctx.fillStyle=muted;ctx.fillText(new Intl.NumberFormat("en-US",{{maximumFractionDigits:value<10?4:2}}).format(value),width-right+8,py);}}
+        const step=plotWidth/chartCandles.length,body=Math.max(1,Math.min(9,step*.62));chartCandles.forEach((c,index)=>{{const x=left+step*(index+.5),open=Number(c.open),close=Number(c.close),color=close>=open?up:down;ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,y(Number(c.high)));ctx.lineTo(x,y(Number(c.low)));ctx.stroke();const topY=Math.min(y(open),y(close)),bodyHeight=Math.max(1.5,Math.abs(y(open)-y(close)));ctx.fillRect(x-body/2,topY,body,bodyHeight);}});
+        const dateIndexes=[0,Math.floor((chartCandles.length-1)/2),chartCandles.length-1];ctx.fillStyle=muted;ctx.textBaseline="bottom";dateIndexes.forEach((index,position)=>{{const date=new Date(Number(chartCandles[index].time)*1000),label=new Intl.DateTimeFormat("en-MY",{{day:"2-digit",month:"short"}}).format(date),x=left+step*(index+.5);ctx.textAlign=position===0?"left":position===2?"right":"center";ctx.fillText(label,x,height-5);}});
+      }}
+      async function loadMarketChart(timeframe){{
+        stage.classList.remove("ready","error");loading.textContent="Loading "+timeframe.toUpperCase()+" exact-pool candles…";status.textContent="Connecting to market data…";timeframeButtons.forEach(button=>button.disabled=true);
+        try{{const response=await fetch("/api/markets/"+encodeURIComponent(chartRoot.dataset.token)+"/chart?timeframe="+encodeURIComponent(timeframe));if(!response.ok)throw new Error("Chart request failed");const data=await response.json();if(!Array.isArray(data.candles)||!data.candles.length)throw new Error("No candles returned");chartCandles=data.candles;drawMarketChart();stage.classList.add("ready");status.textContent=data.candles.length+" "+data.timeframe+" candles · Updated "+formatMYT(data.updated_at);chartRoot.querySelector("[data-chart-source]").textContent=data.source||"GeckoTerminal";chartRoot.querySelector("[data-chart-network]").textContent=data.network||"Not available";const pool=chartRoot.querySelector("[data-chart-pool]"),address=data.pool_address||"Not available";pool.textContent=address.length>22?address.slice(0,10)+"…"+address.slice(-7):address;pool.title=address;timeframeButtons.forEach(button=>{{const active=button.dataset.chartTimeframe===timeframe;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));}});}}
+        catch(error){{chartCandles=[];stage.classList.add("error");loading.textContent="Live chart is temporarily unavailable. The stored DexSato snapshot below remains available.";status.textContent="Chart unavailable · try again shortly";}}
+        finally{{timeframeButtons.forEach(button=>button.disabled=false);}}
+      }}
+      timeframeButtons.forEach(button=>button.addEventListener("click",()=>loadMarketChart(button.dataset.chartTimeframe)));window.addEventListener("resize",drawMarketChart);themeOptions.forEach(button=>button.addEventListener("click",()=>window.setTimeout(drawMarketChart,0)));loadMarketChart("4h");
+    }}
     document.getElementById("copy-summary").addEventListener("click",async()=>{{const status=document.getElementById("copy-status");try{{await navigator.clipboard.writeText(document.getElementById("market-page-content").innerText.trim());status.textContent="Market summary copied.";}}catch(error){{status.textContent="Copy is unavailable in this browser.";}}}});
   </script>
 </body>
