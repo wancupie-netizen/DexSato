@@ -22,6 +22,7 @@ from app.main import (
     health_check,
     market_detail,
     solana_discovery,
+    solana_discovery_jupiter_quote,
     solana_discovery_token,
     system_status_api,
     telegram_send,
@@ -219,6 +220,16 @@ def test_should_return_not_found_for_unknown_market(mock_load):
         assert error.status_code == 404
     else:
         raise AssertionError("Unknown market should return 404.")
+
+
+@patch("application.jupiter_quote_service.fetch_jupiter_quote")
+def test_should_return_quote_only_jupiter_sandbox(mock_quote):
+    mock_quote.return_value = {"status": "QUOTE_READY", "quote_only": True}
+
+    result = solana_discovery_jupiter_quote("11111111111111111111111111111111", "0.1")
+
+    assert result["quote_only"] is True
+    mock_quote.assert_called_once_with("11111111111111111111111111111111", "0.1")
 
 
 @patch(

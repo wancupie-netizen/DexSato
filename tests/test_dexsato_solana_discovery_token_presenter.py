@@ -29,12 +29,22 @@ def test_renders_exact_token_workspace_and_chart():
     assert 'data-copy-address="PoolAddress123456789"' in html
 
 
-def test_keeps_jupiter_read_only_and_discloses_risk():
+def test_renders_quote_only_jupiter_sandbox_and_discloses_risk():
     html = render_solana_discovery_token_page(DETAIL)
-    assert "Planned, not active" in html
-    assert "No wallet connection, executable quote or swap is enabled" in html
+    assert "Jupiter integration sandbox" in html
+    assert "Read-only quote" in html
+    assert "D5 · NO EXECUTION" in html
+    assert "Connect supported wallet" in html
+    assert "Get Jupiter quote" in html
+    assert "/jupiter-quote?amount_sol=" in html
+    assert "provider.connect()" in html
+    assert "signTransaction" not in html and "signMessage" not in html
+    assert "DexSato integrator fee: <strong>0 bps</strong>" in html
     assert "Pool verification is not token verification" in html
     assert "does not hold private keys or funds" in html
+    assert html.index("Risk context") < html.index("Qualification evidence")
+    assert html.index("Qualification evidence") < html.index("Jupiter integration sandbox")
+    assert 'class="card jupiter" data-jupiter-sandbox' in html
 
 
 def test_chart_fails_safely_when_unavailable():

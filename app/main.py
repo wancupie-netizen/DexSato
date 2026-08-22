@@ -212,6 +212,34 @@ def solana_discovery_token(token_address: str) -> str:
     return render_solana_discovery_token_page(detail)
 
 
+@app.get("/api/discovery/solana/{token_address}/jupiter-quote")
+def solana_discovery_jupiter_quote(
+    token_address: str,
+    amount_sol: str = "0.1",
+) -> dict[str, object]:
+    """Return a quote-only Jupiter order for one qualified discovery token."""
+    from application.jupiter_quote_service import (
+        JupiterQuoteNotConfigured,
+        JupiterQuoteUnavailable,
+        fetch_jupiter_quote,
+    )
+
+    try:
+        return fetch_jupiter_quote(token_address, amount_sol)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except JupiterQuoteNotConfigured as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Jupiter quote sandbox is not configured.",
+        ) from error
+    except JupiterQuoteUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Jupiter quote is temporarily unavailable.",
+        ) from error
+
+
 @app.get(
     "/admin/system",
     response_class=HTMLResponse,
