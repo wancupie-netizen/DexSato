@@ -59,6 +59,9 @@ from application.founder_snapshot_service import (
 from application.solana_discovery_feed_service import (
     load_solana_discovery_feed,
 )
+from application.solana_discovery_token_service import (
+    load_solana_discovery_token,
+)
 
 from application.telegram_notifier import (
     send_telegram_alert,
@@ -82,6 +85,9 @@ from presentation.dexsato_user_dashboard_presenter import (
 )
 from presentation.dexsato_solana_discovery_presenter import (
     render_solana_discovery_page,
+)
+from presentation.dexsato_solana_discovery_token_presenter import (
+    render_solana_discovery_token_page,
 )
 
 render_founder_snapshot_dashboard = render_user_dashboard
@@ -192,6 +198,18 @@ def founder_home() -> str:
 def solana_discovery() -> str:
     """Display the read-only Solana Discovery D1 prototype."""
     return render_solana_discovery_page(load_solana_discovery_feed())
+
+
+@app.get(
+    "/discovery/solana/{token_address}",
+    response_class=HTMLResponse,
+)
+def solana_discovery_token(token_address: str) -> str:
+    """Display one qualified exact-token workspace without enabling execution."""
+    detail = load_solana_discovery_token(token_address)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Qualified discovery token is not available.")
+    return render_solana_discovery_token_page(detail)
 
 
 @app.get(

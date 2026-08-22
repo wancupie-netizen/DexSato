@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from html import escape
 from typing import Any
+from urllib.parse import quote
 
 
 def _usd(value: Any) -> str:
@@ -25,7 +26,7 @@ def _short_address(value: str) -> str:
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     symbol = escape(str(candidate.get("symbol") or "Unknown"))
     name = escape(str(candidate.get("name") or "Unknown token"))
-    quote = escape(str(candidate.get("quote_symbol") or "Unknown"))
+    quote_symbol = escape(str(candidate.get("quote_symbol") or "Unknown"))
     address_raw = str(candidate.get("token_address") or "")
     pool_raw = str(candidate.get("pair_address") or "")
     address = escape(address_raw)
@@ -37,16 +38,13 @@ def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     age = escape(str(candidate.get("pair_age") or "Unavailable"))
     evidence = escape(str(candidate.get("evidence") or "Exact-pool activity observed."))
     risk = escape(str(candidate.get("risk_label") or "Token security not independently verified"))
-    source_url = str(candidate.get("source_url") or "")
-    source = ""
-    if source_url.startswith("https://dexscreener.com/"):
-        source = (
-            f'<a class="inspect-link" href="{escape(source_url, quote=True)}" '
-            'target="_blank" rel="noopener noreferrer">Inspect pool ↗</a>'
-        )
+    source = (
+        f'<a class="inspect-link" href="/discovery/solana/{quote(address_raw, safe="")}">'
+        'Open workspace →</a>'
+    ) if address_raw else ""
     return (
         f'<article class="candidate-row" data-token-address="{address}">'
-        f'<div class="token-cell"><span class="rank">0{rank}</span><div><strong>{symbol} / {quote}</strong>'
+        f'<div class="token-cell"><span class="rank">0{rank}</span><div><strong>{symbol} / {quote_symbol}</strong>'
         f'<span>{name}</span><small>{dex} · exact pool</small></div></div>'
         f'<div class="market-cell"><div><span>Price</span><strong>{price}</strong></div>'
         f'<div><span>Liquidity</span><strong>{liquidity}</strong></div>'

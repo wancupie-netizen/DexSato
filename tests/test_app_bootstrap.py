@@ -22,6 +22,7 @@ from app.main import (
     health_check,
     market_detail,
     solana_discovery,
+    solana_discovery_token,
     system_status_api,
     telegram_send,
 )
@@ -105,6 +106,26 @@ def test_should_render_read_only_solana_discovery(mock_feed, mock_render):
 
     assert solana_discovery() == "<html>Solana Discovery</html>"
     mock_render.assert_called_once_with({"connected": True})
+
+
+@patch("app.main.render_solana_discovery_token_page")
+@patch("app.main.load_solana_discovery_token")
+def test_should_render_qualified_solana_discovery_token(mock_load, mock_render):
+    mock_load.return_value = {"token_address": "Token123"}
+    mock_render.return_value = "<html>Token workspace</html>"
+
+    assert solana_discovery_token("Token123") == "<html>Token workspace</html>"
+    mock_load.assert_called_once_with("Token123")
+
+
+@patch("app.main.load_solana_discovery_token", return_value=None)
+def test_should_not_expose_unknown_solana_discovery_token(mock_load):
+    try:
+        solana_discovery_token("Unknown")
+    except HTTPException as error:
+        assert error.status_code == 404
+    else:
+        raise AssertionError("Expected unknown discovery token to return 404")
 
 
 @patch("app.main.render_admin_system_page")

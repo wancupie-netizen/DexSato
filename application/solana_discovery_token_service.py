@@ -1,0 +1,130 @@
+"""Exact-token read model for the Solana Discovery D4 workspace."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Callable
+
+import requests
+
+from application.solana_discovery_feed_service import load_solana_discovery_feed
+
+
+DEXSCREENER_PAIR_URL = "https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
+GECKO_OHLCV_URL = (
+    "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
+    "{pair_address}/ohlcv/hour"
+)
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _live_pair(candidate: dict[str, Any], request_get: Callable[..., Any]) -> dict[str, Any] | None:
+    pair_address = str(candidate.get("pair_address") or "")
+    token_address = str(candidate.get("token_address") or "")
+    if not pair_address or not token_address:
+        return None
+    response = request_get(DEXSCREENER_PAIR_URL.format(pair_address=pair_address), timeout=10)
+    response.raise_for_status()
+    payload = response.json()
+    pairs = payload.get("pairs") if isinstance(payload, dict) else None
+    if not isinstance(pairs, list):
+        return None
+    for pair in pairs:
+        if not isinstance(pair, dict):
+            continue
+        if str(pair.get("pairAddress") or "") != pair_address:
+            continue
+        base = pair.get("baseToken") if isinstance(pair.get("baseToken"), dict) else {}
+        if str(base.get("address") or "") != token_address:
+            continue
+        return pair
+    return None
+
+
+def _chart(candidate: dict[str, Any], request_get: Callable[..., Any]) -> list[dict[str, float]]:
+    pair_address = str(candidate.get("pair_address") or "")
+    if not pair_address:
+        return []
+    response = request_get(
+        GECKO_OHLCV_URL.format(pair_address=pair_address),
+        params={"aggregate": 4, "limit": 90, "currency": "usd", "token": "base"},
+        timeout=10,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    data = payload.get("data") if isinstance(payload, dict) else None
+    attributes = data.get("attributes") if isinstance(data, dict) else None
+    rows = attributes.get("ohlcv_list") if isinstance(attributes, dict) else None
+    if not isinstance(rows, list):
+        return []
+    candles: list[dict[str, float]] = []
+    for row in reversed(rows):
+        if not isinstance(row, list) or len(row) < 6:
+            continue
+        values = [_number(value) for value in row[:6]]
+        if any(value is None for value in values):
+            continue
+        candles.append({
+            "time": values[0], "open": values[1], "high": values[2],
+            "low": values[3], "close": values[4], "volume": values[5],
+        })
+    return candles
+
+
+def load_solana_discovery_token(
+    token_address: str,
+    *,
+    feed: dict[str, Any] | None = None,
+    request_get: Callable[..., Any] = requests.get,
+) -> dict[str, Any] | None:
+    """Return one qualified exact-token workspace; never expose raw candidates."""
+    address = str(token_address or "").strip()
+    if not address or len(address) > 80 or "/" in address:
+        return None
+    public_feed = feed if feed is not None else load_solana_discovery_feed()
+    candidates = public_feed.get("candidates") if isinstance(public_feed, dict) else None
+    if not isinstance(candidates, list):
+        return None
+    candidate = next(
+        (item for item in candidates if isinstance(item, dict) and item.get("token_address") == address),
+        None,
+    )
+    if candidate is None:
+        return None
+
+    detail = dict(candidate)
+    detail["quote_status"] = "STORED"
+    detail["quote_label"] = "Stored collector observation"
+    detail["chart"] = []
+    try:
+        pair = _live_pair(candidate, request_get)
+        if pair is not None:
+            liquidity = pair.get("liquidity") if isinstance(pair.get("liquidity"), dict) else {}
+            volume = pair.get("volume") if isinstance(pair.get("volume"), dict) else {}
+            change = pair.get("priceChange") if isinstance(pair.get("priceChange"), dict) else {}
+            detail.update({
+                "price_usd": _number(pair.get("priceUsd")),
+                "liquidity_usd": _number(liquidity.get("usd")),
+                "volume_24h_usd": _number(volume.get("h24")),
+                "change_24h": _number(change.get("h24")),
+                "market_cap": _number(pair.get("marketCap") or pair.get("fdv")),
+                "dex_id": pair.get("dexId") or detail.get("dex_id"),
+                "source_url": pair.get("url") or detail.get("source_url"),
+                "quote_status": "LIVE",
+                "quote_label": "Live exact-pool observation",
+                "quote_as_of": datetime.now(timezone.utc).isoformat(),
+            })
+    except (requests.RequestException, RuntimeError, ValueError, TypeError):
+        pass
+    try:
+        detail["chart"] = _chart(candidate, request_get)
+    except (requests.RequestException, RuntimeError, ValueError, TypeError):
+        detail["chart"] = []
+    detail["feed_updated_label"] = public_feed.get("updated_label")
+    return detail
