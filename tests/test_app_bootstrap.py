@@ -98,11 +98,13 @@ def test_should_render_snapshot_dashboard(
 
 
 @patch("app.main.render_solana_discovery_page")
-def test_should_render_read_only_solana_discovery(mock_render):
+@patch("app.main.load_solana_discovery_feed")
+def test_should_render_read_only_solana_discovery(mock_feed, mock_render):
+    mock_feed.return_value = {"connected": True}
     mock_render.return_value = "<html>Solana Discovery</html>"
 
     assert solana_discovery() == "<html>Solana Discovery</html>"
-    mock_render.assert_called_once_with()
+    mock_render.assert_called_once_with({"connected": True})
 
 
 @patch("app.main.render_admin_system_page")

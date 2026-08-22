@@ -24,7 +24,7 @@ def test_solana_discovery_has_search_filters_and_no_fake_candidates():
     assert "Volume rising" in html
     assert "Liquidity improving" in html
     assert "Higher risk" in html
-    assert "Tokens discovered</span><strong>—" in html
+    assert "Tokens observed</span><strong>—" in html
     assert "Qualified candidates</span><strong>—" in html
     assert "data-token-address" not in html
 
@@ -39,3 +39,21 @@ def test_solana_discovery_is_responsive_and_supports_existing_themes():
     assert 'aria-label="Use current dark theme"' in html
     assert 'aria-label="Use plain white theme"' in html
     assert 'href="/"' in html
+
+
+def test_solana_discovery_renders_connected_telemetry_without_candidates():
+    html = render_solana_discovery_page({
+        "connected": True,
+        "collector_status": "Running",
+        "tokens_observed": 4742,
+        "pair_resolved": 3271,
+        "qualified_candidates": None,
+        "updated_label": "5 min ago",
+        "message": "Collector telemetry is connected; publication remains disabled.",
+    })
+
+    assert "Collector telemetry is connected." in html
+    assert "Tokens observed</span><strong>4742" in html
+    assert "Pairs resolved</span><strong>3271" in html
+    assert "Qualified candidates</span><strong>—" in html
+    assert "5 min ago" in html

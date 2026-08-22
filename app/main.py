@@ -56,6 +56,9 @@ from application.content_control_service import (
 from application.founder_snapshot_service import (
     read_latest_snapshot,
 )
+from application.solana_discovery_feed_service import (
+    load_solana_discovery_feed,
+)
 
 from application.telegram_notifier import (
     send_telegram_alert,
@@ -188,7 +191,7 @@ def founder_home() -> str:
 )
 def solana_discovery() -> str:
     """Display the read-only Solana Discovery D1 prototype."""
-    return render_solana_discovery_page()
+    return render_solana_discovery_page(load_solana_discovery_feed())
 
 
 @app.get(
