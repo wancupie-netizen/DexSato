@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from application.solana_discovery_qualification import qualify_discovery_candidates
+
 
 DEFAULT_OUTPUT_DIR = Path("output/research/solana-discovery-phase0-seven-day")
 
@@ -74,6 +76,7 @@ def load_solana_discovery_feed(
     generated_at = status.get("generated_at")
     updated_label, fresh = _freshness_label(generated_at, now=current_time)
     collector_status = str(status.get("collector_status") or "Unknown").strip().title()
+    qualified = qualify_discovery_candidates(state["candidates"], now=current_time) if fresh else []
     return {
         "connected": True,
         "fresh": fresh,
@@ -81,10 +84,14 @@ def load_solana_discovery_feed(
         "tokens_observed": len(state["candidates"]),
         "pair_resolved": _integer(metrics.get("pair_resolved")),
         "pair_ready_percent": metrics.get("pair_ready_percent"),
-        "qualified_candidates": None,
+        "qualified_candidates": len(qualified),
+        "candidates": qualified,
         "updated_label": updated_label,
         "message": (
-            "Collector telemetry is connected. Candidate publication remains disabled "
-            "until liquidity, activity, freshness and risk qualification are available."
+            "Qualified candidates are based on verified Solana pool identity, observable liquidity "
+            "and recent trading activity. Token security is not independently verified."
+            if qualified else
+            "Collector telemetry is connected. No observed token currently passes the "
+            "required identity, liquidity, activity and freshness checks."
         ),
     }

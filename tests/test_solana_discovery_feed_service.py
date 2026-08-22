@@ -16,7 +16,8 @@ def test_loads_phase0_telemetry_without_publishing_candidates(tmp_path):
     assert result["connected"] is True
     assert result["tokens_observed"] == 2
     assert result["pair_resolved"] == 2
-    assert result["qualified_candidates"] is None
+    assert result["qualified_candidates"] == 0
+    assert result["candidates"] == []
     assert result["updated_label"] == "5 min ago"
 
 
