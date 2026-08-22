@@ -570,3 +570,21 @@ def test_market_detail_renders_evidence_follow_through():
     assert "Bearish Developing" in html
     assert "-2.00%" in html
     assert "not win rate, P&amp;L or trade advice" in html
+
+
+def test_market_detail_renders_exact_pool_live_quote_controls():
+    html = render_market_detail_page(
+        deepcopy(SNAPSHOT["coins"][0]),
+        generated_at="2026-08-22T05:00:00+00:00",
+    )
+
+    assert "Live Price &amp; Market Chart" in html
+    assert "data-live-price" in html
+    assert "data-live-change" in html
+    assert "data-live-quote-status" in html
+    assert "/quote" in html
+    assert "window.setInterval(loadLiveQuote,10000)" in html
+    assert "window.setInterval(()=>" in html and "60000" in html
+    assert 'document.addEventListener("visibilitychange"' in html
+    assert "EXACT_POOL_INFORMATIONAL_QUOTE" not in html
+    assert "not a Jupiter execution quote or trade instruction" in html
