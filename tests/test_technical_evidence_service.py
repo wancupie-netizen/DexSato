@@ -222,6 +222,6 @@ def test_should_fetch_exact_registered_pool_with_four_hour_parameters():
         "aggregate": 4,
         "limit": 240,
         "currency": "usd",
-        "token": "base",
+        "token": "So11111111111111111111111111111111111111112",
     }
     assert calls[0][3] == 15

@@ -494,7 +494,7 @@ def fetch_technical_evidence(
             "aggregate": 4,
             "limit": 240,
             "currency": "usd",
-            "token": "base",
+            "token": market["base_address"],
         },
         headers={"Accept": "application/json"},
         timeout=15,
