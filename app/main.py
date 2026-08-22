@@ -205,7 +205,7 @@ def solana_discovery() -> str:
     response_class=HTMLResponse,
 )
 def solana_discovery_token(token_address: str) -> str:
-    """Display one qualified exact-token workspace without enabling execution."""
+    """Display one qualified exact-token workspace and its controlled swap pilot."""
     detail = load_solana_discovery_token(token_address)
     if detail is None:
         raise HTTPException(status_code=404, detail="Qualified discovery token is not available.")
@@ -238,6 +238,85 @@ def solana_discovery_jupiter_quote(
             status_code=503,
             detail="Jupiter quote is temporarily unavailable.",
         ) from error
+
+
+async def _jupiter_swap_body(request: Request, permitted: set[str]) -> dict[str, object]:
+    """Accept only the public wallet and transaction fields required by D6."""
+    try:
+        payload = await request.json()
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="A valid JSON request body is required.") from error
+    if not isinstance(payload, dict) or set(payload) - permitted:
+        raise HTTPException(status_code=400, detail="Unsupported swap request fields were rejected.")
+    return payload
+
+
+@app.post("/api/discovery/solana/{token_address}/jupiter-order")
+async def solana_discovery_jupiter_order(
+    token_address: str,
+    request: Request,
+) -> dict[str, object]:
+    """Prepare an unsigned transaction after an explicit mainnet risk acknowledgement."""
+    from application.jupiter_quote_service import JupiterQuoteNotConfigured, JupiterQuoteUnavailable
+    from application.jupiter_swap_service import (
+        JupiterSwapExpired,
+        JupiterSwapRejected,
+        prepare_jupiter_swap,
+    )
+
+    payload = await _jupiter_swap_body(
+        request,
+        {"amount_sol", "wallet_address", "risk_acknowledged"},
+    )
+    try:
+        return prepare_jupiter_swap(
+            token_address,
+            payload.get("amount_sol"),
+            str(payload.get("wallet_address") or ""),
+            risk_acknowledged=payload.get("risk_acknowledged") is True,
+        )
+    except JupiterSwapExpired as error:
+        raise HTTPException(status_code=410, detail=str(error)) from error
+    except (JupiterSwapRejected, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except JupiterQuoteNotConfigured as error:
+        raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
+    except JupiterQuoteUnavailable as error:
+        raise HTTPException(status_code=503, detail="Jupiter swap order is temporarily unavailable.") from error
+
+
+@app.post("/api/discovery/solana/{token_address}/jupiter-execute")
+async def solana_discovery_jupiter_execute(
+    token_address: str,
+    request: Request,
+) -> dict[str, object]:
+    """Relay a transaction already approved and signed by the connected wallet."""
+    from application.jupiter_quote_service import JupiterQuoteNotConfigured, JupiterQuoteUnavailable
+    from application.jupiter_swap_service import (
+        JupiterSwapExpired,
+        JupiterSwapRejected,
+        execute_jupiter_swap,
+    )
+
+    payload = await _jupiter_swap_body(
+        request,
+        {"request_id", "wallet_address", "signed_transaction"},
+    )
+    try:
+        return execute_jupiter_swap(
+            token_address,
+            str(payload.get("request_id") or ""),
+            str(payload.get("wallet_address") or ""),
+            str(payload.get("signed_transaction") or ""),
+        )
+    except JupiterSwapExpired as error:
+        raise HTTPException(status_code=410, detail=str(error)) from error
+    except (JupiterSwapRejected, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except JupiterQuoteNotConfigured as error:
+        raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
+    except JupiterQuoteUnavailable as error:
+        raise HTTPException(status_code=503, detail="Jupiter swap execution is temporarily unavailable.") from error
 
 
 @app.get(

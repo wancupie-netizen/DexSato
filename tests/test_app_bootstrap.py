@@ -2,7 +2,8 @@
 Tests for DexSato V1 FastAPI Application.
 """
 
-from unittest.mock import patch
+import asyncio
+from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi import (
     FastAPI,
@@ -22,6 +23,8 @@ from app.main import (
     health_check,
     market_detail,
     solana_discovery,
+    solana_discovery_jupiter_execute,
+    solana_discovery_jupiter_order,
     solana_discovery_jupiter_quote,
     solana_discovery_token,
     system_status_api,
@@ -230,6 +233,64 @@ def test_should_return_quote_only_jupiter_sandbox(mock_quote):
 
     assert result["quote_only"] is True
     mock_quote.assert_called_once_with("11111111111111111111111111111111", "0.1")
+
+
+@patch("application.jupiter_swap_service.prepare_jupiter_swap")
+def test_should_prepare_unsigned_swap_only_after_explicit_risk_acknowledgement(mock_prepare):
+    mock_prepare.return_value = {"status": "WALLET_APPROVAL_REQUIRED", "request_id": "order-1"}
+    request = Mock()
+    request.json = AsyncMock(return_value={
+        "amount_sol": "0.1",
+        "wallet_address": "11111111111111111111111111111111",
+        "risk_acknowledged": True,
+    })
+
+    result = asyncio.run(solana_discovery_jupiter_order("22222222222222222222222222222222", request))
+
+    assert result["status"] == "WALLET_APPROVAL_REQUIRED"
+    mock_prepare.assert_called_once_with(
+        "22222222222222222222222222222222", "0.1", "11111111111111111111111111111111",
+        risk_acknowledged=True,
+    )
+
+
+@patch("application.jupiter_swap_service.execute_jupiter_swap")
+def test_should_relay_a_wallet_signed_transaction_without_accepting_wallet_secrets(mock_execute):
+    mock_execute.return_value = {"status": "SWAP_CONFIRMED", "signature": "555555"}
+    request = Mock()
+    request.json = AsyncMock(return_value={
+        "request_id": "order-1",
+        "wallet_address": "11111111111111111111111111111111",
+        "signed_transaction": "c2lnbmVk",
+    })
+
+    result = asyncio.run(solana_discovery_jupiter_execute("22222222222222222222222222222222", request))
+
+    assert result["status"] == "SWAP_CONFIRMED"
+    mock_execute.assert_called_once_with(
+        "22222222222222222222222222222222", "order-1",
+        "11111111111111111111111111111111", "c2lnbmVk",
+    )
+
+
+@patch("application.jupiter_swap_service.prepare_jupiter_swap")
+def test_should_reject_unsupported_sensitive_swap_request_fields(mock_prepare):
+    request = Mock()
+    request.json = AsyncMock(return_value={
+        "amount_sol": "0.1",
+        "wallet_address": "11111111111111111111111111111111",
+        "risk_acknowledged": True,
+        "private_key": "must-never-be-accepted",
+    })
+
+    try:
+        asyncio.run(solana_discovery_jupiter_order("22222222222222222222222222222222", request))
+    except HTTPException as error:
+        assert error.status_code == 400
+        assert "Unsupported" in error.detail
+    else:
+        raise AssertionError("Expected private-key field to be rejected")
+    mock_prepare.assert_not_called()
 
 
 @patch(

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from presentation.dexsato_solana_discovery_token_presenter import render_solana_discovery_token_page
 
 
@@ -29,19 +31,23 @@ def test_renders_exact_token_workspace_and_chart():
     assert 'data-copy-address="PoolAddress123456789"' in html
 
 
-def test_renders_quote_only_jupiter_sandbox_and_discloses_risk():
+def test_renders_controlled_non_custodial_jupiter_swap_and_discloses_risk():
     html = render_solana_discovery_token_page(DETAIL)
     assert "Jupiter integration sandbox" in html
-    assert "Read-only quote" in html
-    assert "D5 · NO EXECUTION" in html
+    assert "Controlled wallet-approved swap" in html
+    assert "D6 · NON-CUSTODIAL PILOT" in html
     assert "Connect supported wallet" in html
     assert "Get Jupiter quote" in html
-    assert "/jupiter-quote?amount_sol=" in html
-    assert "provider.connect()" in html
-    assert "signTransaction" not in html and "signMessage" not in html
+    assert "Real Solana mainnet transaction" in html
+    assert "review the transaction in my own wallet" in html
+    assert 'data-swap-risk-ack' in html
+    assert 'data-execute-swap disabled' in html
+    assert 'data-token-symbol="TEST"' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js" defer' in html
     assert "DexSato integrator fee: <strong>0 bps</strong>" in html
     assert "Pool verification is not token verification" in html
     assert "does not hold private keys or funds" in html
+    assert "Transactions must be approved in your connected wallet" in html
     assert html.index("Risk context") < html.index("Qualification evidence")
     assert html.index("Qualification evidence") < html.index("Jupiter integration sandbox")
     assert 'class="card jupiter" data-jupiter-sandbox' in html
@@ -51,6 +57,23 @@ def test_chart_fails_safely_when_unavailable():
     html = render_solana_discovery_token_page({**DETAIL, "chart": []})
     assert "Insufficient chart history" in html
     assert "Only 0 closed 4H candles available" in html
+
+
+def test_swap_client_requires_explicit_wallet_signing_and_preserves_same_origin_api_keys():
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "static" / "js" / "dexsato_solana_discovery_swap.js"
+    ).read_text(encoding="utf-8")
+
+    assert "walletProvider.signTransaction(unsigned)" in script
+    assert "VersionedTransaction.deserialize" in script
+    assert 'apiBase + "/jupiter-order"' in script
+    assert 'apiBase + "/jupiter-execute"' in script
+    assert "risk_acknowledged: acknowledgement.checked" in script
+    assert "Retry signed transaction" in script
+    assert "credentials: \"same-origin\"" in script
+    assert "x-api-key" not in script
+    assert "privateKey" not in script and "seedPhrase" not in script
 
 
 def test_chart_does_not_imply_a_trend_from_two_candles():
