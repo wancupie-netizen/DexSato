@@ -57,3 +57,26 @@ def test_solana_discovery_renders_connected_telemetry_without_candidates():
     assert "Pairs resolved</span><strong>3271" in html
     assert "Qualified candidates</span><strong>—" in html
     assert "5 min ago" in html
+
+
+def test_solana_discovery_renders_qualified_candidate_and_explicit_risk():
+    html = render_solana_discovery_page({
+        "connected": True,
+        "tokens_observed": 4742,
+        "pair_resolved": 3271,
+        "qualified_candidates": 1,
+        "candidates": [{
+            "name": "Example token", "symbol": "EX", "quote_symbol": "SOL",
+            "token_address": "token-address", "pair_address": "pool-address",
+            "dex_id": "raydium", "price_usd": 0.25, "liquidity_usd": 12000,
+            "volume_24h_usd": 4500, "pair_age": "3h",
+            "evidence": "Verified Solana pool with observable liquidity and 24h activity.",
+            "risk_label": "Token security not independently verified",
+        }],
+    })
+
+    assert "Qualified candidates</span><strong>1" in html
+    assert "Example token" in html and "EX / SOL" in html
+    assert "$12.00K" in html and "$4.50K" in html
+    assert "Token security not independently verified" in html
+    assert "data-token-address=\"token-address\"" in html
