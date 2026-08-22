@@ -248,6 +248,25 @@ def market_chart_api(token: str, timeframe: str = "4h") -> dict[str, object]:
             detail="Live market chart is temporarily unavailable.",
         ) from error
 
+
+@app.get("/api/markets/{token}/quote")
+def market_quote_api(token: str) -> dict[str, object]:
+    """Return a validated exact-pool quote without running a scan."""
+    from application.live_market_quote_service import (
+        LiveMarketQuoteUnavailable,
+        fetch_live_market_quote,
+    )
+
+    try:
+        return fetch_live_market_quote(token)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except LiveMarketQuoteUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Exact-pool live price is temporarily unavailable.",
+        ) from error
+
 @app.get(
     "/content-control",
     response_class=HTMLResponse,
