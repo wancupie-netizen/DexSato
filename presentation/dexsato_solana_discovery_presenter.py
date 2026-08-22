@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+from html import escape
+from typing import Any
 
-def render_solana_discovery_page() -> str:
-    """Render the D1 prototype without inventing discovery market data."""
-    return """<!doctype html>
+
+def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
+    """Render collector telemetry without inventing qualified candidates."""
+    data = feed or {}
+    connected = data.get("connected") is True
+    status_heading = "Collector telemetry is connected." if connected else "Discovery candidates are not connected yet."
+    status_message = str(data.get("message") or "The collector remains separate while its data contract and qualification rules are validated.")
+    tokens = str(data.get("tokens_observed")) if data.get("tokens_observed") is not None else "—"
+    pairs = str(data.get("pair_resolved")) if data.get("pair_resolved") is not None else "—"
+    updated = str(data.get("updated_label") or "Not connected")
+    status_label = str(data.get("collector_status") or "Prototype state")
+    page = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -74,11 +85,19 @@ def render_solana_discovery_page() -> str:
 </head>
 <body><main class="shell">
   <header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span>Solana Discovery</span></div><div class="top-actions"><a class="back-link" href="/">← Markets</a><div class="theme-switcher" role="group" aria-label="Discovery theme"><button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button></div></div></header>
-  <section class="hero"><div class="hero-copy"><span class="eyebrow">Evidence-led token discovery</span><h1>Find emerging Solana activity without mistaking attention for safety.</h1><p>DexSato will surface qualified token candidates using observable market activity, verified pool identity and transparent risk context.</p><div class="chips"><span class="chip experimental">Experimental</span><span class="chip solana">Solana network</span><span class="chip">Read-only preview</span></div></div><aside class="status-card"><small>Feed status</small><strong>Discovery candidates are not connected yet.</strong><p>The collector remains separate while its data contract and qualification rules are validated.</p></aside></section>
-  <section class="metrics" aria-label="Discovery summary"><div class="metric"><span>Tokens discovered</span><strong>—</strong><small>Feed not connected</small></div><div class="metric"><span>Qualified candidates</span><strong>—</strong><small>Rules pending validation</small></div><div class="metric"><span>Recently active</span><strong>—</strong><small>No public candidates</small></div><div class="metric"><span>Data updated</span><strong>Not connected</strong><small>Prototype state</small></div></section>
+  <section class="hero"><div class="hero-copy"><span class="eyebrow">Evidence-led token discovery</span><h1>Find emerging Solana activity without mistaking attention for safety.</h1><p>DexSato will surface qualified token candidates using observable market activity, verified pool identity and transparent risk context.</p><div class="chips"><span class="chip experimental">Experimental</span><span class="chip solana">Solana network</span><span class="chip">Read-only preview</span></div></div><aside class="status-card"><small>Feed status</small><strong>__STATUS_HEADING__</strong><p>__STATUS_MESSAGE__</p></aside></section>
+  <section class="metrics" aria-label="Discovery summary"><div class="metric"><span>Tokens observed</span><strong>__TOKENS__</strong><small>Collector universe, not recommendations</small></div><div class="metric"><span>Pairs resolved</span><strong>__PAIRS__</strong><small>Identity mapping only</small></div><div class="metric"><span>Qualified candidates</span><strong>—</strong><small>Publication rules not active</small></div><div class="metric"><span>Data updated</span><strong>__UPDATED__</strong><small>__STATUS_LABEL__</small></div></section>
   <section class="discovery-panel"><div class="section-head"><div><h2>Discovery Feed</h2><p>Candidate results will appear only after token identity, pool liquidity and data freshness are validated.</p></div><input class="search" type="search" placeholder="Search token name, symbol, or contract address" aria-label="Search Solana discovery" disabled></div><div class="filters" role="group" aria-label="Discovery filters"><button type="button" disabled>All</button><button type="button" disabled>Newly active</button><button type="button" disabled>Volume rising</button><button type="button" disabled>Liquidity improving</button><button type="button" disabled>Higher risk</button></div><div class="empty-state"><div class="empty-icon" aria-hidden="true">◎</div><div><h3>Solana Discovery is preparing its first validated feed.</h3><p>DexSato is validating token identity, exact-pool liquidity, market activity and freshness before showing candidates. No discovery tokens are available yet.</p><div class="empty-actions"><a class="primary-link" href="/">Back to Markets</a><a class="secondary-link" href="#how-discovery-works">Learn how discovery works</a></div></div></div></section>
   <div class="lower-grid"><section id="how-discovery-works" class="how-it-works"><h2>How discovery will work</h2><p>A token must earn its place in the feed through observable evidence.</p><div class="steps"><div class="step"><b>1</b><strong>Discover activity</strong><span>Identify emerging activity from the validated Solana data pipeline.</span></div><div class="step"><b>2</b><strong>Verify the market</strong><span>Match the canonical token address to a specific observable pool.</span></div><div class="step"><b>3</b><strong>Review evidence and risk</strong><span>Explain why it appeared and disclose what remains unknown.</span></div></div></section><aside class="safety-card"><small>Non-custodial by design</small><h2>DexSato will not hold your keys or funds.</h2><p>A future Jupiter integration will require users to approve transactions in their own connected wallet. Discovery inclusion will never be an endorsement or guarantee of safety.</p><div class="future-box"><strong>Jupiter execution · planned, not active</strong><span>No wallet connection, quote or trading capability is enabled in this prototype.</span></div></aside></div>
   <footer><span>Experimental discovery · not financial advice.</span><span>No private keys, seed phrases or user funds are stored by DexSato.</span></footer>
 </main><script>
   const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){const value=theme==="plain"?"plain":"current";if(value==="plain")document.documentElement.dataset.theme="plain";else delete document.documentElement.dataset.theme;themeOptions.forEach(button=>{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});try{localStorage.setItem("dexsato-theme",value);}catch(error){}}let saved="current";try{saved=localStorage.getItem("dexsato-theme")||"current";}catch(error){}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
 </script></body></html>"""
+    return (
+        page.replace("__STATUS_HEADING__", escape(status_heading))
+        .replace("__STATUS_MESSAGE__", escape(status_message))
+        .replace("__TOKENS__", escape(tokens))
+        .replace("__PAIRS__", escape(pairs))
+        .replace("__UPDATED__", escape(updated))
+        .replace("__STATUS_LABEL__", escape(status_label))
+    )
