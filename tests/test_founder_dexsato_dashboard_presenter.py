@@ -584,6 +584,10 @@ def test_market_detail_renders_exact_pool_live_quote_controls():
     assert "data-live-quote-status" in html
     assert "/quote" in html
     assert "window.setInterval(loadLiveQuote,10000)" in html
+    assert "window.setInterval(updateQuoteAge,1000)" in html
+    assert 'second:"2-digit"' in html
+    assert "quote-price-up" in html and "quote-price-down" in html
+    assert "prefers-reduced-motion:reduce" in html
     assert "window.setInterval(()=>" in html and "60000" in html
     assert 'document.addEventListener("visibilitychange"' in html
     assert "EXACT_POOL_INFORMATIONAL_QUOTE" not in html
