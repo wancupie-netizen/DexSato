@@ -178,6 +178,17 @@ def _prune_orders(current: datetime) -> None:
         raise JupiterQuoteUnavailable("The swap pilot is temporarily busy.")
 
 
+def _order_error_message(payload: dict[str, Any]) -> str | None:
+    """Map known Jupiter order failures to safe, actionable D6.1 UX messages."""
+    raw = str(payload.get("errorMessage") or payload.get("error") or "").strip()
+    if not raw:
+        return None
+    normalized = raw.casefold()
+    if "insufficient funds" in normalized or "insufficient balance" in normalized:
+        return "Insufficient SOL balance. Reduce the swap amount or add SOL to your connected wallet."
+    return "Jupiter could not prepare this swap transaction."
+
+
 def prepare_jupiter_swap(
     token_address: str,
     amount_sol: Any,
@@ -211,8 +222,11 @@ def prepare_jupiter_swap(
     except (requests.RequestException, RuntimeError, TypeError, ValueError) as error:
         raise JupiterQuoteUnavailable("Jupiter swap order is temporarily unavailable.") from error
 
-    if not isinstance(payload, dict) or payload.get("error") or payload.get("errorMessage"):
+    if not isinstance(payload, dict):
         raise JupiterQuoteUnavailable("Jupiter could not prepare this swap transaction.")
+    provider_error = _order_error_message(payload)
+    if provider_error is not None:
+        raise JupiterQuoteUnavailable(provider_error)
     if str(payload.get("inputMint") or "") != WRAPPED_SOL_MINT:
         raise JupiterSwapRejected("Jupiter swap input mint did not match SOL.")
     if str(payload.get("outputMint") or "") != output_mint:

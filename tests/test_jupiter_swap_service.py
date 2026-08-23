@@ -141,6 +141,17 @@ def test_requires_server_side_jupiter_api_key():
         )
 
 
+def test_surfaces_insufficient_sol_balance_as_actionable_message():
+    _pending_orders.clear()
+    payload = _order(
+        transaction="",
+        error="Insufficient funds",
+        errorMessage="Insufficient funds",
+    )
+    with pytest.raises(JupiterQuoteUnavailable, match="Insufficient SOL balance"):
+        _prepare(payload)
+
+
 def test_rejects_provider_token_wallet_amount_and_transaction_mismatches():
     cases = [
         ({"outputMint": OTHER_TOKEN}, "output mint"),
