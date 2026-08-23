@@ -34,6 +34,8 @@ def test_solana_discovery_is_responsive_and_supports_existing_themes():
     assert "@media(max-width:820px)" in html
     assert "@media(max-width:480px)" in html
     assert 'data-theme-option="current"' in html
+    assert 'data-theme-option="intel"' in html
+    assert 'aria-label="Use market intelligence theme"' in html
     assert 'data-theme-option="plain"' in html
     assert 'aria-label="Use current dark theme"' in html
     assert 'aria-label="Use plain white theme"' in html
@@ -81,7 +83,7 @@ def test_solana_discovery_candidates_open_internal_token_workspace():
     })
 
     assert 'href="/discovery/solana/TokenAddressCaseSensitive123"' in html
-    assert "Open workspace" in html
+    assert "Open Analysis" in html
 
 
 def test_solana_discovery_renders_connected_telemetry_without_candidates():
@@ -102,7 +104,7 @@ def test_solana_discovery_renders_connected_telemetry_without_candidates():
     assert "5 min ago" in html
 
 
-def test_solana_discovery_renders_qualified_candidate_and_explicit_risk():
+def test_solana_discovery_renders_qualified_candidate_in_compact_feed():
     html = render_solana_discovery_page({
         "connected": True,
         "tokens_observed": 4742,
@@ -121,8 +123,92 @@ def test_solana_discovery_renders_qualified_candidate_and_explicit_risk():
     assert "Qualified now</span><strong>1" in html
     assert "Example token" in html and "EX / SOL" in html
     assert "$12.00K" in html and "$4.50K" in html
-    assert "Token security not independently verified" in html
     assert "data-token-address=\"token-address\"" in html
-    assert "Observed activity" in html
     assert "Inspect pool" not in html
-    assert "Pool pool-address" in html
+    assert "Pool pool-address" not in html
+
+def test_solana_discovery_v32_feed_is_compact_and_decision_focused():
+    html = render_solana_discovery_page({
+        "connected": True,
+        "fresh": True,
+        "qualified_candidates": 1,
+        "candidates": [{
+            "name": "Example token",
+            "symbol": "EX",
+            "quote_symbol": "SOL",
+            "token_address": "token-address",
+            "pair_address": "pool-address",
+            "dex_id": "raydium",
+            "price_usd": 0.25,
+            "liquidity_usd": 12000,
+            "volume_24h_usd": 45000,
+            "pair_age": "2h",
+            "evidence": "Verbose evidence belongs in token workspace.",
+            "risk_label": "Verbose risk belongs in token workspace",
+        }],
+    })
+
+    assert "EX / SOL" in html
+    assert "Price" in html
+    assert "Liquidity" in html
+    assert "24h Vol" in html
+    assert "Age" in html
+    assert "Why now" in html
+    assert "Fresh pool" in html
+    assert "Open Analysis" in html
+    assert "Verbose evidence belongs in token workspace." not in html
+    assert "Verbose risk belongs in token workspace" not in html
+    assert "candidate-row-v32" in html
+
+def test_solana_discovery_v33_feed_uses_safe_ascii_and_compact_header():
+    html = render_solana_discovery_page({
+        "connected": True,
+        "fresh": True,
+        "qualified_candidates": 1,
+        "candidates": [{
+            "name": "Example token",
+            "symbol": "EX",
+            "quote_symbol": "SOL",
+            "token_address": "token-address",
+            "pair_address": "pool-address",
+            "dex_id": "raydium",
+            "price_usd": 0.25,
+            "liquidity_usd": 12000,
+            "volume_24h_usd": 45000,
+            "pair_age": "2h",
+        }],
+    })
+
+    assert 'class="feed-columns-v33"' in html
+    assert "Why Now" in html
+    assert "Open Analysis &rarr;" in html
+    assert "Fresh pool / Active 24h volume" in html
+    assert "Â· exact pool" not in html
+
+def test_solana_discovery_mi_v34_has_clean_feed_font_dot_and_metric_icons():
+    html = render_solana_discovery_page({
+        "connected": True,
+        "fresh": True,
+        "qualified_candidates": 1,
+        "candidates": [{
+            "name": "Example token",
+            "symbol": "EX",
+            "quote_symbol": "SOL",
+            "token_address": "token-address",
+            "pair_address": "pool-address",
+            "dex_id": "raydium",
+            "price_usd": 0.25,
+            "liquidity_usd": 12000,
+            "volume_24h_usd": 45000,
+            "pair_age": "2h",
+        }],
+    })
+
+    assert "Observed market activity" in html
+    assert 'class="why-dot"' in html
+    assert 'class="metric metric-observed"' in html
+    assert 'class="metric metric-resolved"' in html
+    assert 'class="metric metric-qualified"' in html
+    assert 'class="metric metric-network"' in html
+    assert 'class="metric-icon sol-icon"' in html
+    assert 'font-family:Inter,"Segoe UI Variable Text"' in html

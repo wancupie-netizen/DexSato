@@ -23,38 +23,63 @@ def _short_address(value: str) -> str:
     return f"{value[:7]}…{value[-7:]}" if len(value) > 18 else value
 
 
+def _why_now(candidate: dict[str, Any]) -> str:
+    """Return one compact, non-promotional reason to inspect this candidate."""
+    reasons: list[str] = []
+    age = str(candidate.get("pair_age") or "").strip().lower()
+    try:
+        liquidity = float(candidate.get("liquidity_usd") or 0)
+    except (TypeError, ValueError):
+        liquidity = 0.0
+    try:
+        volume = float(candidate.get("volume_24h_usd") or 0)
+    except (TypeError, ValueError):
+        volume = 0.0
+
+    if age.endswith("h"):
+        try:
+            hours = float(age[:-1] or 0)
+        except ValueError:
+            hours = 999
+        if hours <= 6:
+            reasons.append("Fresh pool")
+    if volume >= 100_000:
+        reasons.append("Strong 24h activity")
+    elif volume >= 25_000:
+        reasons.append("Active 24h volume")
+    if liquidity >= 25_000:
+        reasons.append("Healthy liquidity")
+    elif liquidity >= 5_000:
+        reasons.append("Liquidity qualified")
+    return " / ".join(reasons[:2]) or "Qualified market activity"
+
+
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     symbol = escape(str(candidate.get("symbol") or "Unknown"))
     name = escape(str(candidate.get("name") or "Unknown token"))
     quote_symbol = escape(str(candidate.get("quote_symbol") or "Unknown"))
     address_raw = str(candidate.get("token_address") or "")
-    pool_raw = str(candidate.get("pair_address") or "")
     address = escape(address_raw)
-    pool = escape(pool_raw)
     dex = escape(str(candidate.get("dex_id") or "Unknown"))
     price = escape(_usd(candidate.get("price_usd")))
     liquidity = escape(_usd(candidate.get("liquidity_usd")))
     volume = escape(_usd(candidate.get("volume_24h_usd")))
     age = escape(str(candidate.get("pair_age") or "Unavailable"))
-    evidence = escape(str(candidate.get("evidence") or "Exact-pool activity observed."))
-    risk = escape(str(candidate.get("risk_label") or "Token security not independently verified"))
+    why_now = escape(_why_now(candidate))
     source = (
         f'<a class="inspect-link" href="/discovery/solana/{quote(address_raw, safe="")}">'
-        'Open workspace →</a>'
+        'Open Analysis &rarr;</a>'
     ) if address_raw else ""
     return (
-        f'<article class="candidate-row" data-token-address="{address}">'
-        f'<div class="token-cell"><span class="rank">0{rank}</span><div><strong>{symbol} / {quote_symbol}</strong>'
-        f'<span>{name}</span><small>{dex} · exact pool</small></div></div>'
-        f'<div class="market-cell"><div><span>Price</span><strong>{price}</strong></div>'
-        f'<div><span>Liquidity</span><strong>{liquidity}</strong></div>'
-        f'<div><span>24h volume</span><strong>{volume}</strong></div>'
-        f'<div><span>Pair age</span><strong>{age}</strong></div></div>'
-        f'<div class="evidence-cell"><span class="activity-tag">Observed activity</span>'
-        f'<strong>Why it appeared</strong><p>{evidence}</p>'
-        f'<div class="risk-line"><b>Risk</b><span>{risk}. Inclusion is not an endorsement.</span></div></div>'
-        f'<div class="action-cell"><code title="{address}">{escape(_short_address(address_raw))}</code>'
-        f'<small title="{pool}">Pool {escape(_short_address(pool_raw))}</small>{source}</div></article>'
+        f'<article class="candidate-row candidate-row-v32" data-token-address="{address}">'
+        f'<div class="token-cell compact-token"><span class="rank">{rank:02d}</span><div>'
+        f'<strong>{symbol} / {quote_symbol}</strong><span>{name}</span><small>{dex} / exact pool</small></div></div>'
+        f'<div class="feed-value"><span>Price</span><strong>{price}</strong></div>'
+        f'<div class="feed-value"><span>Liquidity</span><strong>{liquidity}</strong></div>'
+        f'<div class="feed-value"><span>24h Vol</span><strong>{volume}</strong></div>'
+        f'<div class="feed-value"><span>Age</span><strong>{age}</strong></div>'
+        f'<div class="why-now"><span>Why now</span><strong><i class="why-dot" aria-hidden="true"></i>{why_now}</strong></div>'
+        f'<div class="feed-action">{source}</div></article>'
     )
 
 
@@ -96,7 +121,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DexSato · Solana Discovery Terminal</title>
   <link rel="icon" type="image/png" href="/static/branding/favicon.png">
-  <script>try{if(localStorage.getItem("dexsato-theme")==="plain")document.documentElement.dataset.theme="plain";}catch(error){}</script>
+  <script>try{const t=localStorage.getItem("dexsato-theme");if(t==="plain"||t==="intel")document.documentElement.dataset.theme=t;}catch(error){}</script>
   <style>
     :root{color-scheme:dark;--bg:#070b12;--panel:#0c111b;--panel2:#101827;--panel3:#131e2e;--line:#1b2b3d;--line2:#25384e;--text:#e8eef7;--muted:#90a0b5;--faint:#64758b;--blue:#518df4;--cyan:#14f1d9;--purple:#9945ff;--amber:#f4b544;--green:#22c88c;--risk:#f05d72;--font-display:"Bahnschrift SemiBold","Bahnschrift","Arial Narrow","Segoe UI",sans-serif;--font-ui:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",Arial,sans-serif;--font-mono:"Cascadia Mono","Cascadia Code","Consolas","Courier New",monospace}
     *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:15px;line-height:1.5;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}button,input{font:inherit}
@@ -119,23 +144,314 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     .rule{font-size:12px}.status-detail div{font-size:11px}.jupiter-status{font-size:10px}
     .status-pill span{font-size:10px}.status-pill small{font-size:11px}.metric span{font-size:10px}.metric small{font-size:11px}
     html[data-theme="plain"]{color-scheme:light;--bg:#f5f7fa;--panel:#fff;--panel2:#f2f5f8;--panel3:#eaf0f5;--line:#dce3ea;--line2:#cbd5df;--text:#132033;--muted:#607086;--faint:#78889a;--blue:#2869c7;--cyan:#087f8c;--purple:#6557c7;--amber:#9a5b00;--green:#14804a;--risk:#bd3652}html[data-theme="plain"] body{background:var(--bg)}html[data-theme="plain"] .theme-option.active{background:#172033;color:#fff}html[data-theme="plain"] .candidate-row:hover{background:#f8fafc}html[data-theme="plain"] .empty-state{background:#f8fafc}
+    html[data-theme="intel"]{color-scheme:dark;--bg:#090b0f;--panel:#0e1116;--panel2:#12161c;--panel3:#171c23;--line:#20262f;--line2:#2b333e;--text:#edf0f4;--muted:#8a929d;--faint:#59626e;--blue:#ff9418;--cyan:#ff9418;--purple:#c76a00;--amber:#ff9418;--green:#18c98b;--risk:#ff5470}
+    html[data-theme="intel"] body{background:linear-gradient(180deg,#090b0f,#080a0d)}
+    html[data-theme="intel"] .theme-switcher{background:#0b0e12;border-color:#262c34}
+    html[data-theme="intel"] .theme-option.active{background:#ff9418;color:#090b0f}
+    html[data-theme="intel"] .terminal-head{border-bottom:1px solid #1d2229}
+    html[data-theme="intel"] .terminal-head h1{font-size:40px}
+    html[data-theme="intel"] .eyebrow,html[data-theme="intel"] .activity-tag,html[data-theme="intel"] .rail-kicker{color:#ff9418}
+    html[data-theme="intel"] .status-pill{background:#0d1015;border-color:#262d36;border-radius:2px}
+    html[data-theme="intel"] .status-pill.live{border-left:3px solid #ff9418}
+    html[data-theme="intel"] .metrics{gap:12px;margin-top:16px;border:0;background:transparent}
+    html[data-theme="intel"] .metric{border:1px solid #242a32;border-left:3px solid #ff9418;background:#0f1217}
+    html[data-theme="intel"] .metric:last-child{border-right:1px solid #242a32}
+    html[data-theme="intel"] .metric:before{display:none}
+    html[data-theme="intel"] .workspace{gap:16px;margin-top:16px}
+    html[data-theme="intel"] .feed-panel,html[data-theme="intel"] .rail-card{background:#0d1015;border-color:#232a33}
+    html[data-theme="intel"] .search,html[data-theme="intel"] .filters button{background:#11151b;border-color:#29313a;border-radius:2px}
+    html[data-theme="intel"] .filters button:first-child{border-color:#ff9418;color:#ffb45e}
+    html[data-theme="intel"] .candidate-list{gap:8px;padding:10px}
+    html[data-theme="intel"] .candidate-row{border:1px solid #212832;background:#0f1318}
+    html[data-theme="intel"] .candidate-row:last-child{border-bottom:1px solid #212832}
+    html[data-theme="intel"] .rank{color:#ff9418}
+    html[data-theme="intel"] .inspect-link{border-color:#ff9418;color:#ffad4b;border-radius:2px}
+    html[data-theme="intel"] .risk-card,html[data-theme="intel"] .jupiter-card{border-left-color:#ff9418}
+    /* MI v3.1 Polish â€” CSS-only refinement */
+    html[data-theme="intel"] .shell{width:min(1460px,calc(100% - 56px));padding-top:18px}
+    html[data-theme="intel"] .topbar{padding-bottom:18px}
+    html[data-theme="intel"] .terminal-head{padding:34px 2px 28px}
+    html[data-theme="intel"] .terminal-head h1{font-size:42px;line-height:1.02;letter-spacing:-.035em}
+    html[data-theme="intel"] .terminal-head p{max-width:760px;font-size:14px;line-height:1.6}
+    html[data-theme="intel"] .status-cluster{gap:10px}
+    html[data-theme="intel"] .status-pill{min-width:152px;padding:12px 13px}
+    html[data-theme="intel"] .status-pill strong{font-size:16px}
+    html[data-theme="intel"] .metrics{gap:14px;margin-top:14px}
+    html[data-theme="intel"] .metric{min-height:112px;padding:20px 22px}
+    html[data-theme="intel"] .metric span{color:#747e8a;letter-spacing:.13em}
+    html[data-theme="intel"] .metric strong{margin-top:10px;font-size:29px;line-height:1}
+    html[data-theme="intel"] .metric small{margin-top:8px;color:#757f8a}
+    html[data-theme="intel"] .workspace{grid-template-columns:minmax(0,1fr) 320px;gap:18px;margin-top:18px}
+    html[data-theme="intel"] .feed-panel{border-color:#262d35;background:#0c0f13}
+    html[data-theme="intel"] .feed-head{padding:22px 22px 18px}
+    html[data-theme="intel"] .feed-head h2{font-size:25px;letter-spacing:-.015em}
+    html[data-theme="intel"] .feed-head p{margin-top:6px;color:#858e99}
+    html[data-theme="intel"] .feed-tools{gap:10px}
+    html[data-theme="intel"] .search{height:36px}
+    html[data-theme="intel"] .filters button{height:36px;padding-inline:11px}
+    html[data-theme="intel"] .candidate-list{gap:10px;padding:10px}
+    html[data-theme="intel"] .candidate-row{border-color:#242b33;background:#0f1216;transition:background .15s ease,border-color .15s ease,transform .15s ease}
+    html[data-theme="intel"] .candidate-row:hover{background:#12161b;border-color:#343c45;transform:translateY(-1px)}
+    html[data-theme="intel"] .token-cell,html[data-theme="intel"] .market-cell,html[data-theme="intel"] .evidence-cell,html[data-theme="intel"] .action-cell{padding:18px 16px}
+    html[data-theme="intel"] .token-cell strong{font-size:18px;letter-spacing:-.01em}
+    html[data-theme="intel"] .token-cell span{margin-top:5px;color:#8c96a2}
+    html[data-theme="intel"] .token-cell small{margin-top:7px;color:#69737f}
+    html[data-theme="intel"] .market-cell{gap:14px}
+    html[data-theme="intel"] .market-cell span{color:#606a76;letter-spacing:.11em}
+    html[data-theme="intel"] .market-cell strong{margin-top:7px;font-size:15px}
+    html[data-theme="intel"] .activity-tag{margin-bottom:8px;letter-spacing:.1em}
+    html[data-theme="intel"] .evidence-cell>strong{font-size:13px}
+    html[data-theme="intel"] .evidence-cell p{margin-top:6px;color:#8a949f;line-height:1.6}
+    html[data-theme="intel"] .risk-line{margin-top:11px;padding-top:10px;border-top-color:#252c34}
+    html[data-theme="intel"] .risk-line span{color:#737d88}
+    html[data-theme="intel"] .action-cell{gap:8px}
+    html[data-theme="intel"] .action-cell code{color:#d6dbe1}
+    html[data-theme="intel"] .action-cell small{color:#68727d}
+    html[data-theme="intel"] .inspect-link{padding:8px 10px;background:rgba(255,148,24,.025);font-size:11px}
+    html[data-theme="intel"] .inspect-link:hover{background:rgba(255,148,24,.07)}
+    html[data-theme="intel"] .intel-rail{gap:14px}
+    html[data-theme="intel"] .rail-card{padding:19px 18px;background:#0e1115;border-color:#252c34}
+    html[data-theme="intel"] .rail-card h3{font-size:16px;letter-spacing:-.01em}
+    html[data-theme="intel"] .rail-card>p{color:#858f9a;line-height:1.6}
+    html[data-theme="intel"] .status-detail{margin-top:13px}
+    html[data-theme="intel"] .status-detail div{padding:8px 0;border-top-color:#262d35}
+    html[data-theme="intel"] .rule{padding:9px 0;border-top-color:#262d35}
+    html[data-theme="intel"] .rule:before{background:rgba(24,201,139,.08)}
+    html[data-theme="intel"] .risk-card strong{margin-top:11px}
+    html[data-theme="intel"] footer{padding-top:20px;color:#5e6873}
+    /* MI v3.2 Feed â€” compact decision scanner */
+    .candidate-row-v32{display:grid;grid-template-columns:minmax(210px,1.35fr) minmax(105px,.72fr) minmax(105px,.72fr) minmax(110px,.78fr) minmax(70px,.48fr) minmax(230px,1.45fr) minmax(130px,.82fr);align-items:stretch}
+    .candidate-row-v32>.token-cell,.candidate-row-v32>.feed-value,.candidate-row-v32>.why-now,.candidate-row-v32>.feed-action{padding:15px 14px;border-right:1px solid var(--line)}
+    .candidate-row-v32>.feed-action{border-right:0}
+    .compact-token{display:flex;gap:10px;align-items:flex-start}
+    .compact-token strong,.compact-token span,.compact-token small{display:block}
+    .compact-token strong{font-size:15px}
+    .compact-token span{margin-top:3px;color:var(--muted);font-size:11px}
+    .compact-token small{margin-top:4px;color:var(--faint);font-size:9px;text-transform:uppercase}
+    .feed-value{display:flex;flex-direction:column;justify-content:center}
+    .feed-value span,.why-now span{font-family:var(--font-mono);color:var(--faint);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .feed-value strong{margin-top:5px;font-family:var(--font-mono);font-size:13px}
+    .why-now{display:flex;flex-direction:column;justify-content:center}
+    .why-now strong{margin-top:5px;font-size:11px;line-height:1.45;color:var(--text)}
+    .feed-action{display:flex;align-items:center;justify-content:flex-end}
+    .feed-action .inspect-link{margin-top:0;white-space:nowrap}
+    html[data-theme="intel"] .candidate-list{gap:6px;padding:8px}
+    html[data-theme="intel"] .candidate-row-v32{min-height:74px;background:#0f1216;border:1px solid #242b33}
+    html[data-theme="intel"] .candidate-row-v32:hover{background:#12161b;border-color:#343c45;transform:translateY(-1px)}
+    html[data-theme="intel"] .candidate-row-v32>.token-cell,
+    html[data-theme="intel"] .candidate-row-v32>.feed-value,
+    html[data-theme="intel"] .candidate-row-v32>.why-now{border-right-color:#242b33}
+    html[data-theme="intel"] .compact-token .rank{color:#ff9418}
+    html[data-theme="intel"] .why-now strong{color:#d9dee4}
+    html[data-theme="intel"] .feed-action .inspect-link{border-color:#ff9418;color:#ffad4b;background:rgba(255,148,24,.025)}
+    /* MI v3.3 Reference Polish */
+    html[data-theme="intel"] .shell{width:min(1480px,calc(100% - 48px));padding-top:16px}
+    html[data-theme="intel"] .topbar{padding-bottom:16px}
+    html[data-theme="intel"] .terminal-head{padding:30px 2px 24px}
+    html[data-theme="intel"] .terminal-head h1{font-size:40px;line-height:1.03;letter-spacing:-.035em}
+    html[data-theme="intel"] .terminal-head p{max-width:760px;font-size:13px;line-height:1.55}
+    html[data-theme="intel"] .status-pill{min-width:150px;padding:11px 12px}
+    html[data-theme="intel"] .metrics{gap:12px;margin-top:12px}
+    html[data-theme="intel"] .metric{min-height:100px;padding:18px 20px;background:#0f1318}
+    html[data-theme="intel"] .metric strong{font-size:27px}
+    html[data-theme="intel"] .metric small{margin-top:6px}
+    html[data-theme="intel"] .workspace{grid-template-columns:minmax(0,1fr) 320px;gap:16px;margin-top:16px}
+    html[data-theme="intel"] .feed-panel{background:#0c1014;border-color:#252c34}
+    html[data-theme="intel"] .feed-head{padding:18px 18px 14px}
+    html[data-theme="intel"] .feed-head h2{font-size:23px}
+    html[data-theme="intel"] .feed-head p{font-size:12px}
+    html[data-theme="intel"] .search{height:34px}
+    html[data-theme="intel"] .filters button{height:34px;padding:6px 10px}
+    .feed-columns-v33{display:grid;grid-template-columns:minmax(210px,1.35fr) minmax(105px,.72fr) minmax(105px,.72fr) minmax(110px,.78fr) minmax(70px,.48fr) minmax(230px,1.45fr) minmax(130px,.82fr);align-items:center;padding:0 8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel2)}
+    .feed-columns-v33 span{padding:9px 14px;font-family:var(--font-mono);font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+    html[data-theme="intel"] .feed-columns-v33{background:#101419;border-color:#252c34}
+    html[data-theme="intel"] .candidate-list{gap:4px;padding:6px}
+    html[data-theme="intel"] .candidate-row-v32{min-height:64px;background:#0f1318;border-color:#232a32}
+    html[data-theme="intel"] .candidate-row-v32:hover{background:#12171d;border-color:#343c45;transform:none}
+    .candidate-row-v32>.token-cell,.candidate-row-v32>.feed-value,.candidate-row-v32>.why-now,.candidate-row-v32>.feed-action{padding:11px 12px}
+    .compact-token{gap:9px}
+    .compact-token strong{font-size:14px;line-height:1.25}
+    .compact-token span{margin-top:2px;font-size:10px}
+    .compact-token small{margin-top:3px;font-size:8.5px}
+    .feed-value span,.why-now span{font-size:8.5px;letter-spacing:.08em}
+    .feed-value strong{margin-top:4px;font-size:12.5px}
+    .why-now strong{margin-top:4px;font-size:10.5px;line-height:1.35}
+    html[data-theme="intel"] .why-now strong{color:#e0e4e9}
+    html[data-theme="intel"] .feed-action .inspect-link{padding:7px 10px;font-size:10.5px;font-weight:850;border-radius:2px;background:transparent}
+    html[data-theme="intel"] .feed-action .inspect-link:hover{background:rgba(255,148,24,.08)}
+    html[data-theme="intel"] .intel-rail{gap:12px}
+    html[data-theme="intel"] .rail-card{padding:16px 15px}
+    html[data-theme="intel"] .rail-card h3{font-size:15px}
+    html[data-theme="intel"] .rail-card>p{font-size:11px;line-height:1.5}
+    html[data-theme="intel"] .status-detail div{padding:7px 0}
+    html[data-theme="intel"] .rule{padding:7px 0;font-size:11px}
+    /* MI v3.4 Feed Typography + KPI icons */
+    html[data-theme="intel"] .feed-panel,
+    html[data-theme="intel"] .feed-panel button,
+    html[data-theme="intel"] .feed-panel input{
+      font-family:Inter,"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",Arial,sans-serif;
+    }
+    html[data-theme="intel"] .feed-head h2,
+    html[data-theme="intel"] .compact-token strong,
+    html[data-theme="intel"] .why-now strong{
+      font-family:Inter,"Segoe UI Variable Display","Segoe UI",Arial,sans-serif;
+      font-stretch:normal;
+    }
+    html[data-theme="intel"] .feed-columns-v33 span,
+    html[data-theme="intel"] .feed-value span,
+    html[data-theme="intel"] .why-now>span{
+      font-family:"Cascadia Mono","Cascadia Code",Consolas,monospace;
+      letter-spacing:.07em;
+    }
+    html[data-theme="intel"] .feed-value strong{
+      font-family:"Cascadia Mono","Cascadia Code",Consolas,monospace;
+      font-weight:700;
+    }
+    html[data-theme="intel"] .compact-token strong{font-weight:700;letter-spacing:-.012em}
+    html[data-theme="intel"] .compact-token span{font-weight:400}
+    html[data-theme="intel"] .why-now strong{display:flex;align-items:center;gap:7px;font-weight:600}
+    html[data-theme="intel"] .why-dot{
+      display:inline-block;flex:0 0 auto;width:7px;height:7px;border-radius:50%;
+      background:#22d27f;box-shadow:0 0 0 3px rgba(34,210,127,.08),0 0 8px rgba(34,210,127,.3);
+    }
+    html[data-theme="intel"] .candidate-row-v32{min-height:60px}
+    html[data-theme="intel"] .candidate-row-v32>.token-cell,
+    html[data-theme="intel"] .candidate-row-v32>.feed-value,
+    html[data-theme="intel"] .candidate-row-v32>.why-now,
+    html[data-theme="intel"] .candidate-row-v32>.feed-action{padding-top:9px;padding-bottom:9px}
+    html[data-theme="intel"] .metrics .metric{position:relative;padding-right:58px}
+    html[data-theme="intel"] .metric-icon{
+      position:absolute;right:18px;bottom:16px;width:26px;height:26px;color:#7f8995;opacity:.8;
+    }
+    html[data-theme="intel"] .metric-icon svg{
+      display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round;
+    }
+    html[data-theme="intel"] .metric-network .sol-icon{width:30px;height:24px;color:#8d98a5}
+    html[data-theme="intel"] .metric-network .sol-icon svg{fill:currentColor;stroke:none}
+    html[data-theme="intel"] .metric:hover .metric-icon{color:#ff9418;opacity:1}
+    @media(max-width:820px){
+      html[data-theme="intel"] .metrics .metric{padding-right:46px}
+      html[data-theme="intel"] .metric-icon{right:12px;bottom:12px;width:22px;height:22px}
+    }
+    /* MI v3.5 Compact Type â€” reduce expanded/kembang appearance */
+    html[data-theme="intel"] .compact-token strong{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:13px;
+      font-weight:650;
+      letter-spacing:-.02em;
+      line-height:1.18;
+      font-stretch:normal;
+    }
+    html[data-theme="intel"] .compact-token span{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:9.5px;
+      letter-spacing:-.005em;
+      line-height:1.25;
+    }
+    html[data-theme="intel"] .compact-token small{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:8px;
+      letter-spacing:.015em;
+      line-height:1.2;
+    }
+    html[data-theme="intel"] .feed-value strong{
+      font-family:"Cascadia Mono","Consolas","Courier New",monospace;
+      font-size:11.5px;
+      font-weight:600;
+      letter-spacing:-.035em;
+      line-height:1.15;
+      font-variant-numeric:tabular-nums;
+    }
+    html[data-theme="intel"] .feed-value span,
+    html[data-theme="intel"] .feed-columns-v33 span,
+    html[data-theme="intel"] .why-now>span{
+      font-family:"Cascadia Mono","Consolas","Courier New",monospace;
+      font-size:8px;
+      font-weight:600;
+      letter-spacing:.04em;
+    }
+    html[data-theme="intel"] .why-now strong{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:10px;
+      font-weight:600;
+      letter-spacing:-.01em;
+      line-height:1.25;
+    }
+    html[data-theme="intel"] .rank{
+      font-family:"Cascadia Mono","Consolas","Courier New",monospace;
+      font-size:9px;
+      font-weight:600;
+      letter-spacing:-.02em;
+    }
+    html[data-theme="intel"] .candidate-row-v32{
+      min-height:56px;
+    }
+    html[data-theme="intel"] .candidate-row-v32>.token-cell,
+    html[data-theme="intel"] .candidate-row-v32>.feed-value,
+    html[data-theme="intel"] .candidate-row-v32>.why-now,
+    html[data-theme="intel"] .candidate-row-v32>.feed-action{
+      padding-top:8px;
+      padding-bottom:8px;
+    }
+    html[data-theme="intel"] .feed-action .inspect-link{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:10px;
+      font-weight:700;
+      letter-spacing:-.01em;
+    }
+    @media(max-width:1180px){
+      .feed-columns-v33{display:none}
+    }
+    @media(max-width:820px){
+      html[data-theme="intel"] .shell{width:min(100% - 20px,1480px)}
+      html[data-theme="intel"] .candidate-row-v32{min-height:auto}
+    }
+    @media(max-width:1180px){
+      .candidate-row-v32{grid-template-columns:minmax(190px,1.2fr) repeat(4,minmax(90px,.7fr)) minmax(210px,1.35fr)}
+      .candidate-row-v32>.feed-action{grid-column:1/-1;justify-content:flex-end;border-top:1px solid var(--line);padding:9px 14px}
+    }
+    @media(max-width:820px){
+      .candidate-row-v32{grid-template-columns:1fr 1fr}
+      .candidate-row-v32>.token-cell{grid-column:1/-1}
+      .candidate-row-v32>.why-now{grid-column:1/-1}
+      .candidate-row-v32>.feed-action{grid-column:1/-1;justify-content:stretch}
+      .candidate-row-v32>.feed-action .inspect-link{width:100%;text-align:center}
+      .candidate-row-v32>.token-cell,.candidate-row-v32>.feed-value,.candidate-row-v32>.why-now{border-right:0;border-bottom:1px solid var(--line)}
+    }
+    @media(max-width:1180px){
+      html[data-theme="intel"] .workspace{grid-template-columns:1fr}
+      html[data-theme="intel"] .intel-rail{grid-template-columns:repeat(3,1fr)}
+    }
+    @media(max-width:820px){
+      html[data-theme="intel"] .shell{width:min(100% - 22px,1460px)}
+      html[data-theme="intel"] .terminal-head h1{font-size:31px}
+      html[data-theme="intel"] .metrics{gap:8px}
+      html[data-theme="intel"] .metric{min-height:auto;padding:16px}
+      html[data-theme="intel"] .metric strong{font-size:23px}
+      html[data-theme="intel"] .intel-rail{grid-template-columns:1fr}
+    }
     @media(max-width:1180px){.workspace{grid-template-columns:1fr}.intel-rail{grid-template-columns:repeat(3,1fr)}.candidate-row{grid-template-columns:minmax(170px,.8fr) minmax(310px,1.25fr) minmax(240px,1fr)}.action-cell{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-end;border-top:1px solid var(--line);border-right:0;padding:10px 17px}.feed-tools{align-items:flex-end;flex-direction:column}}
     @media(max-width:820px){.shell{width:min(100% - 22px,1420px);padding-top:11px}.topbar{align-items:flex-start}.terminal-name span{display:none}.terminal-head{grid-template-columns:1fr;align-items:start;padding-top:22px}.terminal-head h1{font-size:29px}.status-cluster{width:100%}.status-pill{flex:1;min-width:0}.metrics{grid-template-columns:repeat(2,1fr)}.metric:nth-child(2){border-right:0}.metric:nth-child(-n+2){border-bottom:1px solid var(--line)}.workspace{display:block}.intel-rail{grid-template-columns:1fr;margin-top:12px}.feed-head{align-items:flex-start;flex-direction:column}.feed-tools{width:100%;align-items:stretch}.filters{overflow-x:auto;scrollbar-width:none}.search{width:100%}.candidate-row{grid-template-columns:1fr}.token-cell,.market-cell,.evidence-cell,.action-cell{border-right:0;border-bottom:1px solid var(--line)}.market-cell{grid-template-columns:repeat(2,1fr)}.market-cell>div{padding:5px 0}.action-cell{grid-column:auto;justify-content:flex-start;border-top:0;border-bottom:0}.empty-state{grid-template-columns:1fr}footer{flex-direction:column}}
     @media(max-width:480px){.shell{width:calc(100% - 16px)}.brand img{width:112px}.terminal-name strong{font-size:11px}.top-actions{margin-left:auto}.back-link{padding:7px 8px;font-size:10px}.theme-option{width:29px;height:29px}.terminal-head h1{font-size:25px}.terminal-head p{font-size:13px}.status-cluster{display:grid;grid-template-columns:1fr 1fr}.status-pill{padding:9px}.metric{padding:13px}.metric strong{font-size:19px}.feed-head{padding:15px}.filters button{font-size:9px}.token-cell,.market-cell,.evidence-cell,.action-cell{padding:14px}.market-cell{gap:7px}.candidate-row{border-left:2px solid var(--purple)}.action-cell{align-items:stretch;flex-direction:column}.inspect-link{text-align:center}.rail-card{padding:15px}.empty-state{margin:12px;padding:18px}.empty-actions{display:grid}.primary-link,.secondary-link{text-align:center}}
   </style>
 </head>
 <body><main class="shell">
-  <header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><div class="terminal-name"><strong>Solana Discovery</strong><span>Market intelligence terminal</span></div></div><div class="top-actions"><a class="back-link" href="/">← Markets</a><div class="theme-switcher" role="group" aria-label="Discovery theme"><button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button></div></div></header>
+  <header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><div class="terminal-name"><strong>Solana Discovery</strong><span>Market intelligence terminal</span></div></div><div class="top-actions"><a class="back-link" href="/">← Markets</a><div class="theme-switcher" role="group" aria-label="Discovery theme"><button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market intelligence theme" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button></div></div></header>
   <section class="terminal-head"><div><span class="eyebrow">Evidence-led Solana intelligence</span><h1>Solana Discovery Terminal</h1><p>Track emerging tokens through verified pool identity, observable liquidity and recent market activity. Discovery rank reflects activity, not safety.</p></div><div class="status-cluster"><div class="status-pill live"><span>Feed status</span><strong>__STATUS_HEADING__</strong><small>__STATUS_LABEL__</small></div><div class="status-pill"><span>Last update</span><strong>__UPDATED__</strong><small>Collector telemetry</small></div></div></section>
-  <section class="metrics" aria-label="Discovery summary"><div class="metric"><span>Tokens observed</span><strong>__TOKENS__</strong><small>Collector universe</small></div><div class="metric"><span>Pairs resolved</span><strong>__PAIRS__</strong><small>Identity mapping</small></div><div class="metric"><span>Qualified now</span><strong>__QUALIFIED__</strong><small>Exact-pool qualification</small></div><div class="metric"><span>Network</span><strong>SOL</strong><small>Experimental discovery</small></div></section>
-  <div class="workspace"><section class="feed-panel"><div class="feed-head"><div><span class="eyebrow">Observed market activity</span><h2>Discovery Feed</h2><p>Qualified candidates sorted from the bounded, freshest pool review.</p></div><div class="feed-tools"><input class="search" type="search" placeholder="Search token, symbol, or address" aria-label="Search Solana discovery" disabled><div class="filters" role="group" aria-label="Discovery filters"><button type="button" disabled>All</button><button type="button" disabled>New activity</button><button type="button" disabled>Volume</button><button type="button" disabled>Liquidity</button></div></div></div>__CANDIDATE_FEED__</section>
+  <section class="metrics" aria-label="Discovery summary">
+  <div class="metric metric-observed"><span>Tokens observed</span><strong>__TOKENS__</strong><small>Collector universe</small><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span></div>
+  <div class="metric metric-resolved"><span>Pairs resolved</span><strong>__PAIRS__</strong><small>Identity mapping</small><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="18" cy="17" r="2.5"/><path d="M8.5 11l7-3M8.5 13l7 3"/></svg></span></div>
+  <div class="metric metric-qualified"><span>Qualified now</span><strong>__QUALIFIED__</strong><small>Exact-pool qualification</small><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.8-2.8 8.1-7 10-4.2-1.9-7-5.2-7-10V6l7-3z"/><path d="M8.5 12l2.2 2.2 4.8-5"/></svg></span></div>
+  <div class="metric metric-network"><span>Network</span><strong>SOL</strong><small>Experimental discovery</small><span class="metric-icon sol-icon" aria-hidden="true"><svg viewBox="0 0 30 24"><path d="M6 3h17l3 3H9z"/><path d="M9 10h17l-3 3H6z"/><path d="M6 17h17l3 3H9z"/></svg></span></div>
+</section>
+  <div class="workspace"><section class="feed-panel"><div class="feed-head"><div><span class="eyebrow">Observed market activity</span><h2>Discovery Feed</h2><p>Qualified candidates sorted from the bounded, freshest pool review.</p></div><div class="feed-tools"><input class="search" type="search" placeholder="Search token, symbol, or address" aria-label="Search Solana discovery" disabled><div class="filters" role="group" aria-label="Discovery filters"><button type="button" disabled>All</button><button type="button" disabled>New activity</button><button type="button" disabled>Volume</button><button type="button" disabled>Liquidity</button></div></div></div><div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Why Now</span><span></span></div>__CANDIDATE_FEED__</section>
   <aside class="intel-rail"><section class="rail-card"><span class="rail-kicker">Discovery status</span><h3>Current qualification</h3><div class="status-detail"><div><span>Observed</span><strong>__TOKENS__</strong></div><div><span>Resolved pools</span><strong>__PAIRS__</strong></div><div><span>Qualified</span><strong>__QUALIFIED__</strong></div><div><span>Updated</span><strong>__UPDATED__</strong></div></div></section>
   <section id="qualification-rules" class="rail-card"><span class="rail-kicker">Qualification rules</span><h3>A token must pass every check</h3><div class="rule-list"><div class="rule">Solana network identity</div><div class="rule">Exact token and pool match</div><div class="rule">Liquidity at least $5,000</div><div class="rule">24h volume at least $1,000</div><div class="rule">Fresh collector data</div></div></section>
   <section class="rail-card risk-card"><span class="rail-kicker">Risk notice</span><h3>Pool verification is not token verification</h3><strong>Token security is not independently assessed.</strong><p>Contract controls, holder concentration and rug-pull risk may remain unknown. Inclusion is not an endorsement.</p></section>
   <section class="rail-card jupiter-card"><span class="rail-kicker">Jupiter execution</span><h3>Planned, not active</h3><span class="jupiter-status">Read-only</span><p>No wallet connection, quote or trade capability is enabled. DexSato does not hold keys or funds.</p></section></aside></div>
   <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>__STATUS_MESSAGE__</span></footer>
 </main><script>
-  const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){const value=theme==="plain"?"plain":"current";if(value==="plain")document.documentElement.dataset.theme="plain";else delete document.documentElement.dataset.theme;themeOptions.forEach(button=>{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});try{localStorage.setItem("dexsato-theme",value);}catch(error){}}let saved="current";try{saved=localStorage.getItem("dexsato-theme")||"current";}catch(error){}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
+  const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){const value=theme==="plain"?"plain":theme==="intel"?"intel":"current";if(value==="current")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=value;themeOptions.forEach(button=>{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});try{localStorage.setItem("dexsato-theme",value);}catch(error){}}let saved="current";try{saved=localStorage.getItem("dexsato-theme")||"current";}catch(error){}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
 </script></body></html>"""
     return (
         page.replace("__STATUS_HEADING__", escape(status_heading))
