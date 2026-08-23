@@ -399,6 +399,214 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
       font-weight:700;
       letter-spacing:-.01em;
     }
+    /* MI v3.6.1 Feed Layout Fix - UI only */
+    html[data-theme="intel"] .candidate-row-v32{
+      display:grid;
+      grid-template-columns:
+        minmax(190px,1.45fr)
+        minmax(96px,.72fr)
+        minmax(96px,.72fr)
+        minmax(104px,.78fr)
+        minmax(62px,.45fr)
+        minmax(220px,1.55fr)
+        minmax(118px,.82fr);
+      align-items:center;
+      min-height:58px;
+    }
+    html[data-theme="intel"] .candidate-row-v32>.token-cell,
+    html[data-theme="intel"] .candidate-row-v32>.feed-value,
+    html[data-theme="intel"] .candidate-row-v32>.why-now,
+    html[data-theme="intel"] .candidate-row-v32>.feed-action{
+      min-width:0;
+      height:100%;
+      padding:9px 10px;
+      border-right:1px solid #232a32;
+      border-bottom:0;
+      display:flex;
+      justify-content:center;
+    }
+    html[data-theme="intel"] .candidate-row-v32>.feed-action{
+      border-right:0;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    html[data-theme="intel"] .candidate-row-v32>.token-cell{
+      align-items:flex-start;
+      justify-content:flex-start;
+    }
+    html[data-theme="intel"] .compact-token>div{
+      min-width:0;
+    }
+    html[data-theme="intel"] .compact-token strong,
+    html[data-theme="intel"] .compact-token span,
+    html[data-theme="intel"] .compact-token small{
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    html[data-theme="intel"] .feed-value{
+      flex-direction:column;
+      align-items:flex-start;
+    }
+    html[data-theme="intel"] .why-now{
+      flex-direction:column;
+      align-items:flex-start;
+    }
+    html[data-theme="intel"] .why-now strong{
+      max-width:100%;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    html[data-theme="intel"] .feed-action .inspect-link{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:30px;
+      padding:6px 9px;
+      white-space:nowrap;
+    }
+
+    html[data-theme="intel"] .feed-columns-v33{
+      display:grid;
+      grid-template-columns:
+        minmax(190px,1.45fr)
+        minmax(96px,.72fr)
+        minmax(96px,.72fr)
+        minmax(104px,.78fr)
+        minmax(62px,.45fr)
+        minmax(220px,1.55fr)
+        minmax(118px,.82fr);
+      padding:0 6px;
+    }
+    html[data-theme="intel"] .feed-columns-v33 span{
+      padding:8px 10px;
+      min-width:0;
+    }
+
+    html[data-theme="intel"] .candidate-list{
+      gap:4px;
+      padding:6px;
+    }
+
+    /* MI v3.6.2 Feed Breakpoint Hotfix - UI only */
+    @media(min-width:761px){
+      html[data-theme="intel"] .feed-columns-v33{
+        display:grid !important;
+        grid-template-columns:
+          minmax(190px,1.45fr)
+          minmax(96px,.72fr)
+          minmax(96px,.72fr)
+          minmax(104px,.78fr)
+          minmax(62px,.45fr)
+          minmax(220px,1.55fr)
+          minmax(118px,.82fr) !important;
+      }
+
+      html[data-theme="intel"] .candidate-row-v32{
+        display:grid !important;
+        grid-template-columns:
+          minmax(190px,1.45fr)
+          minmax(96px,.72fr)
+          minmax(96px,.72fr)
+          minmax(104px,.78fr)
+          minmax(62px,.45fr)
+          minmax(220px,1.55fr)
+          minmax(118px,.82fr) !important;
+        align-items:center !important;
+        min-height:58px !important;
+      }
+
+      html[data-theme="intel"] .candidate-row-v32>.token-cell,
+      html[data-theme="intel"] .candidate-row-v32>.feed-value,
+      html[data-theme="intel"] .candidate-row-v32>.why-now,
+      html[data-theme="intel"] .candidate-row-v32>.feed-action{
+        grid-column:auto !important;
+        width:auto !important;
+        min-width:0 !important;
+        height:100% !important;
+        padding:9px 10px !important;
+        border-bottom:0 !important;
+      }
+
+      html[data-theme="intel"] .candidate-row-v32>.token-cell,
+      html[data-theme="intel"] .candidate-row-v32>.feed-value,
+      html[data-theme="intel"] .candidate-row-v32>.why-now{
+        border-right:1px solid #232a32 !important;
+      }
+
+      html[data-theme="intel"] .candidate-row-v32>.feed-action{
+        border-top:0 !important;
+        border-right:0 !important;
+        justify-content:flex-end !important;
+      }
+
+      html[data-theme="intel"] .feed-action .inspect-link{
+        width:auto !important;
+        min-width:0 !important;
+      }
+    }
+
+    @media(max-width:760px){
+      html[data-theme="intel"] .feed-columns-v33{display:none !important}
+
+      html[data-theme="intel"] .candidate-row-v32{
+        grid-template-columns:1fr 1fr !important;
+        min-height:auto !important;
+      }
+
+      html[data-theme="intel"] .candidate-row-v32>.token-cell{
+        grid-column:1/-1 !important;
+      }
+
+      html[data-theme="intel"] .candidate-row-v32>.why-now{
+        grid-column:1/-1 !important;
+      }
+
+      html[data-theme="intel"] .candidate-row-v32>.feed-action{
+        grid-column:1/-1 !important;
+        justify-content:stretch !important;
+        border-top:1px solid #232a32 !important;
+      }
+
+      html[data-theme="intel"] .candidate-row-v32>.token-cell,
+      html[data-theme="intel"] .candidate-row-v32>.feed-value,
+      html[data-theme="intel"] .candidate-row-v32>.why-now{
+        border-right:0 !important;
+        border-bottom:1px solid #232a32 !important;
+      }
+
+      html[data-theme="intel"] .feed-action .inspect-link{
+        width:100% !important;
+      }
+    }
+    @media(max-width:1180px){
+      html[data-theme="intel"] .feed-columns-v33{display:none}
+      html[data-theme="intel"] .candidate-row-v32{
+        grid-template-columns:1fr 1fr;
+        min-height:auto;
+      }
+      html[data-theme="intel"] .candidate-row-v32>.token-cell{
+        grid-column:1/-1;
+      }
+      html[data-theme="intel"] .candidate-row-v32>.why-now{
+        grid-column:1/-1;
+      }
+      html[data-theme="intel"] .candidate-row-v32>.feed-action{
+        grid-column:1/-1;
+        justify-content:stretch;
+        border-top:1px solid #232a32;
+      }
+      html[data-theme="intel"] .candidate-row-v32>.token-cell,
+      html[data-theme="intel"] .candidate-row-v32>.feed-value,
+      html[data-theme="intel"] .candidate-row-v32>.why-now{
+        border-right:0;
+        border-bottom:1px solid #232a32;
+      }
+      html[data-theme="intel"] .feed-action .inspect-link{
+        width:100%;
+      }
+    }
     @media(max-width:1180px){
       .feed-columns-v33{display:none}
     }
