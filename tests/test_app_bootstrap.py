@@ -254,6 +254,35 @@ def test_should_prepare_unsigned_swap_only_after_explicit_risk_acknowledgement(m
     )
 
 
+@patch("application.jupiter_swap_service.prepare_jupiter_swap")
+def test_should_preserve_actionable_jupiter_order_error_message(mock_prepare):
+    from application.jupiter_quote_service import JupiterQuoteUnavailable
+
+    mock_prepare.side_effect = JupiterQuoteUnavailable(
+        "Insufficient SOL balance. Reduce the swap amount or add SOL to your connected wallet."
+    )
+    request = Mock()
+    request.json = AsyncMock(return_value={
+        "amount_sol": "0.1",
+        "wallet_address": "11111111111111111111111111111111",
+        "risk_acknowledged": True,
+    })
+
+    try:
+        asyncio.run(
+            solana_discovery_jupiter_order(
+                "22222222222222222222222222222222",
+                request,
+            )
+        )
+    except HTTPException as error:
+        assert error.status_code == 503
+        assert error.detail == (
+            "Insufficient SOL balance. Reduce the swap amount or add SOL to your connected wallet."
+        )
+    else:
+        raise AssertionError("Actionable Jupiter order error should be returned as HTTP 503.")
+
 @patch("application.jupiter_swap_service.execute_jupiter_swap")
 def test_should_relay_a_wallet_signed_transaction_without_accepting_wallet_secrets(mock_execute):
     mock_execute.return_value = {"status": "SWAP_CONFIRMED", "signature": "555555"}

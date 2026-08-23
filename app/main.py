@@ -282,7 +282,7 @@ async def solana_discovery_jupiter_order(
     except JupiterQuoteNotConfigured as error:
         raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
     except JupiterQuoteUnavailable as error:
-        raise HTTPException(status_code=503, detail="Jupiter swap order is temporarily unavailable.") from error
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @app.post("/api/discovery/solana/{token_address}/jupiter-execute")
