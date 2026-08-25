@@ -45,7 +45,7 @@ def test_renders_exact_token_workspace_and_chart():
 
     assert "TEST / SOL" in html
     assert 'data-candlestick-panel' in html
-    assert 'aria-label="Exact-pool candlestick chart"' in html
+    assert 'aria-label="Exact-pool interactive candlestick chart"' in html
     assert 'data-candle-timeframe="1m"' in html
     assert 'data-candle-timeframe="5m"' in html
     assert 'data-candle-timeframe="15m"' in html
@@ -396,3 +396,41 @@ def test_token_workspace_v25_renders_multitimeframe_candlestick_only():
     assert "4H Market Chart" not in html
     assert "Closed market intervals; not an executable quote." not in html
     assert "GeckoTerminal" not in html
+
+
+def test_chart_v21_renders_interactive_trading_controls():
+    candle = {
+        "time": 1700000000,
+        "open": 1.0,
+        "high": 1.2,
+        "low": 0.9,
+        "close": 1.1,
+        "volume": 100.0,
+    }
+    detail = dict(DETAIL)
+    detail["candlestick_timeframes"] = {
+        "1m": [candle],
+        "5m": [candle],
+        "15m": [candle],
+        "30m": [candle],
+        "1H": [candle],
+        "4H": [candle],
+    }
+
+    html = render_solana_discovery_token_page(detail)
+
+    assert "CHART_V21_INTERACTIVE_TRADING_CHART" in html
+    assert 'data-candle-ohlc' in html
+    assert 'data-ohlc-open' in html
+    assert 'data-ohlc-high' in html
+    assert 'data-ohlc-low' in html
+    assert 'data-ohlc-close' in html
+    assert 'data-ohlc-volume' in html
+    assert 'data-candle-reset' in html
+    assert 'aria-label="Exact-pool interactive candlestick chart"' in html
+    assert "candlestick-crosshair" in html
+    assert "candlestick-volume" in html
+    assert "candlestick-price-line" in html
+    assert 'addEventListener("wheel"' in html
+    assert 'addEventListener("pointerdown"' in html
+    assert 'addEventListener("pointermove"' in html

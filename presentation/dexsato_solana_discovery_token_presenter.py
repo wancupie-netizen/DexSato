@@ -277,6 +277,7 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
 # TOKEN_WORKSPACE_V247_SOCIAL_SEPARATOR_CLEANUP
 # TOKEN_WORKSPACE_V248_DETERMINISTIC_SOCIAL_LINKS
 
+# CHART_V21_INTERACTIVE_TRADING_CHART
 def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
     raw = detail.get("candlestick_timeframes")
     datasets = raw if isinstance(raw, dict) else {}
@@ -304,13 +305,25 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
 
     return (
         '<section class="candlestick-panel" data-candlestick-panel>'
+        '<div class="candle-toolbar">'
         '<div class="candle-timeframe-tabs" role="group" aria-label="Candlestick timeframe">'
         + buttons
         + '</div>'
+        '<div class="candle-toolbar-actions">'
+        '<div class="candle-ohlc" data-candle-ohlc aria-live="polite">'
+        '<span>O <b data-ohlc-open>--</b></span>'
+        '<span>H <b data-ohlc-high>--</b></span>'
+        '<span>L <b data-ohlc-low>--</b></span>'
+        '<span>C <b data-ohlc-close>--</b></span>'
+        '<span>V <b data-ohlc-volume>--</b></span>'
+        '</div>'
+        '<button class="candle-reset" type="button" data-candle-reset>Reset view</button>'
+        '</div>'
+        '</div>'
         '<div class="candlestick-stage">'
-        '<svg class="candlestick-chart" viewBox="0 0 1000 360" '
-        'preserveAspectRatio="none" role="img" aria-label="Exact-pool candlestick chart" '
-        'data-candlestick-svg></svg>'
+        '<svg class="candlestick-chart" viewBox="0 0 1000 420" '
+        'preserveAspectRatio="none" role="img" aria-label="Exact-pool interactive candlestick chart" '
+        'tabindex="0" data-candlestick-svg></svg>'
         '<div class="candlestick-empty" data-candlestick-empty hidden>'
         'Market candles unavailable for this timeframe.'
         '</div>'
@@ -907,6 +920,32 @@ html[data-theme="intel"] .candlestick-chart{background:#0d1218}
   .candlestick-chart{height:280px}
 }
 
+
+
+/* CHART_V21_INTERACTIVE_TRADING_CHART */
+.candle-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);background:var(--panel)}
+.candle-toolbar .candle-timeframe-tabs{border-bottom:0;min-width:0;flex:1 1 auto}
+.candle-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:8px 12px 8px 0;min-width:0}
+.candle-ohlc{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 12px;color:var(--muted);font:600 10px/1.2 var(--mono);font-variant-numeric:tabular-nums}
+.candle-ohlc span{white-space:nowrap}.candle-ohlc b{color:var(--text);font-weight:700}
+.candle-reset{flex:0 0 auto;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:5px;background:transparent;color:var(--muted);font:650 11px/1 var(--ui);cursor:pointer}
+.candle-reset:hover{background:var(--panel2);color:var(--text)}
+.candle-reset:focus-visible,.candlestick-chart:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.candlestick-stage{min-height:450px;user-select:none}.candlestick-chart{height:420px;touch-action:pan-y;cursor:crosshair}
+.candlestick-volume{opacity:.5;vector-effect:non-scaling-stroke}
+.candlestick-axis-line{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.candlestick-crosshair{stroke:#788391;stroke-width:1;stroke-dasharray:4 4;vector-effect:non-scaling-stroke;pointer-events:none}
+.candlestick-price-line{stroke:var(--cyan);stroke-width:1;stroke-dasharray:4 3;vector-effect:non-scaling-stroke}
+.candlestick-price-tag{fill:var(--cyan)}.candlestick-price-tag-text{fill:#071018;font:700 10px var(--mono)}
+.candlestick-axis-label,.candlestick-time-label{fill:var(--muted);font:10px var(--mono)}
+.candlestick-cross-label{fill:var(--panel);stroke:var(--line);stroke-width:1}.candlestick-cross-label-text{fill:var(--text);font:10px var(--mono)}
+html[data-theme="intel"] .candle-toolbar{border-bottom-color:#28313b;background:#0f141a}
+html[data-theme="intel"] .candlestick-crosshair{stroke:#6f7985}
+html[data-theme="intel"] .candlestick-price-line{stroke:#ff9418}
+html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
+@media(max-width:900px){.candle-toolbar{align-items:stretch;flex-direction:column;gap:0}.candle-toolbar-actions{justify-content:space-between;padding:8px 12px;border-top:1px solid var(--line)}.candle-ohlc{justify-content:flex-start}}
+@media(max-width:560px){.candle-toolbar-actions{align-items:flex-start;flex-direction:column}.candle-ohlc{gap:6px 10px}.candlestick-stage{min-height:350px}.candlestick-chart{height:330px}}
+
 </style></head><body><main class="shell"><header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><strong>Solana Discovery</strong></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
 __TOKEN_OVERVIEW_CARD__
 <section class="hero"><div><span class="eyebrow">Qualified exact-token workspace</span><h1>__SYMBOL__ / __QUOTE__</h1><p>Review observed market activity, exact-pool identity and disclosed risk before taking any action.</p></div><div class="status"><span class="eyebrow">Market data</span><b>__STATUS__</b><small>__STATUS_LABEL__</small></div></section>
@@ -1168,7 +1207,7 @@ __CANDLESTICK_CHART_PANEL__
 
 
 <script>
-/* Token Workspace v2.5 multi-timeframe candlestick chart */
+/* CHART_V21_INTERACTIVE_TRADING_CHART */
 (function(){
   const panel=document.querySelector("[data-candlestick-panel]");
   if(!panel) return;
@@ -1177,6 +1216,14 @@ __CANDLESTICK_CHART_PANEL__
   const empty=panel.querySelector("[data-candlestick-empty]");
   const dataNode=panel.querySelector("[data-candlestick-data]");
   const buttons=[...panel.querySelectorAll("[data-candle-timeframe]")];
+  const resetButton=panel.querySelector("[data-candle-reset]");
+  const ohlc={
+    open:panel.querySelector("[data-ohlc-open]"),
+    high:panel.querySelector("[data-ohlc-high]"),
+    low:panel.querySelector("[data-ohlc-low]"),
+    close:panel.querySelector("[data-ohlc-close]"),
+    volume:panel.querySelector("[data-ohlc-volume]")
+  };
 
   let datasets={};
   try{datasets=JSON.parse(dataNode.textContent||"{}");}catch(error){datasets={};}
@@ -1187,23 +1234,84 @@ __CANDLESTICK_CHART_PANEL__
     Object.entries(attrs).forEach(([key,value])=>el.setAttribute(key,String(value)));
     return el;
   };
+  const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
-  function render(timeframe){
-    const rows=Array.isArray(datasets[timeframe]) ? datasets[timeframe] : [];
+  const state={timeframe:"5m",visibleCount:60,offset:0,dragging:false,dragStartX:0,dragStartOffset:0,geometry:null};
+
+  function formatPrice(value){
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    if(Math.abs(n)>=1000) return n.toLocaleString(undefined,{maximumFractionDigits:2});
+    if(Math.abs(n)>=1) return n.toLocaleString(undefined,{maximumFractionDigits:6});
+    if(Math.abs(n)>=0.01) return n.toFixed(6);
+    return n.toFixed(8);
+  }
+
+  function formatVolume(value){
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    if(Math.abs(n)>=1e9) return (n/1e9).toFixed(2)+"B";
+    if(Math.abs(n)>=1e6) return (n/1e6).toFixed(2)+"M";
+    if(Math.abs(n)>=1e3) return (n/1e3).toFixed(2)+"K";
+    return n.toFixed(2);
+  }
+
+  function formatTime(timestamp,timeframe){
+    const n=Number(timestamp);
+    if(!Number.isFinite(n)) return "";
+    const d=new Date(n*1000);
+    const short=["1m","5m","15m","30m","1H"].includes(timeframe);
+    return short
+      ? d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})
+      : d.toLocaleDateString([], {month:"short",day:"numeric"})+" "+d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  }
+
+  function updateOHLC(row){
+    if(!row){
+      Object.values(ohlc).forEach(node=>{if(node) node.textContent="--";});
+      return;
+    }
+    if(ohlc.open) ohlc.open.textContent=formatPrice(row.open);
+    if(ohlc.high) ohlc.high.textContent=formatPrice(row.high);
+    if(ohlc.low) ohlc.low.textContent=formatPrice(row.low);
+    if(ohlc.close) ohlc.close.textContent=formatPrice(row.close);
+    if(ohlc.volume) ohlc.volume.textContent=formatVolume(row.volume);
+  }
+
+  function currentRows(){
+    const all=Array.isArray(datasets[state.timeframe]) ? datasets[state.timeframe] : [];
+    if(!all.length) return {all,visible:[],start:0};
+    state.visibleCount=clamp(state.visibleCount,8,Math.min(120,all.length));
+    const maxOffset=Math.max(0,all.length-state.visibleCount);
+    state.offset=clamp(state.offset,0,maxOffset);
+    const end=all.length-state.offset;
+    const start=Math.max(0,end-state.visibleCount);
+    return {all,visible:all.slice(start,end),start};
+  }
+
+  function draw(){
     svg.replaceChildren();
+    const {all,visible,start}=currentRows();
 
     buttons.forEach(button=>{
-      button.classList.toggle("active",button.dataset.candleTimeframe===timeframe);
+      button.classList.toggle("active",button.dataset.candleTimeframe===state.timeframe);
     });
 
-    if(!rows.length){
+    if(!visible.length){
       empty.hidden=false;
+      updateOHLC(null);
+      state.geometry=null;
       return;
     }
     empty.hidden=true;
 
+    const left=18,right=900,priceRight=978;
+    const priceTop=18,priceBottom=300;
+    const volumeTop=315,volumeBottom=380;
+    const timeY=408;
+
     const values=[];
-    rows.forEach(row=>{
+    visible.forEach(row=>{
       [row.high,row.low,row.open,row.close].forEach(value=>{
         const n=Number(value);
         if(Number.isFinite(n)) values.push(n);
@@ -1211,61 +1319,166 @@ __CANDLESTICK_CHART_PANEL__
     });
     if(!values.length){
       empty.hidden=false;
+      updateOHLC(null);
+      state.geometry=null;
       return;
     }
 
-    const low=Math.min(...values);
-    const high=Math.max(...values);
-    const spread=(high-low)||Math.max(Math.abs(high)*0.01,1e-9);
-    const top=18,bottom=324,left=22,right=978;
-    const y=value=>top+(high-Number(value))*(bottom-top)/spread;
-
-    for(let i=0;i<5;i++){
-      const gy=top+i*(bottom-top)/4;
-      svg.append(make("line",{x1:left,y1:gy,x2:right,y2:gy,class:"candlestick-grid"}));
+    let low=Math.min(...values),high=Math.max(...values),spread=high-low;
+    if(!spread){
+      spread=Math.max(Math.abs(high)*0.02,1e-9);
+      low-=spread/2; high+=spread/2;
+    }else{
+      const pad=spread*.08; low-=pad; high+=pad; spread=high-low;
     }
 
-    const visible=rows.slice(-80);
+    const maxVolume=Math.max(...visible.map(row=>Number(row.volume)||0),1);
+    const y=value=>priceTop+(high-Number(value))*(priceBottom-priceTop)/spread;
+    const priceFromY=py=>high-((py-priceTop)/(priceBottom-priceTop))*spread;
+
+    for(let i=0;i<5;i++){
+      const gy=priceTop+i*(priceBottom-priceTop)/4;
+      svg.append(make("line",{x1:left,y1:gy,x2:priceRight,y2:gy,class:"candlestick-grid"}));
+      const label=make("text",{x:priceRight-4,y:gy-4,"text-anchor":"end",class:"candlestick-axis-label"});
+      label.textContent=formatPrice(high-i*spread/4);
+      svg.append(label);
+    }
+
+    svg.append(make("line",{x1:left,y1:volumeTop-6,x2:priceRight,y2:volumeTop-6,class:"candlestick-axis-line"}));
+
     const slot=(right-left)/visible.length;
-    const bodyWidth=Math.max(2,Math.min(10,slot*.62));
+    const bodyWidth=Math.max(2,Math.min(12,slot*.62));
 
     visible.forEach((row,index)=>{
-      const open=Number(row.open),close=Number(row.close);
-      const highValue=Number(row.high),lowValue=Number(row.low);
+      const open=Number(row.open),close=Number(row.close),highValue=Number(row.high),lowValue=Number(row.low),volume=Number(row.volume)||0;
       if(![open,close,highValue,lowValue].every(Number.isFinite)) return;
-
-      const x=left+slot*(index+.5);
-      const up=close>=open;
-      const cls=up?"candlestick-up":"candlestick-down";
+      const x=left+slot*(index+.5),up=close>=open,cls=up?"candlestick-up":"candlestick-down";
       const yOpen=y(open),yClose=y(close),yHigh=y(highValue),yLow=y(lowValue);
 
-      svg.append(make("line",{
-        x1:x,y1:yHigh,x2:x,y2:yLow,
-        class:"candlestick-wick "+cls
-      }));
-
-      const bodyTop=Math.min(yOpen,yClose);
-      const bodyHeight=Math.max(1.5,Math.abs(yOpen-yClose));
-      svg.append(make("rect",{
-        x:x-bodyWidth/2,
-        y:bodyTop,
-        width:bodyWidth,
-        height:bodyHeight,
-        rx:.5,
-        class:"candlestick-body "+cls
-      }));
+      const volumeHeight=(volume/maxVolume)*(volumeBottom-volumeTop);
+      svg.append(make("rect",{x:x-bodyWidth/2,y:volumeBottom-volumeHeight,width:bodyWidth,height:Math.max(1,volumeHeight),class:"candlestick-volume "+cls}));
+      svg.append(make("line",{x1:x,y1:yHigh,x2:x,y2:yLow,class:"candlestick-wick "+cls}));
+      svg.append(make("rect",{x:x-bodyWidth/2,y:Math.min(yOpen,yClose),width:bodyWidth,height:Math.max(1.5,Math.abs(yOpen-yClose)),rx:.5,class:"candlestick-body "+cls}));
     });
 
-    const label=make("text",{x:left,y:350,class:"candlestick-axis"});
-    label.textContent=timeframe;
-    svg.append(label);
+    const timeStep=Math.max(1,Math.floor(visible.length/6));
+    visible.forEach((row,index)=>{
+      if(index%timeStep!==0 && index!==visible.length-1) return;
+      const x=left+slot*(index+.5);
+      const label=make("text",{x:x,y:timeY,"text-anchor":"middle",class:"candlestick-time-label"});
+      label.textContent=formatTime(row.time,state.timeframe);
+      svg.append(label);
+    });
+
+    const last=visible[visible.length-1],lastPrice=Number(last.close);
+    if(Number.isFinite(lastPrice)){
+      const py=y(lastPrice);
+      svg.append(make("line",{x1:left,y1:py,x2:priceRight,y2:py,class:"candlestick-price-line"}));
+      svg.append(make("rect",{x:905,y:py-10,width:72,height:20,rx:3,class:"candlestick-price-tag"}));
+      const text=make("text",{x:941,y:py+4,"text-anchor":"middle",class:"candlestick-price-tag-text"});
+      text.textContent=formatPrice(lastPrice); svg.append(text);
+    }
+
+    updateOHLC(last);
+    state.geometry={all,visible,start,left,right,priceRight,priceTop,priceBottom,volumeTop,volumeBottom,slot,low,high,spread,y,priceFromY};
+  }
+
+  function drawCrosshair(clientX,clientY){
+    draw();
+    const g=state.geometry;
+    if(!g||!g.visible.length) return;
+    const rect=svg.getBoundingClientRect();
+    const sx=(clientX-rect.left)*(1000/rect.width),sy=(clientY-rect.top)*(420/rect.height);
+    if(sx<g.left||sx>g.right||sy<g.priceTop||sy>g.volumeBottom) return;
+
+    const index=clamp(Math.floor((sx-g.left)/g.slot),0,g.visible.length-1);
+    const row=g.visible[index],candleX=g.left+g.slot*(index+.5);
+    svg.append(make("line",{x1:candleX,y1:g.priceTop,x2:candleX,y2:g.volumeBottom,class:"candlestick-crosshair"}));
+    svg.append(make("line",{x1:g.left,y1:sy,x2:g.priceRight,y2:sy,class:"candlestick-crosshair"}));
+
+    const price=g.priceFromY(clamp(sy,g.priceTop,g.priceBottom));
+    svg.append(make("rect",{x:905,y:sy-10,width:72,height:20,rx:3,class:"candlestick-cross-label"}));
+    const priceText=make("text",{x:941,y:sy+4,"text-anchor":"middle",class:"candlestick-cross-label-text"});
+    priceText.textContent=formatPrice(price); svg.append(priceText);
+
+    const timeText=formatTime(row.time,state.timeframe),timeWidth=Math.max(58,timeText.length*6.2+14);
+    const timeX=clamp(candleX-timeWidth/2,g.left,g.right-timeWidth);
+    svg.append(make("rect",{x:timeX,y:386,width:timeWidth,height:22,rx:3,class:"candlestick-cross-label"}));
+    const timeLabel=make("text",{x:timeX+timeWidth/2,y:401,"text-anchor":"middle",class:"candlestick-cross-label-text"});
+    timeLabel.textContent=timeText; svg.append(timeLabel);
+
+    updateOHLC(row);
   }
 
   buttons.forEach(button=>{
-    button.addEventListener("click",()=>render(button.dataset.candleTimeframe));
+    button.addEventListener("click",()=>{
+      state.timeframe=button.dataset.candleTimeframe;
+      const all=Array.isArray(datasets[state.timeframe]) ? datasets[state.timeframe] : [];
+      state.visibleCount=Math.min(60,Math.max(8,all.length||60));
+      state.offset=0;
+      draw();
+    });
   });
 
-  render("5m");
+  resetButton?.addEventListener("click",()=>{
+    const all=Array.isArray(datasets[state.timeframe]) ? datasets[state.timeframe] : [];
+    state.visibleCount=Math.min(60,Math.max(8,all.length||60));
+    state.offset=0;
+    draw();
+  });
+
+  svg.addEventListener("wheel",event=>{
+    const all=Array.isArray(datasets[state.timeframe]) ? datasets[state.timeframe] : [];
+    if(all.length<2) return;
+    event.preventDefault();
+    state.visibleCount=clamp(state.visibleCount+(event.deltaY>0?6:-6),8,Math.min(120,all.length));
+    state.offset=clamp(state.offset,0,Math.max(0,all.length-state.visibleCount));
+    draw();
+  },{passive:false});
+
+  svg.addEventListener("pointerdown",event=>{
+    if(event.button!==0) return;
+    state.dragging=true; state.dragStartX=event.clientX; state.dragStartOffset=state.offset;
+    svg.setPointerCapture?.(event.pointerId); svg.style.cursor="grabbing";
+  });
+
+  svg.addEventListener("pointermove",event=>{
+    if(state.dragging){
+      const g=state.geometry;
+      if(!g) return;
+      const rect=svg.getBoundingClientRect(),candlePx=(g.slot/1000)*rect.width;
+      if(candlePx>0){
+        state.offset=Math.round(state.dragStartOffset+((event.clientX-state.dragStartX)/candlePx));
+        const all=Array.isArray(datasets[state.timeframe]) ? datasets[state.timeframe] : [];
+        state.offset=clamp(state.offset,0,Math.max(0,all.length-state.visibleCount));
+        draw();
+      }
+    }else{
+      drawCrosshair(event.clientX,event.clientY);
+    }
+  });
+
+  function stopDrag(event){
+    if(!state.dragging) return;
+    state.dragging=false;
+    try{svg.releasePointerCapture?.(event.pointerId);}catch(error){}
+    svg.style.cursor="crosshair"; draw();
+  }
+
+  svg.addEventListener("pointerup",stopDrag);
+  svg.addEventListener("pointercancel",stopDrag);
+  svg.addEventListener("pointerleave",event=>{if(state.dragging) stopDrag(event); else draw();});
+
+  svg.addEventListener("keydown",event=>{
+    const all=Array.isArray(datasets[state.timeframe]) ? datasets[state.timeframe] : [];
+    if(!all.length) return;
+    if(event.key==="ArrowLeft"){event.preventDefault();state.offset=clamp(state.offset+1,0,Math.max(0,all.length-state.visibleCount));draw();}
+    else if(event.key==="ArrowRight"){event.preventDefault();state.offset=clamp(state.offset-1,0,Math.max(0,all.length-state.visibleCount));draw();}
+    else if(event.key==="+"||event.key==="="){event.preventDefault();state.visibleCount=clamp(state.visibleCount-4,8,Math.min(120,all.length));draw();}
+    else if(event.key==="-"||event.key==="_"){event.preventDefault();state.visibleCount=clamp(state.visibleCount+4,8,Math.min(120,all.length));draw();}
+  });
+
+  draw();
 })();
 </script>
 
