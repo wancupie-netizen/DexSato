@@ -15,6 +15,9 @@ PAIR_URL = "https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
 MIN_LIQUIDITY_USD = 5_000.0
 MIN_VOLUME_24H_USD = 1_000.0
 MAX_CANDIDATES_CHECKED = 12
+MI_V40_ROTATING_ENRICHMENT = True
+_ENRICHMENT_CURSOR = 0
+_ENRICHMENT_CURSOR_LOCK = Lock()
 MAX_PUBLIC_CANDIDATES = 8
 CACHE_SECONDS = 75
 REQUEST_TIMEOUT_SECONDS = 6
@@ -123,20 +126,34 @@ def qualify_discovery_candidates(
 ) -> list[dict[str, Any]]:
     """Enrich only a bounded, newest-first set of unique resolved pools."""
     resolved = [item for item in candidates.values() if isinstance(item, dict) and item.get("token_address") and item.get("pair_address")]
-    resolved.sort(key=lambda item: str(item.get("last_seen_at") or ""), reverse=True)
-    selected: list[dict[str, Any]] = []
-    seen_tokens: set[str] = set()
-    seen_pairs: set[str] = set()
-    for item in resolved:
-        token = str(item["token_address"])
-        pool = str(item["pair_address"])
-        if token in seen_tokens or pool in seen_pairs:
-            continue
-        seen_tokens.add(token)
-        seen_pairs.add(pool)
-        selected.append(item)
-        if len(selected) >= MAX_CANDIDATES_CHECKED:
-            break
+    resolved.sort(key=lambda item: str(item.get("last_seen_at") or ""), reverse=True)
+
+    # MI v4.0: deduplicate the whole resolved universe first, then rotate the
+    # bounded enrichment window.  This preserves the existing API budget while
+    # preventing older pools from being permanently starved by newer arrivals.
+    unique_resolved: list[dict[str, Any]] = []
+    seen_tokens: set[str] = set()
+    seen_pairs: set[str] = set()
+    for item in resolved:
+        token = str(item["token_address"])
+        pool = str(item["pair_address"])
+        if token in seen_tokens or pool in seen_pairs:
+            continue
+        seen_tokens.add(token)
+        seen_pairs.add(pool)
+        unique_resolved.append(item)
+
+    selected: list[dict[str, Any]] = []
+    if unique_resolved:
+        global _ENRICHMENT_CURSOR
+        with _ENRICHMENT_CURSOR_LOCK:
+            start = _ENRICHMENT_CURSOR % len(unique_resolved)
+            take = min(MAX_CANDIDATES_CHECKED, len(unique_resolved))
+            selected = [
+                unique_resolved[(start + offset) % len(unique_resolved)]
+                for offset in range(take)
+            ]
+            _ENRICHMENT_CURSOR = (start + take) % len(unique_resolved)
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=min(4, max(1, len(selected)))) as executor:
         futures = {executor.submit(_cached_pair, str(item["pair_address"]), request_get): item for item in selected}
