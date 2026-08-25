@@ -60,3 +60,56 @@ def test_falls_back_to_stored_observation_when_provider_fails():
     assert result["quote_status"] == "STORED"
     assert result["price_usd"] == .1
     assert result["chart"] == []
+
+def test_trader_timeframe_changes_uses_closed_minute_history():
+    from application.solana_discovery_token_service import _trader_timeframe_changes
+
+    base_time = 1_700_000_000
+    candles = [
+        {
+            "time": base_time + minute * 60,
+            "open": 100.0 + minute,
+            "high": 100.0 + minute,
+            "low": 100.0 + minute,
+            "close": 100.0 + minute,
+            "volume": 1.0,
+        }
+        for minute in range(0, 301)
+    ]
+
+    changes = _trader_timeframe_changes(candles)
+    newest = 400.0
+
+    assert changes["change_1m"] == ((newest / 399.0) - 1.0) * 100.0
+    assert changes["change_5m"] == ((newest / 395.0) - 1.0) * 100.0
+    assert changes["change_15m"] == ((newest / 385.0) - 1.0) * 100.0
+    assert changes["change_30m"] == ((newest / 370.0) - 1.0) * 100.0
+    assert changes["change_1h"] == ((newest / 340.0) - 1.0) * 100.0
+    assert changes["change_4h"] == ((newest / 160.0) - 1.0) * 100.0
+
+
+def test_trader_timeframe_changes_keeps_missing_history_unavailable():
+    from application.solana_discovery_token_service import _trader_timeframe_changes
+
+    base_time = 1_700_000_000
+    candles = [
+        {
+            "time": base_time + minute * 60,
+            "open": 1.0,
+            "high": 1.0,
+            "low": 1.0,
+            "close": 1.0 + minute / 100.0,
+            "volume": 1.0,
+        }
+        for minute in range(0, 11)
+    ]
+
+    changes = _trader_timeframe_changes(candles)
+
+    assert changes["change_1m"] is not None
+    assert changes["change_5m"] is not None
+    assert changes["change_15m"] is None
+    assert changes["change_30m"] is None
+    assert changes["change_1h"] is None
+    assert changes["change_4h"] is None
+
