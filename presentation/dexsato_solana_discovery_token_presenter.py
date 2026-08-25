@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from html import escape
+import json
 from typing import Any
 
 
@@ -275,9 +276,57 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
 # TOKEN_WORKSPACE_V246_ARIA_CLEANUP
 # TOKEN_WORKSPACE_V247_SOCIAL_SEPARATOR_CLEANUP
 # TOKEN_WORKSPACE_V248_DETERMINISTIC_SOCIAL_LINKS
+
+def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
+    raw = detail.get("candlestick_timeframes")
+    datasets = raw if isinstance(raw, dict) else {}
+    safe: dict[str, list[dict[str, float]]] = {}
+    for timeframe in ("1m", "5m", "15m", "30m", "1H", "4H"):
+        rows = datasets.get(timeframe)
+        safe[timeframe] = rows if isinstance(rows, list) else []
+
+    payload = escape(
+        json.dumps(safe, separators=(",", ":"), ensure_ascii=True),
+        quote=False,
+    )
+    buttons = "".join(
+        (
+            '<button class="candle-tf-button'
+            + (' active' if timeframe == "5m" else '')
+            + '" type="button" data-candle-timeframe="'
+            + timeframe
+            + '">'
+            + timeframe
+            + '</button>'
+        )
+        for timeframe in ("1m", "5m", "15m", "30m", "1H", "4H")
+    )
+
+    return (
+        '<section class="candlestick-panel" data-candlestick-panel>'
+        '<div class="candle-timeframe-tabs" role="group" aria-label="Candlestick timeframe">'
+        + buttons
+        + '</div>'
+        '<div class="candlestick-stage">'
+        '<svg class="candlestick-chart" viewBox="0 0 1000 360" '
+        'preserveAspectRatio="none" role="img" aria-label="Exact-pool candlestick chart" '
+        'data-candlestick-svg></svg>'
+        '<div class="candlestick-empty" data-candlestick-empty hidden>'
+        'Market candles unavailable for this timeframe.'
+        '</div>'
+        '</div>'
+        '<script type="application/json" data-candlestick-data>'
+        + payload
+        + '</script>'
+        '</section>'
+    )
+
+
+# TOKEN_WORKSPACE_V25_MULTITIMEFRAME_CANDLESTICK
 def render_solana_discovery_token_page(detail: dict[str, Any]) -> str:
     """Render exact-token evidence and explicit wallet-approved Jupiter execution."""
     token_overview_card = _token_overview_card(detail)
+    candlestick_chart_panel = _candlestick_chart_panel(detail)
     symbol = escape(str(detail.get("symbol") or "Unknown"))
     trader_tf_strip = _trader_timeframe_strip(detail)
     name = escape(str(detail.get("name") or "Unknown token"))
@@ -299,7 +348,7 @@ def render_solana_discovery_token_page(detail: dict[str, Any]) -> str:
     )
     evidence = escape(str(detail.get("evidence") or "Exact-pool market activity was observed."))
     risk = escape(str(detail.get("risk_label") or "Token security is not independently verified."))
-    chart = _chart_svg(detail.get("chart") if isinstance(detail.get("chart"), list) else [])
+    chart = ""
     status = escape(str(detail.get("quote_status") or "STORED"))
     status_label = escape(str(detail.get("quote_label") or "Stored collector observation"))
     html = """<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -785,11 +834,84 @@ html[data-theme="intel"] .token-meta-row{border-color:#28313b}
   margin:0 1px;
 }
 
+
+
+/* TOKEN_WORKSPACE_V25_MULTITIMEFRAME_CANDLESTICK */
+.candlestick-panel{
+  margin-top:14px;
+  border:1px solid var(--line);
+  background:var(--panel);
+  overflow:hidden;
+}
+.candle-timeframe-tabs{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  background:var(--panel);
+}
+.candle-tf-button{
+  min-width:54px;
+  height:32px;
+  padding:0 12px;
+  border:1px solid transparent;
+  border-radius:5px;
+  background:transparent;
+  color:var(--muted);
+  font:650 12px/1 var(--ui);
+  cursor:pointer;
+}
+.candle-tf-button:hover{color:var(--text);background:var(--panel2)}
+.candle-tf-button.active{
+  color:var(--text);
+  border-color:var(--line);
+  background:var(--panel2);
+}
+.candlestick-stage{
+  position:relative;
+  min-height:390px;
+  padding:12px;
+  background:var(--panel2);
+}
+.candlestick-chart{
+  display:block;
+  width:100%;
+  height:360px;
+  background:var(--panel2);
+}
+.candlestick-grid{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.candlestick-wick{stroke-width:1.4;vector-effect:non-scaling-stroke}
+.candlestick-body{vector-effect:non-scaling-stroke}
+.candlestick-up{stroke:var(--green);fill:var(--green)}
+.candlestick-down{stroke:var(--red);fill:var(--red)}
+.candlestick-axis{fill:var(--muted);font:11px var(--ui)}
+.candlestick-empty{
+  position:absolute;
+  inset:12px;
+  display:grid;
+  place-items:center;
+  color:var(--muted);
+  font-size:13px;
+}
+.candlestick-empty[hidden]{display:none}
+html[data-theme="intel"] .candlestick-panel{border-color:#303a45;background:#0f141a}
+html[data-theme="intel"] .candle-timeframe-tabs{border-bottom-color:#28313b;background:#0f141a}
+html[data-theme="intel"] .candle-tf-button.active{background:#151c24;border-color:#3a4652}
+html[data-theme="intel"] .candlestick-stage,
+html[data-theme="intel"] .candlestick-chart{background:#0d1218}
+@media(max-width:700px){
+  .candle-timeframe-tabs{overflow-x:auto}
+  .candle-tf-button{flex:0 0 auto}
+  .candlestick-stage{min-height:310px}
+  .candlestick-chart{height:280px}
+}
+
 </style></head><body><main class="shell"><header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><strong>Solana Discovery</strong></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
 __TOKEN_OVERVIEW_CARD__
 <section class="hero"><div><span class="eyebrow">Qualified exact-token workspace</span><h1>__SYMBOL__ / __QUOTE__</h1><p>Review observed market activity, exact-pool identity and disclosed risk before taking any action.</p></div><div class="status"><span class="eyebrow">Market data</span><b>__STATUS__</b><small>__STATUS_LABEL__</small></div></section>
 <section class="identity"><div class="identity-head"><div><span class="eyebrow">Token identity</span><h2>__NAME__</h2><span class="name">__DEX__ · Solana exact pool</span></div><div>__SOURCE_LINK__</div></div><div class="addresses"><div class="address"><span>Canonical token address</span><div class="address-row"><code title="__TOKEN__">__TOKEN_SHORT__</code><button class="copy-address" type="button" data-copy-address="__TOKEN__">Copy</button></div></div><div class="address"><span>Exact pool address</span><div class="address-row"><code title="__POOL__">__POOL_SHORT__</code><button class="copy-address" type="button" data-copy-address="__POOL__">Copy</button></div></div></div></section>
-<section class="chart-panel"><div class="section-head"><div><span class="eyebrow">Validated exact-pool data</span><h2>4H Market Chart</h2><p>Closed market intervals; not an executable quote.</p></div><span class="eyebrow">GeckoTerminal · base token</span></div>__CHART__</section>
+__CANDLESTICK_CHART_PANEL__
 <div class="grid"><section class="card"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div><section class="qualification"><span class="eyebrow">Qualification evidence</span><h3>Checks passed for this feed</h3><div class="check">Solana token identity</div><div class="check">Exact token and pool match</div><div class="check">Observed liquidity threshold</div><div class="check">Observed 24h activity</div><div class="check">Fresh collector data</div><div class="source">Collector updated __UPDATED__</div></section></section>
 <aside><section class="card jupiter" data-jupiter-sandbox data-token-address="__TOKEN__" data-token-symbol="__SYMBOL__"><span class="eyebrow">Jupiter integration sandbox</span><h3>Controlled wallet-approved swap</h3><span class="badge">D6 · NON-CUSTODIAL PILOT</span><p class="sandbox-note">Review an indicative Jupiter quote before choosing whether to approve one real Solana mainnet transaction in your connected wallet.</p><div class="wallet-state" data-wallet-state>Wallet not connected · required for swap approval</div><div class="sandbox-form"><button class="sandbox-button" type="button" data-connect-wallet>Connect supported wallet</button><label for="jupiter-amount">Amount in SOL</label><input class="sandbox-input" id="jupiter-amount" data-quote-amount inputmode="decimal" type="number" min="0.001" max="100" step="0.001" value="0.1"><button class="sandbox-button primary" type="button" data-get-quote>Get Jupiter quote</button></div><div class="quote-result" data-quote-result aria-live="polite"></div><div class="swap-warning"><strong>Real Solana mainnet transaction</strong>Discovery tokens may lose value, liquidity may change, and network or Jupiter fees may apply. A quote is not a guaranteed settlement result.</div><label class="swap-consent"><input type="checkbox" data-swap-risk-ack>I understand the risks and will review the transaction in my own wallet.</label><button class="sandbox-button primary" type="button" data-execute-swap disabled>Review and approve swap</button><div class="quote-result" data-swap-result aria-live="polite"></div><p class="quote-policy">DexSato integrator fee: <strong>0 bps</strong>. Trades are routed through Jupiter. DexSato never asks for a seed phrase and does not hold private keys or funds. Transactions must be approved in your connected wallet.</p></section></aside></div>
 <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>Market observations, indicative quotes and transaction results are distinct.</span></footer></main><script src="/static/js/dexsato_solana_discovery_swap.js" defer></script><script>
@@ -1044,6 +1166,109 @@ __TOKEN_OVERVIEW_CARD__
 })();
 </script>
 
+
+<script>
+/* Token Workspace v2.5 multi-timeframe candlestick chart */
+(function(){
+  const panel=document.querySelector("[data-candlestick-panel]");
+  if(!panel) return;
+
+  const svg=panel.querySelector("[data-candlestick-svg]");
+  const empty=panel.querySelector("[data-candlestick-empty]");
+  const dataNode=panel.querySelector("[data-candlestick-data]");
+  const buttons=[...panel.querySelectorAll("[data-candle-timeframe]")];
+
+  let datasets={};
+  try{datasets=JSON.parse(dataNode.textContent||"{}");}catch(error){datasets={};}
+
+  const NS="http://www.w3.org/2000/svg";
+  const make=(name,attrs={})=>{
+    const el=document.createElementNS(NS,name);
+    Object.entries(attrs).forEach(([key,value])=>el.setAttribute(key,String(value)));
+    return el;
+  };
+
+  function render(timeframe){
+    const rows=Array.isArray(datasets[timeframe]) ? datasets[timeframe] : [];
+    svg.replaceChildren();
+
+    buttons.forEach(button=>{
+      button.classList.toggle("active",button.dataset.candleTimeframe===timeframe);
+    });
+
+    if(!rows.length){
+      empty.hidden=false;
+      return;
+    }
+    empty.hidden=true;
+
+    const values=[];
+    rows.forEach(row=>{
+      [row.high,row.low,row.open,row.close].forEach(value=>{
+        const n=Number(value);
+        if(Number.isFinite(n)) values.push(n);
+      });
+    });
+    if(!values.length){
+      empty.hidden=false;
+      return;
+    }
+
+    const low=Math.min(...values);
+    const high=Math.max(...values);
+    const spread=(high-low)||Math.max(Math.abs(high)*0.01,1e-9);
+    const top=18,bottom=324,left=22,right=978;
+    const y=value=>top+(high-Number(value))*(bottom-top)/spread;
+
+    for(let i=0;i<5;i++){
+      const gy=top+i*(bottom-top)/4;
+      svg.append(make("line",{x1:left,y1:gy,x2:right,y2:gy,class:"candlestick-grid"}));
+    }
+
+    const visible=rows.slice(-80);
+    const slot=(right-left)/visible.length;
+    const bodyWidth=Math.max(2,Math.min(10,slot*.62));
+
+    visible.forEach((row,index)=>{
+      const open=Number(row.open),close=Number(row.close);
+      const highValue=Number(row.high),lowValue=Number(row.low);
+      if(![open,close,highValue,lowValue].every(Number.isFinite)) return;
+
+      const x=left+slot*(index+.5);
+      const up=close>=open;
+      const cls=up?"candlestick-up":"candlestick-down";
+      const yOpen=y(open),yClose=y(close),yHigh=y(highValue),yLow=y(lowValue);
+
+      svg.append(make("line",{
+        x1:x,y1:yHigh,x2:x,y2:yLow,
+        class:"candlestick-wick "+cls
+      }));
+
+      const bodyTop=Math.min(yOpen,yClose);
+      const bodyHeight=Math.max(1.5,Math.abs(yOpen-yClose));
+      svg.append(make("rect",{
+        x:x-bodyWidth/2,
+        y:bodyTop,
+        width:bodyWidth,
+        height:bodyHeight,
+        rx:.5,
+        class:"candlestick-body "+cls
+      }));
+    });
+
+    const label=make("text",{x:left,y:350,class:"candlestick-axis"});
+    label.textContent=timeframe;
+    svg.append(label);
+  }
+
+  buttons.forEach(button=>{
+    button.addEventListener("click",()=>render(button.dataset.candleTimeframe));
+  });
+
+  render("5m");
+})();
+</script>
+
 </body></html>"""
     replacements = {
         "__SYMBOL__": symbol, "__QUOTE__": quote, "__NAME__": name,
@@ -1064,5 +1289,6 @@ __TOKEN_OVERVIEW_CARD__
         html = html.replace(key, value)
     html = html.replace("__TRADER_TF_STRIP__", trader_tf_strip)
     html = html.replace("__TOKEN_OVERVIEW_CARD__", token_overview_card)
+    html = html.replace("__CANDLESTICK_CHART_PANEL__", candlestick_chart_panel)
     return html
 

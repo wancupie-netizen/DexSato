@@ -16,6 +16,12 @@ GECKO_OHLCV_URL = (
     "{pair_address}/ohlcv/hour"
 )
 
+# TOKEN_WORKSPACE_V25_MULTITIMEFRAME_CANDLESTICK
+GECKO_HOURLY_OHLCV_URL = (
+    "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
+    "{pair_address}/ohlcv/hour"
+)
+
 # TOKEN_WORKSPACE_V23_REAL_TIMEFRAME_INTELLIGENCE
 GECKO_MINUTE_OHLCV_URL = (
     "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
@@ -173,6 +179,110 @@ def _trader_timeframe_changes(
     return result
 
 
+
+def _aggregate_candles(
+    candles: list[dict[str, float]],
+    minutes: int,
+) -> list[dict[str, float]]:
+    if minutes <= 1:
+        return list(candles)
+
+    bucket_seconds = minutes * 60
+    buckets: dict[int, list[dict[str, float]]] = {}
+    for candle in candles:
+        timestamp = _number(candle.get("time"))
+        if timestamp is None:
+            continue
+        bucket = int(timestamp // bucket_seconds) * bucket_seconds
+        buckets.setdefault(bucket, []).append(candle)
+
+    result: list[dict[str, float]] = []
+    for bucket in sorted(buckets):
+        rows = sorted(buckets[bucket], key=lambda item: float(item["time"]))
+        if not rows:
+            continue
+        open_value = _number(rows[0].get("open"))
+        close_value = _number(rows[-1].get("close"))
+        highs = [_number(row.get("high")) for row in rows]
+        lows = [_number(row.get("low")) for row in rows]
+        volumes = [_number(row.get("volume")) for row in rows]
+        if (
+            open_value is None
+            or close_value is None
+            or any(value is None for value in highs)
+            or any(value is None for value in lows)
+            or any(value is None for value in volumes)
+        ):
+            continue
+        result.append({
+            "time": float(bucket),
+            "open": open_value,
+            "high": max(float(value) for value in highs if value is not None),
+            "low": min(float(value) for value in lows if value is not None),
+            "close": close_value,
+            "volume": sum(float(value) for value in volumes if value is not None),
+        })
+    return result
+
+
+def _hourly_candles(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+) -> list[dict[str, float]]:
+    pair_address = str(candidate.get("pair_address") or "")
+    if not pair_address:
+        return []
+    response = request_get(
+        GECKO_HOURLY_OHLCV_URL.format(pair_address=pair_address),
+        params={
+            "aggregate": 1,
+            "limit": 120,
+            "currency": "usd",
+            "token": "base",
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    data = payload.get("data") if isinstance(payload, dict) else None
+    attributes = data.get("attributes") if isinstance(data, dict) else None
+    rows = attributes.get("ohlcv_list") if isinstance(attributes, dict) else None
+    if not isinstance(rows, list):
+        return []
+
+    candles: list[dict[str, float]] = []
+    for row in reversed(rows):
+        if not isinstance(row, list) or len(row) < 6:
+            continue
+        values = [_number(value) for value in row[:6]]
+        if any(value is None for value in values):
+            continue
+        candles.append({
+            "time": values[0],
+            "open": values[1],
+            "high": values[2],
+            "low": values[3],
+            "close": values[4],
+            "volume": values[5],
+        })
+    return candles
+
+
+def _candlestick_timeframes(
+    minute_candles: list[dict[str, float]],
+    hourly_candles: list[dict[str, float]],
+    four_hour_candles: list[dict[str, float]],
+) -> dict[str, list[dict[str, float]]]:
+    return {
+        "1m": minute_candles[-180:],
+        "5m": _aggregate_candles(minute_candles, 5)[-120:],
+        "15m": _aggregate_candles(minute_candles, 15)[-120:],
+        "30m": _aggregate_candles(minute_candles, 30)[-120:],
+        "1H": hourly_candles[-120:],
+        "4H": four_hour_candles[-90:],
+    }
+
+
 def load_solana_discovery_token(
     token_address: str,
     *,
@@ -198,6 +308,9 @@ def load_solana_discovery_token(
     detail["quote_status"] = "STORED"
     detail["quote_label"] = "Stored collector observation"
     detail["chart"] = []
+    detail["candlestick_timeframes"] = {
+        "1m": [], "5m": [], "15m": [], "30m": [], "1H": [], "4H": [],
+    }
     for timeframe_key in TRADER_TIMEFRAME_MINUTES:
         detail[timeframe_key] = None
     try:
@@ -255,14 +368,31 @@ def load_solana_discovery_token(
             })
     except (requests.RequestException, RuntimeError, ValueError, TypeError):
         pass
+    four_hour_candles: list[dict[str, float]] = []
+    minute_candles: list[dict[str, float]] = []
+    hourly_candles: list[dict[str, float]] = []
+
     try:
-        detail["chart"] = _chart(candidate, request_get)
+        four_hour_candles = _chart(candidate, request_get)
+        detail["chart"] = four_hour_candles
     except (requests.RequestException, RuntimeError, ValueError, TypeError):
         detail["chart"] = []
+
     try:
         minute_candles = _minute_candles(candidate, request_get)
         detail.update(_trader_timeframe_changes(minute_candles))
     except (requests.RequestException, RuntimeError, ValueError, TypeError):
-        pass
+        minute_candles = []
+
+    try:
+        hourly_candles = _hourly_candles(candidate, request_get)
+    except (requests.RequestException, RuntimeError, ValueError, TypeError):
+        hourly_candles = []
+
+    detail["candlestick_timeframes"] = _candlestick_timeframes(
+        minute_candles,
+        hourly_candles,
+        four_hour_candles,
+    )
     detail["feed_updated_label"] = public_feed.get("updated_label")
     return detail

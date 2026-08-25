@@ -18,18 +18,46 @@ DETAIL = {
 }
 
 
+
+# TOKEN_WORKSPACE_V251_CANDLESTICK_TEST_MIGRATION
 def test_renders_exact_token_workspace_and_chart():
-    html = render_solana_discovery_token_page(DETAIL)
-    assert "Qualified exact-token workspace" in html
+    candle = {
+        "time": 1700000000,
+        "open": 0.10,
+        "high": 0.12,
+        "low": 0.09,
+        "close": 0.11,
+        "volume": 100.0,
+    }
+    detail = {
+        **DETAIL,
+        "candlestick_timeframes": {
+            "1m": [candle],
+            "5m": [candle],
+            "15m": [candle],
+            "30m": [candle],
+            "1H": [candle],
+            "4H": [candle],
+        },
+    }
+
+    html = render_solana_discovery_token_page(detail)
+
     assert "TEST / SOL" in html
-    assert "Validated exact-pool data" in html
-    assert "aria-label=\"Validated exact-pool 4H closing-price chart\"" in html
-    assert "Live exact-pool observation" in html
-    assert "Open market source" in html
+    assert 'data-candlestick-panel' in html
+    assert 'aria-label="Exact-pool candlestick chart"' in html
+    assert 'data-candle-timeframe="1m"' in html
+    assert 'data-candle-timeframe="5m"' in html
+    assert 'data-candle-timeframe="15m"' in html
+    assert 'data-candle-timeframe="30m"' in html
+    assert 'data-candle-timeframe="1H"' in html
+    assert 'data-candle-timeframe="4H"' in html
+    assert "Validated exact-pool data" not in html
+    assert "4H Market Chart" not in html
+    assert "Closed market intervals; not an executable quote." not in html
+    assert "GeckoTerminal" not in html
     assert 'src="/static/branding/dexsato-logo.png"' in html
     assert 'data-copy-address="TokenAddress123456789"' in html
-    assert 'data-copy-address="PoolAddress123456789"' in html
-
 
 def test_renders_controlled_non_custodial_jupiter_swap_and_discloses_risk():
     html = render_solana_discovery_token_page(DETAIL)
@@ -53,11 +81,25 @@ def test_renders_controlled_non_custodial_jupiter_swap_and_discloses_risk():
     assert 'class="card jupiter" data-jupiter-sandbox' in html
 
 
-def test_chart_fails_safely_when_unavailable():
-    html = render_solana_discovery_token_page({**DETAIL, "chart": []})
-    assert "Insufficient chart history" in html
-    assert "Only 0 closed 4H candles available" in html
 
+def test_chart_fails_safely_when_unavailable():
+    html = render_solana_discovery_token_page({
+        **DETAIL,
+        "chart": [],
+        "candlestick_timeframes": {
+            "1m": [],
+            "5m": [],
+            "15m": [],
+            "30m": [],
+            "1H": [],
+            "4H": [],
+        },
+    })
+
+    assert 'data-candlestick-panel' in html
+    assert "Market candles unavailable for this timeframe." in html
+    assert "Insufficient chart history" not in html
+    assert "Only 0 closed 4H candles available" not in html
 
 def test_swap_client_requires_explicit_wallet_signing_and_preserves_same_origin_api_keys():
     script = (
@@ -76,15 +118,44 @@ def test_swap_client_requires_explicit_wallet_signing_and_preserves_same_origin_
     assert "privateKey" not in script and "seedPhrase" not in script
 
 
+
 def test_chart_does_not_imply_a_trend_from_two_candles():
+    candles = [
+        {
+            "time": 1700000000,
+            "open": 0.10,
+            "high": 0.13,
+            "low": 0.09,
+            "close": 0.12,
+            "volume": 100.0,
+        },
+        {
+            "time": 1700014400,
+            "open": 0.12,
+            "high": 0.125,
+            "low": 0.07,
+            "close": 0.08,
+            "volume": 120.0,
+        },
+    ]
     html = render_solana_discovery_token_page({
-        **DETAIL, "chart": [{"close": .12}, {"close": .08}],
+        **DETAIL,
+        "chart": candles,
+        "candlestick_timeframes": {
+            "1m": [],
+            "5m": [],
+            "15m": [],
+            "30m": [],
+            "1H": [],
+            "4H": candles,
+        },
     })
 
-    assert "Only 2 closed 4H candles available" in html
-    assert "At least 6 are required" in html
+    assert 'data-candlestick-panel' in html
+    assert '"4H":[{"time":1700000000' in html
+    assert "Only 2 closed 4H candles available" not in html
+    assert "At least 6 are required" not in html
     assert "<polyline" not in html
-
 
 def test_token_workspace_supports_market_intelligence_theme():
     html = render_solana_discovery_token_page({
@@ -291,3 +362,37 @@ def test_token_workspace_v248_social_links_have_no_orphan_separators():
     assert "Telegram" not in card
     assert "Twitter" not in card
 
+
+
+def test_token_workspace_v25_renders_multitimeframe_candlestick_only():
+    detail = dict(DETAIL)
+    candle = {
+        "time": 1700000000,
+        "open": 1.0,
+        "high": 1.2,
+        "low": 0.9,
+        "close": 1.1,
+        "volume": 100.0,
+    }
+    detail["candlestick_timeframes"] = {
+        "1m": [candle],
+        "5m": [candle],
+        "15m": [candle],
+        "30m": [candle],
+        "1H": [candle],
+        "4H": [candle],
+    }
+
+    html = render_solana_discovery_token_page(detail)
+
+    assert 'data-candlestick-panel' in html
+    assert 'data-candle-timeframe="1m"' in html
+    assert 'data-candle-timeframe="5m"' in html
+    assert 'data-candle-timeframe="15m"' in html
+    assert 'data-candle-timeframe="30m"' in html
+    assert 'data-candle-timeframe="1H"' in html
+    assert 'data-candle-timeframe="4H"' in html
+    assert "VALIDATED EXACT-POOL DATA" not in html
+    assert "4H Market Chart" not in html
+    assert "Closed market intervals; not an executable quote." not in html
+    assert "GeckoTerminal" not in html
