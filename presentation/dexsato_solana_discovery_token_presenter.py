@@ -1,4 +1,4 @@
-﻿"""Exact-token discovery workspace with a controlled non-custodial D6 swap pilot."""
+"""Exact-token discovery workspace with a controlled non-custodial D6 swap pilot."""
 
 from __future__ import annotations
 
@@ -344,10 +344,39 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
 
 
 # TOKEN_WORKSPACE_V25_MULTITIMEFRAME_CANDLESTICK
+
+# TRANSACTIONS_FEED_V121_ROBUST_UI_MOUNT
+def _transactions_table_panel(detail: dict[str, Any]) -> str:
+    token_address = escape(str(detail.get("token_address") or ""), quote=True)
+    symbol = escape(str(detail.get("symbol") or "Token"))
+    transactions_url = f"/api/discovery/solana/{token_address}/transactions"
+
+    return (
+        '<section class="transactions-panel" data-transactions-panel '
+        f'data-transactions-url="{transactions_url}">'
+        '<div class="transactions-head">'
+        '<h2>Transactions</h2>'
+        '<span class="transactions-state" data-transactions-state>Loading</span>'
+        '</div>'
+        '<div class="transactions-table-wrap">'
+        '<table class="transactions-table">'
+        '<thead><tr>'
+        '<th>Time</th><th>Type</th><th>Price USD</th>'
+        f'<th>Amount {symbol}</th><th>Total USD</th><th>Trader</th><th>Tx</th>'
+        '</tr></thead>'
+        '<tbody data-transactions-body>'
+        '<tr class="transactions-placeholder">'
+        '<td colspan="7">Loading recent exact-pool transactions...</td>'
+        '</tr>'
+        '</tbody></table></div></section>'
+    )
+
+
 def render_solana_discovery_token_page(detail: dict[str, Any]) -> str:
     """Render exact-token evidence and explicit wallet-approved Jupiter execution."""
     token_overview_card = _token_overview_card(detail)
     candlestick_chart_panel = _candlestick_chart_panel(detail)
+    transactions_table_panel = _transactions_table_panel(detail)
     symbol = escape(str(detail.get("symbol") or "Unknown"))
     trader_tf_strip = _trader_timeframe_strip(detail)
     name = escape(str(detail.get("name") or "Unknown token"))
@@ -961,6 +990,37 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 .candle-live-state i{width:6px;height:6px;border-radius:50%;background:currentColor}
 .candle-live-state.stale{color:var(--amber)}
 
+
+
+/* TRANSACTIONS_FEED_V121_ROBUST_UI_MOUNT */
+/* TRANSACTIONS_FEED_V1221_UI_SCOPE_FIX */
+.transactions-panel{margin-top:14px;border:1px solid var(--line);background:var(--panel);overflow:hidden}
+.transactions-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:0 14px;border-bottom:1px solid var(--line)}
+.transactions-head h2{margin:0;font-size:15px;line-height:1.2}
+.transactions-state{color:var(--muted);font:700 10px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase}
+.transactions-state.ready{color:var(--green)}
+.transactions-state.unavailable{color:var(--amber)}
+/* TRANSACTIONS_FEED_V122_COMPACT_LIVE_TABLE */
+.transactions-table-wrap{max-height:480px;overflow:auto;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable}
+.transactions-table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums lining-nums}
+.transactions-table th,.transactions-table td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.transactions-table th{position:sticky;top:0;z-index:2;color:var(--muted);background:var(--panel2);box-shadow:0 1px 0 var(--line);font:700 9px/1.2 var(--mono);letter-spacing:.05em;text-transform:uppercase}
+.transactions-table td{color:var(--text);font:12px/1.3 var(--mono)}
+.transactions-table th:first-child,.transactions-table td:first-child,.transactions-table th:nth-child(2),.transactions-table td:nth-child(2){text-align:left}
+.transactions-table tbody tr:last-child td{border-bottom:0}
+.transaction-side{display:inline-flex;align-items:center;justify-content:center;min-width:42px;padding:4px 7px;border-radius:4px;font:800 10px/1 var(--mono)}
+.transaction-side.buy{color:var(--green);background:rgba(38,212,154,.08)}
+.transaction-side.sell{color:var(--red);background:rgba(255,86,117,.08)}
+.transaction-trader,.transaction-tx{color:var(--blue);text-decoration:none}
+.transaction-tx:hover{text-decoration:underline}
+.transactions-placeholder td,.transactions-empty td,.transactions-error td{padding:22px 14px;text-align:center!important;color:var(--muted);font-family:var(--ui)}
+.transactions-error td{color:var(--amber)}
+html[data-theme="intel"] .transactions-panel{border-color:#303a45;background:#0f141a}
+html[data-theme="intel"] .transactions-head{border-bottom-color:#28313b}
+html[data-theme="intel"] .transactions-table th{background:#121820}
+html[data-theme="intel"] .transactions-table th,html[data-theme="intel"] .transactions-table td{border-bottom-color:#222b35}
+@media(max-width:700px){.transactions-table-wrap{max-height:400px}}
+
 </style></head><body><main class="shell"><header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><strong>Solana Discovery</strong></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
 __TOKEN_OVERVIEW_CARD__
 <section class="hero"><div><span class="eyebrow">Qualified exact-token workspace</span><h1>__SYMBOL__ / __QUOTE__</h1><p>Review observed market activity, exact-pool identity and disclosed risk before taking any action.</p></div><div class="status"><span class="eyebrow">Market data</span><b>__STATUS__</b><small>__STATUS_LABEL__</small></div></section>
@@ -1556,6 +1616,176 @@ __CANDLESTICK_CHART_PANEL__
 })();
 </script>
 
+
+<script>
+/* TRANSACTIONS_FEED_V121_ROBUST_UI_MOUNT */
+(function(){
+  const panel=document.querySelector("[data-transactions-panel]");
+  if(!panel) return;
+
+  const url=panel.dataset.transactionsUrl||"";
+  const tbody=panel.querySelector("[data-transactions-body]");
+  const state=panel.querySelector("[data-transactions-state]");
+
+  const rawText=(value)=>value===null||value===undefined?"":String(value);
+  const compact=(value)=>{
+    const raw=rawText(value);
+    if(!raw) return "--";
+    return raw.length>14?raw.slice(0,6)+"..."+raw.slice(-4):raw;
+  };
+  const formatPrice=(value)=>{
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    if(Math.abs(n)>=1) return "$"+n.toLocaleString(undefined,{maximumFractionDigits:6});
+    if(Math.abs(n)>=0.01) return "$"+n.toFixed(6);
+    return "$"+n.toFixed(8);
+  };
+  const formatUsd=(value)=>{
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    return "$"+n.toLocaleString(undefined,{minimumFractionDigits:n<1?4:2,maximumFractionDigits:n<1?4:2});
+  };
+  const formatAmount=(value)=>{
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    return n.toLocaleString(undefined,{maximumFractionDigits:4});
+  };
+  const formatTime=(value)=>{
+    const d=new Date(rawText(value));
+    if(Number.isNaN(d.getTime())) return "--";
+    return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  };
+
+  function textCell(value){
+    const td=document.createElement("td");
+    td.textContent=value;
+    return td;
+  }
+
+  function nodeCell(node){
+    const td=document.createElement("td");
+    td.append(node);
+    return td;
+  }
+
+  function sideNode(value){
+    const side=rawText(value).toUpperCase()==="SELL"?"SELL":"BUY";
+    const span=document.createElement("span");
+    span.className="transaction-side "+side.toLowerCase();
+    span.textContent=side;
+    return span;
+  }
+
+  function traderNode(value){
+    const raw=rawText(value);
+    const span=document.createElement("span");
+    span.className="transaction-trader";
+    span.textContent=compact(raw);
+    if(raw) span.title=raw;
+    return span;
+  }
+
+  function txNode(value){
+    const raw=rawText(value);
+    if(!raw){
+      const span=document.createElement("span");
+      span.textContent="--";
+      return span;
+    }
+
+    const link=document.createElement("a");
+    link.className="transaction-tx";
+    link.href="https://solscan.io/tx/"+encodeURIComponent(raw);
+    link.target="_blank";
+    link.rel="noopener noreferrer";
+    link.title=raw;
+    link.textContent=compact(raw);
+    return link;
+  }
+
+  const MAX_VISIBLE_TRANSACTIONS=30;
+
+  function renderRows(rows){
+    tbody.replaceChildren();
+    const visibleRows=rows.slice(0,MAX_VISIBLE_TRANSACTIONS);
+
+    if(!visibleRows.length){
+      const tr=document.createElement("tr");
+      tr.className="transactions-empty";
+      const td=document.createElement("td");
+      td.colSpan=7;
+      td.textContent="No recent exact-pool transactions available.";
+      tr.append(td);
+      tbody.append(tr);
+      return;
+    }
+
+    visibleRows.forEach(item=>{
+      if(!item||typeof item!=="object") return;
+
+      const tr=document.createElement("tr");
+      tr.dataset.transactionId=rawText(item.id);
+      tr.append(
+        textCell(formatTime(item.timestamp)),
+        nodeCell(sideNode(item.side)),
+        textCell(formatPrice(item.price_usd)),
+        textCell(formatAmount(item.token_amount)),
+        textCell(formatUsd(item.volume_usd)),
+        nodeCell(traderNode(item.trader)),
+        nodeCell(txNode(item.tx_hash))
+      );
+      tbody.append(tr);
+    });
+  }
+
+  async function loadTransactions(){
+    if(!url) return;
+
+    try{
+      const response=await fetch(url,{
+        method:"GET",
+        credentials:"same-origin",
+        headers:{"Accept":"application/json"},
+        cache:"no-store"
+      });
+
+      if(!response.ok) throw new Error("transactions unavailable");
+
+      const payload=await response.json();
+      const rows=Array.isArray(payload.transactions)
+        ? payload.transactions
+        : [];
+      renderRows(rows);
+
+      if(state){
+        const shown=Math.min(rows.length,MAX_VISIBLE_TRANSACTIONS);
+        state.textContent=shown ? shown+" recent" : "Loaded";
+        state.classList.remove("unavailable");
+        state.classList.add("ready");
+      }
+    }catch(error){
+      tbody.replaceChildren();
+
+      const tr=document.createElement("tr");
+      tr.className="transactions-error";
+      const td=document.createElement("td");
+      td.colSpan=7;
+      td.textContent="Recent transactions are temporarily unavailable.";
+      tr.append(td);
+      tbody.append(tr);
+
+      if(state){
+        state.textContent="Unavailable";
+        state.classList.remove("ready");
+        state.classList.add("unavailable");
+      }
+    }
+  }
+
+  loadTransactions();
+})();
+</script>
+
 </body></html>"""
     replacements = {
         "__SYMBOL__": symbol, "__QUOTE__": quote, "__NAME__": name,
@@ -1576,6 +1806,6 @@ __CANDLESTICK_CHART_PANEL__
         html = html.replace(key, value)
     html = html.replace("__TRADER_TF_STRIP__", trader_tf_strip)
     html = html.replace("__TOKEN_OVERVIEW_CARD__", token_overview_card)
-    html = html.replace("__CANDLESTICK_CHART_PANEL__", candlestick_chart_panel)
+    html = html.replace("__CANDLESTICK_CHART_PANEL__", candlestick_chart_panel + transactions_table_panel)
     return html
 

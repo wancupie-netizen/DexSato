@@ -282,3 +282,237 @@ def test_live_candle_builder_never_rewrites_future_provider_history():
 
     assert used is False
     assert merged == candles
+
+
+
+# TRANSACTIONS_FEED_V10_EXACT_POOL_SERVICE
+def test_transactions_service_fetches_only_exact_qualified_pool():
+    from application.solana_discovery_token_service import load_solana_discovery_transactions
+    calls = []
+
+    class TradesResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"data": [{
+                "id": "solana_trade_1",
+                "type": "trade",
+                "attributes": {
+                    "block_timestamp": "2026-08-26T00:00:10Z",
+                    "tx_hash": "tx-buy",
+                    "tx_from_address": "wallet-buy",
+                    "from_token_amount": "0.5",
+                    "to_token_amount": "1000",
+                    "price_from_in_usd": "200",
+                    "price_to_in_usd": "0.1",
+                    "volume_in_usd": "100",
+                    "from_token_address": "So11111111111111111111111111111111111111112",
+                    "to_token_address": TOKEN,
+                    "kind": "buy",
+                },
+            }]}
+
+    def get(url, params=None, timeout=10):
+        calls.append((url, params, timeout))
+        return TradesResponse()
+
+    result = load_solana_discovery_transactions(TOKEN, feed=FEED, request_get=get)
+
+    assert result is not None
+    assert result["token_address"] == TOKEN
+    assert result["pair_address"] == POOL
+    assert len(calls) == 1
+    assert calls[0][0].endswith(f"/networks/solana/pools/{POOL}/trades")
+    assert calls[0][1] == {"token": "base"}
+    assert calls[0][2] == 10
+    trade = result["transactions"][0]
+    assert trade["side"] == "BUY"
+    assert trade["token_amount"] == 1000.0
+    assert trade["price_usd"] == 0.1
+    assert trade["volume_usd"] == 100.0
+    assert trade["trader"] == "wallet-buy"
+
+
+def test_transactions_service_derives_sell_from_exact_token_direction():
+    from application.solana_discovery_token_service import _normalize_exact_pool_trade
+    row = {
+        "id": "solana_trade_2",
+        "attributes": {
+            "block_timestamp": "2026-08-26T00:00:20Z",
+            "tx_hash": "tx-sell",
+            "tx_from_address": "wallet-sell",
+            "from_token_amount": "2500",
+            "to_token_amount": "1.25",
+            "price_from_in_usd": "0.05",
+            "price_to_in_usd": "100",
+            "volume_in_usd": "125",
+            "from_token_address": TOKEN,
+            "to_token_address": "So11111111111111111111111111111111111111112",
+            "kind": "buy",
+        },
+    }
+    trade = _normalize_exact_pool_trade(row, TOKEN)
+    assert trade is not None
+    assert trade["side"] == "SELL"
+    assert trade["token_amount"] == 2500.0
+    assert trade["price_usd"] == 0.05
+    assert trade["volume_usd"] == 125.0
+
+
+def test_transactions_service_rejects_trade_not_involving_exact_token():
+    from application.solana_discovery_token_service import _normalize_exact_pool_trade
+    row = {
+        "id": "wrong-token-trade",
+        "attributes": {
+            "block_timestamp": "2026-08-26T00:00:30Z",
+            "tx_hash": "tx-wrong",
+            "tx_from_address": "wallet",
+            "from_token_amount": "1",
+            "to_token_amount": "2",
+            "price_from_in_usd": "1",
+            "price_to_in_usd": "1",
+            "volume_in_usd": "2",
+            "from_token_address": "other-a",
+            "to_token_address": "other-b",
+        },
+    }
+    assert _normalize_exact_pool_trade(row, TOKEN) is None
+
+
+def test_transactions_service_deduplicates_by_provider_trade_identity():
+    from application.solana_discovery_token_service import _normalize_exact_pool_trades
+    row = {
+        "id": "same-trade-id",
+        "attributes": {
+            "block_timestamp": "2026-08-26T00:00:40Z",
+            "tx_hash": "same-tx",
+            "tx_from_address": "wallet",
+            "from_token_amount": "1",
+            "to_token_amount": "10",
+            "price_from_in_usd": "10",
+            "price_to_in_usd": "1",
+            "volume_in_usd": "10",
+            "from_token_address": "quote-token",
+            "to_token_address": TOKEN,
+        },
+    }
+    result = _normalize_exact_pool_trades({"data": [row, dict(row)]}, TOKEN)
+    assert len(result) == 1
+    assert result[0]["id"] == "same-trade-id"
+
+
+def test_transactions_service_rejects_unknown_or_case_changed_token():
+    from application.solana_discovery_token_service import load_solana_discovery_transactions
+    assert load_solana_discovery_transactions("unknown", feed=FEED) is None
+    assert load_solana_discovery_transactions(TOKEN.lower(), feed=FEED) is None
+
+
+def test_transactions_service_fails_closed_for_malformed_provider_payload():
+    from application.solana_discovery_token_service import load_solana_discovery_transactions
+
+    class BadResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"data": "not-a-list"}
+
+    result = load_solana_discovery_transactions(
+        TOKEN,
+        feed=FEED,
+        request_get=lambda *args, **kwargs: BadResponse(),
+    )
+    assert result is not None
+    assert result["transactions"] == []
+
+
+
+# TRANSACTIONS_FEED_V123_PROVIDER_RESILIENCE
+def test_provider_resilience_reuses_minute_ohlcv_cache(monkeypatch):
+    import requests
+    import application.solana_discovery_token_service as service
+
+    service._OHLCV_CACHE.clear()
+    calls = []
+
+    def provider(candidate, request_get):
+        calls.append(candidate["pair_address"])
+        return [{
+            "time": 1700000000.0,
+            "open": 1.0,
+            "high": 1.1,
+            "low": 0.9,
+            "close": 1.05,
+            "volume": 100.0,
+        }]
+
+    monkeypatch.setattr(service, "_minute_candles_provider", provider)
+    candidate = {"pair_address": "cache-pair"}
+
+    first = service._minute_candles(candidate, requests.get)
+    second = service._minute_candles(candidate, requests.get)
+
+    assert first == second
+    assert calls == ["cache-pair"]
+
+
+def test_provider_resilience_uses_stale_ohlcv_when_refresh_fails(monkeypatch):
+    import requests
+    import application.solana_discovery_token_service as service
+
+    service._OHLCV_CACHE.clear()
+    candidate = {"pair_address": "stale-pair"}
+    cached_rows = [{
+        "time": 1700000000.0,
+        "open": 1.0,
+        "high": 1.1,
+        "low": 0.9,
+        "close": 1.05,
+        "volume": 100.0,
+    }]
+    service._OHLCV_CACHE[("stale-pair", "minute")] = (
+        service.monotonic() - 999.0,
+        cached_rows,
+    )
+
+    def failing_provider(candidate, request_get):
+        raise requests.RequestException("temporary provider failure")
+
+    monkeypatch.setattr(service, "_minute_candles_provider", failing_provider)
+
+    result = service._minute_candles(candidate, requests.get)
+
+    assert result == cached_rows
+
+
+def test_provider_resilience_transactions_fall_back_to_last_valid_payload(monkeypatch):
+    import requests
+    import application.solana_discovery_token_service as service
+
+    service._TRANSACTION_CACHE.clear()
+    token = "CacheToken123"
+    cached = {
+        "token_address": token,
+        "pair_address": "CachePool123",
+        "transactions": [{"id": "trade-1", "side": "BUY"}],
+        "as_of": "2026-08-26T00:00:00+00:00",
+        "source": "GeckoTerminal exact-pool trades",
+    }
+    service._TRANSACTION_CACHE[token] = (
+        service.monotonic() - 999.0,
+        cached,
+    )
+
+    def failing_provider(*args, **kwargs):
+        raise requests.RequestException("temporary provider failure")
+
+    monkeypatch.setattr(
+        service,
+        "_load_solana_discovery_transactions_provider",
+        failing_provider,
+    )
+
+    result = service.load_solana_discovery_transactions(token)
+
+    assert result is not None
+    assert result["transactions"] == [{"id": "trade-1", "side": "BUY"}]
+    assert result["stale"] is True

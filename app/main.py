@@ -62,6 +62,7 @@ from application.solana_discovery_feed_service import (
 from application.solana_discovery_token_service import (
     load_solana_discovery_live_candles,
     load_solana_discovery_token,
+    load_solana_discovery_transactions,
 )
 
 from application.telegram_notifier import (
@@ -227,6 +228,26 @@ def solana_discovery_live_candles(
         raise HTTPException(
             status_code=503,
             detail="Live candle data is temporarily unavailable.",
+        ) from error
+
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Qualified discovery token is not available.",
+        )
+    return payload
+
+
+# TRANSACTIONS_FEED_V11_API_ROUTE
+@app.get("/api/discovery/solana/{token_address}/transactions")
+def solana_discovery_transactions(token_address: str) -> dict[str, object]:
+    """Return verified recent exact-pool transactions for one qualified token."""
+    try:
+        payload = load_solana_discovery_transactions(token_address)
+    except (requests.RequestException, RuntimeError, TypeError, ValueError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Live transaction data is temporarily unavailable.",
         ) from error
 
     if payload is None:

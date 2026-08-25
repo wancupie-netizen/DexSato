@@ -3,6 +3,7 @@ Tests for DexSato V1 FastAPI Application.
 """
 
 import asyncio
+import requests
 from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi import (
@@ -408,3 +409,55 @@ def test_should_use_local_server_defaults():
     assert HOST == "127.0.0.1"
 
     assert PORT == 8000
+
+
+
+# TRANSACTIONS_FEED_V11_API_ROUTE
+def test_transactions_api_returns_exact_pool_service_payload():
+    from app.main import solana_discovery_transactions
+    expected = {
+        "token_address": "Token123", "pair_address": "Pool123",
+        "transactions": [{"id": "trade-1", "side": "BUY"}],
+        "as_of": "2026-08-26T00:00:01+00:00",
+        "source": "GeckoTerminal exact-pool trades",
+    }
+    with patch("app.main.load_solana_discovery_transactions", return_value=expected) as mock_load:
+        assert solana_discovery_transactions("Token123") == expected
+    mock_load.assert_called_once_with("Token123")
+
+
+def test_transactions_api_returns_404_for_unqualified_token():
+    from app.main import solana_discovery_transactions
+    with patch("app.main.load_solana_discovery_transactions", return_value=None):
+        try:
+            solana_discovery_transactions("Unknown")
+        except HTTPException as error:
+            assert error.status_code == 404
+            assert error.detail == "Qualified discovery token is not available."
+        else:
+            raise AssertionError("Expected unknown discovery token to return 404")
+
+
+def test_transactions_api_returns_503_when_provider_is_unavailable():
+    from app.main import solana_discovery_transactions
+    with patch("app.main.load_solana_discovery_transactions", side_effect=requests.RequestException("provider unavailable")):
+        try:
+            solana_discovery_transactions("Token123")
+        except HTTPException as error:
+            assert error.status_code == 503
+            assert error.detail == "Live transaction data is temporarily unavailable."
+        else:
+            raise AssertionError("Expected provider failure to return 503")
+
+
+def test_transactions_api_route_is_registered_as_get():
+    routes = {
+        (route.path, tuple(sorted(route.methods or [])))
+        for route in app.routes
+        if hasattr(route, "path") and hasattr(route, "methods")
+    }
+
+    assert (
+        "/api/discovery/solana/{token_address}/transactions",
+        ("GET",),
+    ) in routes

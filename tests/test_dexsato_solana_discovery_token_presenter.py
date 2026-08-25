@@ -488,3 +488,114 @@ def test_chart_v221_keeps_live_builder_on_same_origin_polling_path():
     assert 'setInterval(()=>pollLive(false),10000)' in html
     assert 'cache:"no-store"' in html
     assert "location.reload" not in html
+
+
+
+# TRANSACTIONS_FEED_V121_ROBUST_UI_MOUNT
+def test_transactions_feed_v121_robust_ui_mount():
+    candle = {
+        "time": 1700000000,
+        "open": 1.0,
+        "high": 1.2,
+        "low": 0.9,
+        "close": 1.1,
+        "volume": 100.0,
+    }
+
+    detail = dict(DETAIL)
+    detail["token_address"] = "TokenAddress123456789"
+    detail["symbol"] = "TEST"
+    detail["candlestick_timeframes"] = {
+        "1m": [candle],
+        "5m": [candle],
+        "15m": [candle],
+        "30m": [candle],
+        "1H": [candle],
+        "4H": [candle],
+    }
+
+    html = render_solana_discovery_token_page(detail)
+
+    assert "TRANSACTIONS_FEED_V121_ROBUST_UI_MOUNT" in html
+    assert 'data-transactions-panel' in html
+    assert 'data-transactions-url="/api/discovery/solana/TokenAddress123456789/transactions"' in html
+    assert "<h2>Transactions</h2>" in html
+    assert "<th>Time</th>" in html
+    assert "<th>Type</th>" in html
+    assert "<th>Price USD</th>" in html
+    assert "<th>Amount TEST</th>" in html
+    assert "<th>Total USD</th>" in html
+    assert "<th>Trader</th>" in html
+    assert "<th>Tx</th>" in html
+    assert html.index('data-candlestick-panel') < html.index('data-transactions-panel')
+    assert 'credentials:"same-origin"' in html
+    assert 'cache:"no-store"' in html
+    assert "https://solscan.io/tx/" in html
+    assert "loadTransactions();" in html
+
+
+
+# TRANSACTIONS_FEED_V122_COMPACT_LIVE_TABLE
+def test_transactions_feed_v122_compacts_rows_and_keeps_internal_scroll():
+    candle = {
+        "time": 1700000000,
+        "open": 1.0,
+        "high": 1.2,
+        "low": 0.9,
+        "close": 1.1,
+        "volume": 100.0,
+    }
+    detail = dict(DETAIL)
+    detail["token_address"] = "TokenAddress123456789"
+    detail["symbol"] = "TEST"
+    detail["candlestick_timeframes"] = {
+        "1m": [candle], "5m": [candle], "15m": [candle],
+        "30m": [candle], "1H": [candle], "4H": [candle],
+    }
+    html = render_solana_discovery_token_page(detail)
+    assert "TRANSACTIONS_FEED_V122_COMPACT_LIVE_TABLE" in html
+    assert "max-height:480px" in html
+    assert "overflow:auto" in html
+    assert "position:sticky" in html
+    assert "top:0" in html
+    assert "MAX_VISIBLE_TRANSACTIONS=30" in html
+    assert "rows.slice(0,MAX_VISIBLE_TRANSACTIONS)" in html
+    assert "visibleRows.forEach" in html
+    assert 'state.textContent=shown ? shown+" recent" : "Loaded"' in html
+    assert "setInterval(loadTransactions" not in html
+
+
+
+# TRANSACTIONS_FEED_V1221_UI_SCOPE_FIX
+def test_transactions_feed_v1221_defines_rows_before_loaded_state():
+    candle = {
+        "time": 1700000000,
+        "open": 1.0,
+        "high": 1.2,
+        "low": 0.9,
+        "close": 1.1,
+        "volume": 100.0,
+    }
+
+    detail = dict(DETAIL)
+    detail["token_address"] = "TokenAddress123456789"
+    detail["symbol"] = "TEST"
+    detail["candlestick_timeframes"] = {
+        "1m": [candle],
+        "5m": [candle],
+        "15m": [candle],
+        "30m": [candle],
+        "1H": [candle],
+        "4H": [candle],
+    }
+
+    html = render_solana_discovery_token_page(detail)
+
+    assert "TRANSACTIONS_FEED_V1221_UI_SCOPE_FIX" in html
+    assert "const rows=Array.isArray(payload.transactions)" in html
+    assert "renderRows(rows);" in html
+    assert "Math.min(rows.length,MAX_VISIBLE_TRANSACTIONS)" in html
+
+    rows_pos = html.index("const rows=Array.isArray(payload.transactions)")
+    state_pos = html.index("Math.min(rows.length,MAX_VISIBLE_TRANSACTIONS)")
+    assert rows_pos < state_pos

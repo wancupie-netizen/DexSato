@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from time import monotonic
 from typing import Any, Callable
 
 import requests
@@ -11,6 +12,12 @@ from application.solana_discovery_feed_service import load_solana_discovery_feed
 
 
 DEXSCREENER_PAIR_URL = "https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
+
+# TRANSACTIONS_FEED_V10_EXACT_POOL_SERVICE
+GECKO_TRADES_URL = (
+    "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
+    "{pair_address}/trades"
+)
 GECKO_OHLCV_URL = (
     "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
     "{pair_address}/ohlcv/hour"
@@ -67,7 +74,7 @@ def _live_pair(candidate: dict[str, Any], request_get: Callable[..., Any]) -> di
     return None
 
 
-def _chart(candidate: dict[str, Any], request_get: Callable[..., Any]) -> list[dict[str, float]]:
+def _chart_provider(candidate: dict[str, Any], request_get: Callable[..., Any]) -> list[dict[str, float]]:
     pair_address = str(candidate.get("pair_address") or "")
     if not pair_address:
         return []
@@ -98,7 +105,7 @@ def _chart(candidate: dict[str, Any], request_get: Callable[..., Any]) -> list[d
 
 
 
-def _minute_candles(
+def _minute_candles_provider(
     candidate: dict[str, Any],
     request_get: Callable[..., Any],
 ) -> list[dict[str, float]]:
@@ -225,7 +232,7 @@ def _aggregate_candles(
     return result
 
 
-def _hourly_candles(
+def _hourly_candles_provider(
     candidate: dict[str, Any],
     request_get: Callable[..., Any],
 ) -> list[dict[str, float]]:
@@ -266,6 +273,76 @@ def _hourly_candles(
             "volume": values[5],
         })
     return candles
+
+
+
+# TRANSACTIONS_FEED_V123_PROVIDER_RESILIENCE
+_OHLCV_CACHE: dict[tuple[str, str], tuple[float, list[dict[str, float]]]] = {}
+_TRANSACTION_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+_OHLCV_TTL_SECONDS = {
+    "minute": 45.0,
+    "hour": 60.0,
+    "4h": 60.0,
+}
+_TRANSACTION_TTL_SECONDS = 20.0
+
+
+def _copy_candles(rows: list[dict[str, float]]) -> list[dict[str, float]]:
+    return [dict(row) for row in rows]
+
+
+def _cached_ohlcv(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+    cache_kind: str,
+    provider: Callable[[dict[str, Any], Callable[..., Any]], list[dict[str, float]]],
+) -> list[dict[str, float]]:
+    if request_get is not requests.get:
+        return provider(candidate, request_get)
+
+    pair_address = str(candidate.get("pair_address") or "")
+    if not pair_address:
+        return []
+
+    key = (pair_address, cache_kind)
+    now = monotonic()
+    cached = _OHLCV_CACHE.get(key)
+    ttl = _OHLCV_TTL_SECONDS[cache_kind]
+
+    if cached is not None and (now - cached[0]) < ttl:
+        return _copy_candles(cached[1])
+
+    try:
+        rows = provider(candidate, request_get)
+    except requests.RequestException:
+        if cached is not None:
+            return _copy_candles(cached[1])
+        raise
+
+    _OHLCV_CACHE[key] = (now, _copy_candles(rows))
+    return _copy_candles(rows)
+
+
+def _chart(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+) -> list[dict[str, float]]:
+    return _cached_ohlcv(candidate, request_get, "4h", _chart_provider)
+
+
+def _minute_candles(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+) -> list[dict[str, float]]:
+    return _cached_ohlcv(candidate, request_get, "minute", _minute_candles_provider)
+
+
+def _hourly_candles(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+) -> list[dict[str, float]]:
+    return _cached_ohlcv(candidate, request_get, "hour", _hourly_candles_provider)
 
 
 def _candlestick_timeframes(
@@ -418,6 +495,180 @@ def load_solana_discovery_live_candles(
         "live_observation": live_observation,
         "volume_live": False,
     }
+
+
+
+# TRANSACTIONS_FEED_V10_EXACT_POOL_SERVICE
+def _transaction_candidate(token_address: str, feed: dict[str, Any]) -> dict[str, Any] | None:
+    candidates = feed.get("candidates") if isinstance(feed, dict) else None
+    if not isinstance(candidates, list):
+        return None
+    return next(
+        (
+            item for item in candidates
+            if isinstance(item, dict)
+            and str(item.get("token_address") or "") == token_address
+            and str(item.get("pair_address") or "")
+        ),
+        None,
+    )
+
+
+def _normalize_exact_pool_trade(row: dict[str, Any], token_address: str) -> dict[str, Any] | None:
+    attributes = row.get("attributes") if isinstance(row.get("attributes"), dict) else {}
+    trade_id = str(row.get("id") or "").strip()
+    tx_hash = str(attributes.get("tx_hash") or "").strip()
+    timestamp = str(attributes.get("block_timestamp") or "").strip()
+    trader = str(attributes.get("tx_from_address") or "").strip()
+    from_address = str(attributes.get("from_token_address") or "").strip()
+    to_address = str(attributes.get("to_token_address") or "").strip()
+
+    if not trade_id or not tx_hash or not timestamp:
+        return None
+
+    if to_address == token_address:
+        side = "BUY"
+        token_amount = _number(attributes.get("to_token_amount"))
+        price_usd = _number(attributes.get("price_to_in_usd"))
+    elif from_address == token_address:
+        side = "SELL"
+        token_amount = _number(attributes.get("from_token_amount"))
+        price_usd = _number(attributes.get("price_from_in_usd"))
+    else:
+        return None
+
+    volume_usd = _number(attributes.get("volume_in_usd"))
+    if token_amount is None or token_amount < 0:
+        return None
+    if price_usd is None or price_usd < 0:
+        return None
+    if volume_usd is None or volume_usd < 0:
+        return None
+
+    return {
+        "id": trade_id,
+        "tx_hash": tx_hash,
+        "timestamp": timestamp,
+        "trader": trader or None,
+        "side": side,
+        "price_usd": price_usd,
+        "token_amount": token_amount,
+        "volume_usd": volume_usd,
+    }
+
+
+def _normalize_exact_pool_trades(payload: Any, token_address: str) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    rows = payload.get("data")
+    if not isinstance(rows, list):
+        return []
+
+    transactions: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        normalized = _normalize_exact_pool_trade(row, token_address)
+        if normalized is None:
+            continue
+        identity = str(normalized["id"])
+        if identity in seen:
+            continue
+        seen.add(identity)
+        transactions.append(normalized)
+
+    transactions.sort(
+        key=lambda item: (str(item.get("timestamp") or ""), str(item.get("id") or "")),
+        reverse=True,
+    )
+    return transactions
+
+
+def _load_solana_discovery_transactions_provider(
+    token_address: str,
+    *,
+    feed: dict[str, Any] | None = None,
+    request_get: Callable[..., Any] = requests.get,
+) -> dict[str, Any] | None:
+    # Verified recent trades for one qualified exact Solana pool.
+    address = str(token_address or "").strip()
+    if not address or len(address) > 80 or "/" in address:
+        return None
+
+    public_feed = feed if feed is not None else load_solana_discovery_feed()
+    candidate = _transaction_candidate(address, public_feed)
+    if candidate is None:
+        return None
+
+    pair_address = str(candidate.get("pair_address") or "").strip()
+    response = request_get(
+        GECKO_TRADES_URL.format(pair_address=pair_address),
+        params={"token": "base"},
+        timeout=10,
+    )
+    response.raise_for_status()
+
+    return {
+        "token_address": address,
+        "pair_address": pair_address,
+        "transactions": _normalize_exact_pool_trades(response.json(), address),
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "source": "GeckoTerminal exact-pool trades",
+    }
+
+
+
+def _copy_transaction_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    copied = dict(payload)
+    rows = payload.get("transactions")
+    copied["transactions"] = (
+        [dict(row) for row in rows if isinstance(row, dict)]
+        if isinstance(rows, list)
+        else []
+    )
+    return copied
+
+
+def load_solana_discovery_transactions(
+    token_address: str,
+    *,
+    feed: dict[str, Any] | None = None,
+    request_get: Callable[..., Any] = requests.get,
+) -> dict[str, Any] | None:
+    if request_get is not requests.get or feed is not None:
+        return _load_solana_discovery_transactions_provider(
+            token_address,
+            feed=feed,
+            request_get=request_get,
+        )
+
+    address = str(token_address or "").strip()
+    now = monotonic()
+    cached = _TRANSACTION_CACHE.get(address)
+
+    if cached is not None and (now - cached[0]) < _TRANSACTION_TTL_SECONDS:
+        return _copy_transaction_payload(cached[1])
+
+    try:
+        payload = _load_solana_discovery_transactions_provider(
+            token_address,
+            feed=feed,
+            request_get=request_get,
+        )
+    except requests.RequestException:
+        if cached is not None:
+            stale = _copy_transaction_payload(cached[1])
+            stale["stale"] = True
+            return stale
+        raise
+
+    if payload is None:
+        return None
+
+    stored = _copy_transaction_payload(payload)
+    _TRANSACTION_CACHE[address] = (now, stored)
+    return _copy_transaction_payload(stored)
 
 
 def load_solana_discovery_token(
