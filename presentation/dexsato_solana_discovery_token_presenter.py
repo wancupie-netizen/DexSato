@@ -278,6 +278,7 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
 # TOKEN_WORKSPACE_V248_DETERMINISTIC_SOCIAL_LINKS
 
 # CHART_V21_INTERACTIVE_TRADING_CHART
+# CHART_V22_LIVE_CANDLE
 def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
     raw = detail.get("candlestick_timeframes")
     datasets = raw if isinstance(raw, dict) else {}
@@ -303,8 +304,12 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
         for timeframe in ("1m", "5m", "15m", "30m", "1H", "4H")
     )
 
+    token_address = escape(str(detail.get("token_address") or ""), quote=True)
+    live_url = f"/api/discovery/solana/{token_address}/candles"
+
     return (
-        '<section class="candlestick-panel" data-candlestick-panel>'
+        '<section class="candlestick-panel" data-candlestick-panel '
+        f'data-live-candle-url="{live_url}">'
         '<div class="candle-toolbar">'
         '<div class="candle-timeframe-tabs" role="group" aria-label="Candlestick timeframe">'
         + buttons
@@ -317,6 +322,9 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
         '<span>C <b data-ohlc-close>--</b></span>'
         '<span>V <b data-ohlc-volume>--</b></span>'
         '</div>'
+        '<span class="candle-live-state" data-candle-live-state>'
+        '<i aria-hidden="true"></i>LIVE'
+        '</span>'
         '<button class="candle-reset" type="button" data-candle-reset>Reset view</button>'
         '</div>'
         '</div>'
@@ -946,6 +954,13 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 @media(max-width:900px){.candle-toolbar{align-items:stretch;flex-direction:column;gap:0}.candle-toolbar-actions{justify-content:space-between;padding:8px 12px;border-top:1px solid var(--line)}.candle-ohlc{justify-content:flex-start}}
 @media(max-width:560px){.candle-toolbar-actions{align-items:flex-start;flex-direction:column}.candle-ohlc{gap:6px 10px}.candlestick-stage{min-height:350px}.candlestick-chart{height:330px}}
 
+
+
+/* CHART_V22_LIVE_CANDLE */
+.candle-live-state{display:inline-flex;align-items:center;gap:6px;color:var(--green);font:700 10px/1 var(--mono);letter-spacing:.04em}
+.candle-live-state i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.candle-live-state.stale{color:var(--amber)}
+
 </style></head><body><main class="shell"><header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><strong>Solana Discovery</strong></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
 __TOKEN_OVERVIEW_CARD__
 <section class="hero"><div><span class="eyebrow">Qualified exact-token workspace</span><h1>__SYMBOL__ / __QUOTE__</h1><p>Review observed market activity, exact-pool identity and disclosed risk before taking any action.</p></div><div class="status"><span class="eyebrow">Market data</span><b>__STATUS__</b><small>__STATUS_LABEL__</small></div></section>
@@ -1217,6 +1232,8 @@ __CANDLESTICK_CHART_PANEL__
   const dataNode=panel.querySelector("[data-candlestick-data]");
   const buttons=[...panel.querySelectorAll("[data-candle-timeframe]")];
   const resetButton=panel.querySelector("[data-candle-reset]");
+  const liveState=panel.querySelector("[data-candle-live-state]");
+  const liveUrl=panel.dataset.liveCandleUrl||"";
   const ohlc={
     open:panel.querySelector("[data-ohlc-open]"),
     high:panel.querySelector("[data-ohlc-high]"),
@@ -1236,7 +1253,7 @@ __CANDLESTICK_CHART_PANEL__
   };
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
-  const state={timeframe:"5m",visibleCount:60,offset:0,dragging:false,dragStartX:0,dragStartOffset:0,geometry:null};
+  const state={timeframe:"5m",visibleCount:60,offset:0,dragging:false,dragStartX:0,dragStartOffset:0,geometry:null,liveInFlight:false};
 
   function formatPrice(value){
     const n=Number(value);
@@ -1410,6 +1427,57 @@ __CANDLESTICK_CHART_PANEL__
     updateOHLC(row);
   }
 
+
+  function setLiveState(ok){
+    if(!liveState) return;
+    liveState.classList.toggle("stale",!ok);
+    const textNode=[...liveState.childNodes].find(node=>node.nodeType===Node.TEXT_NODE);
+    if(textNode) textNode.textContent=ok?"LIVE":"STALE";
+  }
+
+  async function pollLive(force=false){
+    if(!liveUrl||state.liveInFlight) return;
+    if(document.hidden&&!force) return;
+
+    state.liveInFlight=true;
+    try{
+      const response=await fetch(
+        liveUrl+"?timeframe="+encodeURIComponent(state.timeframe),
+        {
+          method:"GET",
+          credentials:"same-origin",
+          headers:{"Accept":"application/json"},
+          cache:"no-store"
+        }
+      );
+      if(!response.ok) throw new Error("live candle unavailable");
+
+      const payload=await response.json();
+      const incoming=Array.isArray(payload.candles)?payload.candles:[];
+      if(payload.timeframe!==state.timeframe||!incoming.length){
+        setLiveState(true);
+        return;
+      }
+
+      const previous=Array.isArray(datasets[state.timeframe])?datasets[state.timeframe]:[];
+      const previousLength=previous.length;
+      const wasPanned=state.offset>0;
+
+      datasets[state.timeframe]=incoming;
+
+      if(wasPanned&&incoming.length>previousLength){
+        state.offset+=incoming.length-previousLength;
+      }
+
+      draw();
+      setLiveState(true);
+    }catch(error){
+      setLiveState(false);
+    }finally{
+      state.liveInFlight=false;
+    }
+  }
+
   buttons.forEach(button=>{
     button.addEventListener("click",()=>{
       state.timeframe=button.dataset.candleTimeframe;
@@ -1417,6 +1485,7 @@ __CANDLESTICK_CHART_PANEL__
       state.visibleCount=Math.min(60,Math.max(8,all.length||60));
       state.offset=0;
       draw();
+      pollLive(true);
     });
   });
 
@@ -1479,6 +1548,11 @@ __CANDLESTICK_CHART_PANEL__
   });
 
   draw();
+  window.setTimeout(()=>pollLive(true),1200);
+  window.setInterval(()=>pollLive(false),10000);
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden) pollLive(true);
+  });
 })();
 </script>
 

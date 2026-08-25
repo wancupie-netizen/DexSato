@@ -60,6 +60,7 @@ from application.solana_discovery_feed_service import (
     load_solana_discovery_feed,
 )
 from application.solana_discovery_token_service import (
+    load_solana_discovery_live_candles,
     load_solana_discovery_token,
 )
 
@@ -210,6 +211,30 @@ def solana_discovery_token(token_address: str) -> str:
     if detail is None:
         raise HTTPException(status_code=404, detail="Qualified discovery token is not available.")
     return render_solana_discovery_token_page(detail)
+
+
+# CHART_V22_LIVE_CANDLE
+@app.get("/api/discovery/solana/{token_address}/candles")
+def solana_discovery_live_candles(
+    token_address: str,
+    timeframe: str = "5m",
+) -> dict[str, object]:
+    try:
+        payload = load_solana_discovery_live_candles(token_address, timeframe)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except (requests.RequestException, RuntimeError, TypeError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Live candle data is temporarily unavailable.",
+        ) from error
+
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Qualified discovery token is not available.",
+        )
+    return payload
 
 
 @app.get("/api/discovery/solana/{token_address}/jupiter-quote")

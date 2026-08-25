@@ -434,3 +434,57 @@ def test_chart_v21_renders_interactive_trading_controls():
     assert 'addEventListener("wheel"' in html
     assert 'addEventListener("pointerdown"' in html
     assert 'addEventListener("pointermove"' in html
+
+
+
+def test_chart_v22_polls_live_candles_without_page_reload():
+    candle = {
+        "time": 1700000000,
+        "open": 1.0,
+        "high": 1.2,
+        "low": 0.9,
+        "close": 1.1,
+        "volume": 100.0,
+    }
+    detail = dict(DETAIL)
+    detail["token_address"] = "TokenAddress123456789"
+    detail["candlestick_timeframes"] = {
+        "1m": [candle],
+        "5m": [candle],
+        "15m": [candle],
+        "30m": [candle],
+        "1H": [candle],
+        "4H": [candle],
+    }
+
+    html = render_solana_discovery_token_page(detail)
+
+    assert "CHART_V22_LIVE_CANDLE" in html
+    assert 'data-live-candle-url="/api/discovery/solana/TokenAddress123456789/candles"' in html
+    assert 'data-candle-live-state' in html
+    assert 'credentials:"same-origin"' in html
+    assert 'cache:"no-store"' in html
+    assert 'setInterval(()=>pollLive(false),10000)' in html
+    assert 'visibilitychange' in html
+    assert "location.reload" not in html
+
+
+
+def test_chart_v221_keeps_live_builder_on_same_origin_polling_path():
+    candle = {
+        "time": 1700000000, "open": 1.0, "high": 1.2,
+        "low": 0.9, "close": 1.1, "volume": 100.0,
+    }
+    detail = dict(DETAIL)
+    detail["token_address"] = "TokenAddress123456789"
+    detail["candlestick_timeframes"] = {
+        "1m": [candle], "5m": [candle], "15m": [candle],
+        "30m": [candle], "1H": [candle], "4H": [candle],
+    }
+
+    html = render_solana_discovery_token_page(detail)
+
+    assert 'data-live-candle-url="/api/discovery/solana/TokenAddress123456789/candles"' in html
+    assert 'setInterval(()=>pollLive(false),10000)' in html
+    assert 'cache:"no-store"' in html
+    assert "location.reload" not in html

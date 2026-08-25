@@ -283,6 +283,143 @@ def _candlestick_timeframes(
     }
 
 
+
+# CHART_V22_LIVE_CANDLE
+LIVE_CANDLE_TIMEFRAMES = {"1m", "5m", "15m", "30m", "1H", "4H"}
+
+# CHART_V221_LIVE_CANDLE_BUILDER
+LIVE_CANDLE_SECONDS = {
+    "1m": 60,
+    "5m": 300,
+    "15m": 900,
+    "30m": 1800,
+    "1H": 3600,
+    "4H": 14400,
+}
+
+
+def _merge_live_price_into_candles(
+    candles: list[dict[str, float]],
+    timeframe: str,
+    live_price: float | None,
+    observed_at: float,
+) -> tuple[list[dict[str, Any]], bool]:
+    # Merge one verified exact-pool price observation into the open candle.
+    # Historical OHLCV remains provider-owned. No trade volume is invented.
+    if timeframe not in LIVE_CANDLE_SECONDS or live_price is None or live_price <= 0:
+        return [dict(candle) for candle in candles], False
+
+    bucket_seconds = LIVE_CANDLE_SECONDS[timeframe]
+    bucket_time = int(float(observed_at) // bucket_seconds) * bucket_seconds
+    result: list[dict[str, Any]] = [dict(candle) for candle in candles]
+
+    last_time = _number(result[-1].get("time")) if result else None
+
+    if last_time is not None and int(last_time) == bucket_time:
+        candle = result[-1]
+        open_value = _number(candle.get("open"))
+        high_value = _number(candle.get("high"))
+        low_value = _number(candle.get("low"))
+
+        if open_value is None:
+            open_value = live_price
+
+        candle["open"] = open_value
+        candle["high"] = max(value for value in (high_value, live_price) if value is not None)
+        candle["low"] = min(value for value in (low_value, live_price) if value is not None)
+        candle["close"] = live_price
+        candle["live"] = True
+        candle["volume_live"] = False
+        return result, True
+
+    if last_time is None or int(last_time) < bucket_time:
+        result.append({
+            "time": float(bucket_time),
+            "open": live_price,
+            "high": live_price,
+            "low": live_price,
+            "close": live_price,
+            "volume": None,
+            "live": True,
+            "volume_live": False,
+        })
+        return result, True
+
+    return result, False
+
+
+def load_solana_discovery_live_candles(
+    token_address: str,
+    timeframe: str,
+    *,
+    feed: dict[str, Any] | None = None,
+    request_get: Callable[..., Any] = requests.get,
+) -> dict[str, Any] | None:
+    address = str(token_address or "").strip()
+    selected = str(timeframe or "").strip()
+
+    if not address or len(address) > 80 or "/" in address:
+        return None
+    if selected not in LIVE_CANDLE_TIMEFRAMES:
+        raise ValueError("Unsupported candlestick timeframe.")
+
+    public_feed = feed if feed is not None else load_solana_discovery_feed()
+    candidates = public_feed.get("candidates") if isinstance(public_feed, dict) else None
+    if not isinstance(candidates, list):
+        return None
+
+    candidate = next(
+        (
+            item
+            for item in candidates
+            if isinstance(item, dict) and item.get("token_address") == address
+        ),
+        None,
+    )
+    if candidate is None:
+        return None
+
+    if selected in {"1m", "5m", "15m", "30m"}:
+        minute = _minute_candles(candidate, request_get)
+        if selected == "1m":
+            candles = minute[-180:]
+        else:
+            minutes = {"5m": 5, "15m": 15, "30m": 30}[selected]
+            candles = _aggregate_candles(minute, minutes)[-120:]
+    elif selected == "1H":
+        candles = _hourly_candles(candidate, request_get)[-120:]
+    else:
+        candles = _chart(candidate, request_get)[-90:]
+
+    observed_now = datetime.now(timezone.utc)
+    live_price = None
+    live_observation = False
+
+    try:
+        pair = _live_pair(candidate, request_get)
+        if pair is not None:
+            live_price = _number(pair.get("priceUsd"))
+    except (requests.RequestException, RuntimeError, ValueError, TypeError):
+        live_price = None
+
+    candles, live_observation = _merge_live_price_into_candles(
+        candles,
+        selected,
+        live_price,
+        observed_now.timestamp(),
+    )
+
+    return {
+        "token_address": address,
+        "timeframe": selected,
+        "candles": candles,
+        "as_of": observed_now.isoformat(),
+        "live_price": live_price,
+        "live_observation": live_observation,
+        "volume_live": False,
+    }
+
+
 def load_solana_discovery_token(
     token_address: str,
     *,
