@@ -113,3 +113,36 @@ def test_trader_timeframe_changes_keeps_missing_history_unavailable():
     assert changes["change_1h"] is None
     assert changes["change_4h"] is None
 
+
+
+def test_candlestick_timeframes_aggregate_real_ohlcv():
+    from application.solana_discovery_token_service import _candlestick_timeframes
+
+    minute = [
+        {
+            "time": 1_700_000_000 + index * 60,
+            "open": 10.0 + index,
+            "high": 11.0 + index,
+            "low": 9.0 + index,
+            "close": 10.5 + index,
+            "volume": 100.0,
+        }
+        for index in range(30)
+    ]
+    hourly = [{
+        "time": 1_700_000_000,
+        "open": 10.0, "high": 20.0, "low": 9.0, "close": 18.0, "volume": 500.0,
+    }]
+    four_hour = [{
+        "time": 1_700_000_000,
+        "open": 10.0, "high": 30.0, "low": 8.0, "close": 25.0, "volume": 900.0,
+    }]
+
+    result = _candlestick_timeframes(minute, hourly, four_hour)
+
+    assert len(result["1m"]) == 30
+    assert len(result["5m"]) >= 6
+    assert len(result["15m"]) >= 2
+    assert len(result["30m"]) >= 1
+    assert result["1H"] == hourly
+    assert result["4H"] == four_hour
