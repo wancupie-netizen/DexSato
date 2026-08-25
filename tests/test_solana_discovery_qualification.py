@@ -75,11 +75,11 @@ def test_rotating_enrichment_eventually_checks_older_resolved_pairs(monkeypatch)
     }
 
     qualification._CACHE.clear()
-    qualification.qualify_discovery_candidates(candidates, request_get=request_get)
+    qualification.qualify_discovery_candidates(candidates, now="2026-08-25T13:00:00+00:00", request_get=request_get)
     first = set(seen)
     seen.clear()
 
-    qualification.qualify_discovery_candidates(candidates, request_get=request_get)
+    qualification.qualify_discovery_candidates(candidates, now="2026-08-25T13:15:00+00:00", request_get=request_get)
     second = set(seen)
 
     assert len(first) == qualification.MAX_CANDIDATES_CHECKED
