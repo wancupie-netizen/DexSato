@@ -580,6 +580,223 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         width:100% !important;
       }
     }
+    /* MI v3.7 Typography Comfort Pass - UI only */
+    html[data-theme="intel"]{
+      --bg:#0b0f14;
+      --panel:#0f141a;
+      --panel2:#121820;
+      --panel3:#151c24;
+      --line:#28313b;
+      --line2:#333d48;
+      --text:#e6e9ed;
+      --muted:#a0a8b3;
+      --faint:#737d88;
+    }
+
+    html[data-theme="intel"] body{
+      background:#0b0f14;
+      color:var(--text);
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:15px;
+      line-height:1.58;
+      -webkit-font-smoothing:antialiased;
+      text-rendering:optimizeLegibility;
+    }
+
+    html[data-theme="intel"] .terminal-head h1,
+    html[data-theme="intel"] .feed-head h2,
+    html[data-theme="intel"] .rail-card h3,
+    html[data-theme="intel"] .status-pill strong,
+    html[data-theme="intel"] .metric strong{
+      font-family:"Segoe UI Variable Display","Segoe UI",Arial,sans-serif;
+      font-weight:600;
+      letter-spacing:-.018em;
+    }
+
+    html[data-theme="intel"] .terminal-head h1{
+      font-size:39px;
+      line-height:1.08;
+    }
+
+    html[data-theme="intel"] .terminal-head p,
+    html[data-theme="intel"] .feed-head p,
+    html[data-theme="intel"] .rail-card>p,
+    html[data-theme="intel"] footer{
+      color:#a6aeb8;
+      font-weight:400;
+      letter-spacing:0;
+    }
+
+    html[data-theme="intel"] .eyebrow,
+    html[data-theme="intel"] .rail-kicker,
+    html[data-theme="intel"] .feed-columns-v33 span,
+    html[data-theme="intel"] .feed-value span,
+    html[data-theme="intel"] .why-now>span,
+    html[data-theme="intel"] .metric>span:first-child,
+    html[data-theme="intel"] .status-pill span{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-weight:600;
+      letter-spacing:.045em;
+      text-transform:uppercase;
+    }
+
+    html[data-theme="intel"] .compact-token strong{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:13.5px;
+      font-weight:600;
+      letter-spacing:-.01em;
+      line-height:1.25;
+    }
+
+    html[data-theme="intel"] .compact-token span{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:10px;
+      font-weight:400;
+      letter-spacing:0;
+      line-height:1.35;
+      color:#a1a9b3;
+    }
+
+    html[data-theme="intel"] .compact-token small{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:8.5px;
+      font-weight:500;
+      letter-spacing:.02em;
+      line-height:1.3;
+      color:#7d8792;
+    }
+
+    html[data-theme="intel"] .feed-value strong{
+      font-family:"Cascadia Mono","Consolas","Courier New",monospace;
+      font-size:11.5px;
+      font-weight:500;
+      letter-spacing:-.015em;
+      line-height:1.2;
+      color:#f0f2f4;
+      font-variant-numeric:tabular-nums;
+    }
+
+    html[data-theme="intel"] .feed-value span,
+    html[data-theme="intel"] .feed-columns-v33 span,
+    html[data-theme="intel"] .why-now>span{
+      font-size:8.5px;
+      font-weight:600;
+      color:#7f8994;
+    }
+
+    html[data-theme="intel"] .why-now strong{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:10.5px;
+      font-weight:500;
+      letter-spacing:0;
+      line-height:1.35;
+      color:#dce1e6;
+    }
+
+    html[data-theme="intel"] .rank{
+      font-family:"Cascadia Mono","Consolas","Courier New",monospace;
+      font-size:9px;
+      font-weight:600;
+      letter-spacing:0;
+    }
+
+    html[data-theme="intel"] .inspect-link,
+    html[data-theme="intel"] .filters button,
+    html[data-theme="intel"] .search{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-weight:500;
+      letter-spacing:0;
+    }
+
+    html[data-theme="intel"] .inspect-link{
+      font-size:10px;
+    }
+
+    html[data-theme="intel"] .metric{
+      background:#11161c;
+    }
+
+    html[data-theme="intel"] .metric strong{
+      color:#f0f2f4;
+      font-size:26px;
+      font-weight:600;
+    }
+
+    html[data-theme="intel"] .metric small{
+      color:#8e98a3;
+      font-size:10px;
+      line-height:1.4;
+    }
+
+    html[data-theme="intel"] .status-pill,
+    html[data-theme="intel"] .feed-panel,
+    html[data-theme="intel"] .rail-card,
+    html[data-theme="intel"] .candidate-row-v32{
+      background:#0f141a;
+    }
+
+    html[data-theme="intel"] .candidate-row-v32{
+      border-color:#2a323c;
+    }
+
+    html[data-theme="intel"] .feed-columns-v33{
+      background:#11171d;
+      border-color:#2a323c;
+    }
+
+    html[data-theme="intel"] .rule,
+    html[data-theme="intel"] .status-detail div{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-size:11px;
+      font-weight:400;
+      line-height:1.45;
+    }
+
+    html[data-theme="intel"] .rail-card h3{
+      font-size:15px;
+      font-weight:600;
+    }
+
+    html[data-theme="intel"] .risk-card strong{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-weight:600;
+    }
+
+    @media(max-width:760px){
+      html[data-theme="intel"] body{
+        font-size:14px;
+      }
+      html[data-theme="intel"] .terminal-head h1{
+        font-size:31px;
+      }
+    }
+    /* MI v3.7.1 Clean Numbers - UI only */
+    html[data-theme="intel"] .feed-value strong,
+    html[data-theme="intel"] .rank{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-variant-numeric:tabular-nums lining-nums;
+      font-feature-settings:"tnum" 1,"lnum" 1;
+      font-weight:600;
+      letter-spacing:-.012em;
+    }
+
+    html[data-theme="intel"] .feed-value strong{
+      font-size:11.5px;
+      line-height:1.25;
+    }
+
+    html[data-theme="intel"] .rank{
+      font-size:9px;
+      line-height:1.2;
+    }
+
+    html[data-theme="intel"] .status-detail strong,
+    html[data-theme="intel"] .status-pill strong{
+      font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif;
+      font-variant-numeric:tabular-nums lining-nums;
+      font-feature-settings:"tnum" 1,"lnum" 1;
+      letter-spacing:-.01em;
+    }
     @media(max-width:1180px){
       html[data-theme="intel"] .feed-columns-v33{display:none}
       html[data-theme="intel"] .candidate-row-v32{
