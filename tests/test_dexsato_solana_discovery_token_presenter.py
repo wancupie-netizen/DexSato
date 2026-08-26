@@ -672,3 +672,27 @@ def test_transactions_feed_v13_preserves_scroll_anchor_during_live_updates():
     assert "scrollBox.scrollTop<=8" in html
     assert "row.dataset.transactionId===anchor.id" in html
     assert "restoreScrollAnchor(scrollAnchor);" in html
+
+
+
+# TRANSACTIONS_FEED_V14_FRESHNESS_DIAGNOSTICS
+def test_transactions_feed_v14_renders_freshness_diagnostics():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TRANSACTIONS_FEED_V14_FRESHNESS_DIAGNOSTICS" in html
+    assert "function formatFreshnessSeconds(value)" in html
+    assert "function applyFreshnessDiagnostics(payload)" in html
+    assert "freshness.trade_age_seconds" in html
+    assert "freshness.provider_lag_seconds" in html
+    assert "freshness.api_cache_age_seconds" in html
+    assert 'diagnostics.push("trade "+tradeAge)' in html
+    assert 'diagnostics.push("api "+apiAge)' in html
+    assert 'detail.push("provider lag "+providerLag)' in html
+    assert 'detail.push("cache hit")' in html
+    assert 'detail.push("stale fallback")' in html
+
+    state_pos = html.index(
+        'setTransactionState(payload.stale===true?"STALE":"LIVE",shown)'
+    )
+    diagnostics_pos = html.index("applyFreshnessDiagnostics(payload);")
+    assert state_pos < diagnostics_pos

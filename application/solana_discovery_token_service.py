@@ -619,6 +619,69 @@ def _load_solana_discovery_transactions_provider(
 
 
 
+# TRANSACTIONS_FEED_V14_FRESHNESS_DIAGNOSTICS
+def _parse_transaction_timestamp(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _transaction_freshness(
+    payload: dict[str, Any],
+    *,
+    served_at: datetime,
+    cache_hit: bool,
+    stale: bool,
+) -> dict[str, Any]:
+    fetched_at = _parse_transaction_timestamp(payload.get("as_of"))
+    rows = payload.get("transactions")
+    latest_trade_at = None
+    if isinstance(rows, list) and rows:
+        first = rows[0] if isinstance(rows[0], dict) else {}
+        latest_trade_at = _parse_transaction_timestamp(first.get("timestamp"))
+
+    def age_seconds(newer: datetime | None, older: datetime | None) -> float | None:
+        if newer is None or older is None:
+            return None
+        return max(0.0, round((newer - older).total_seconds(), 3))
+
+    return {
+        "served_at": served_at.isoformat(),
+        "provider_fetched_at": fetched_at.isoformat() if fetched_at else None,
+        "latest_trade_at": latest_trade_at.isoformat() if latest_trade_at else None,
+        "trade_age_seconds": age_seconds(served_at, latest_trade_at),
+        "provider_lag_seconds": age_seconds(fetched_at, latest_trade_at),
+        "api_cache_age_seconds": age_seconds(served_at, fetched_at),
+        "cache_hit": bool(cache_hit),
+        "stale": bool(stale),
+    }
+
+
+def _with_transaction_freshness(
+    payload: dict[str, Any],
+    *,
+    cache_hit: bool,
+    stale: bool = False,
+) -> dict[str, Any]:
+    copied = _copy_transaction_payload(payload)
+    copied["freshness"] = _transaction_freshness(
+        copied,
+        served_at=datetime.now(timezone.utc),
+        cache_hit=cache_hit,
+        stale=stale,
+    )
+    if stale:
+        copied["stale"] = True
+    return copied
+
+
 def _copy_transaction_payload(payload: dict[str, Any]) -> dict[str, Any]:
     copied = dict(payload)
     rows = payload.get("transactions")
@@ -648,7 +711,11 @@ def load_solana_discovery_transactions(
     cached = _TRANSACTION_CACHE.get(address)
 
     if cached is not None and (now - cached[0]) < _TRANSACTION_TTL_SECONDS:
-        return _copy_transaction_payload(cached[1])
+        return _with_transaction_freshness(
+            cached[1],
+            cache_hit=True,
+            stale=False,
+        )
 
     try:
         payload = _load_solana_discovery_transactions_provider(
@@ -658,9 +725,11 @@ def load_solana_discovery_transactions(
         )
     except requests.RequestException:
         if cached is not None:
-            stale = _copy_transaction_payload(cached[1])
-            stale["stale"] = True
-            return stale
+            return _with_transaction_freshness(
+                cached[1],
+                cache_hit=True,
+                stale=True,
+            )
         raise
 
     if payload is None:
@@ -668,7 +737,11 @@ def load_solana_discovery_transactions(
 
     stored = _copy_transaction_payload(payload)
     _TRANSACTION_CACHE[address] = (now, stored)
-    return _copy_transaction_payload(stored)
+    return _with_transaction_freshness(
+        stored,
+        cache_hit=False,
+        stale=False,
+    )
 
 
 def load_solana_discovery_token(

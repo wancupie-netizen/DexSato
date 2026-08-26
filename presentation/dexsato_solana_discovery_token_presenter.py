@@ -1773,6 +1773,40 @@ __CANDLESTICK_CHART_PANEL__
     restoreScrollAnchor(scrollAnchor);
   }
 
+  /* TRANSACTIONS_FEED_V14_FRESHNESS_DIAGNOSTICS */
+  function formatFreshnessSeconds(value){
+    const seconds=Number(value);
+    if(!Number.isFinite(seconds)||seconds<0) return null;
+    if(seconds<60) return Math.round(seconds)+"s";
+    const minutes=Math.floor(seconds/60);
+    const remain=Math.round(seconds-(minutes*60));
+    return remain>0 ? minutes+"m "+remain+"s" : minutes+"m";
+  }
+
+  function applyFreshnessDiagnostics(payload){
+    if(!state||!payload||typeof payload!=="object") return;
+    const freshness=payload.freshness;
+    if(!freshness||typeof freshness!=="object") return;
+
+    const tradeAge=formatFreshnessSeconds(freshness.trade_age_seconds);
+    const apiAge=formatFreshnessSeconds(freshness.api_cache_age_seconds);
+    const diagnostics=[];
+    if(tradeAge) diagnostics.push("trade "+tradeAge);
+    if(apiAge) diagnostics.push("api "+apiAge);
+    if(diagnostics.length){
+      state.textContent+=" · "+diagnostics.join(" · ");
+    }
+
+    const providerLag=formatFreshnessSeconds(freshness.provider_lag_seconds);
+    const detail=[];
+    if(providerLag) detail.push("provider lag "+providerLag);
+    if(freshness.cache_hit===true) detail.push("cache hit");
+    if(freshness.stale===true) detail.push("stale fallback");
+    if(freshness.latest_trade_at) detail.push("latest "+freshness.latest_trade_at);
+    if(detail.length) state.title=detail.join(" · ");
+    else state.removeAttribute("title");
+  }
+
   function setTransactionState(mode,shown=0){
     if(!state) return;
 
@@ -1836,6 +1870,7 @@ __CANDLESTICK_CHART_PANEL__
 
       const shown=Math.min(deduped.length,MAX_VISIBLE_TRANSACTIONS);
       setTransactionState(payload.stale===true?"STALE":"LIVE",shown);
+      applyFreshnessDiagnostics(payload);
     }catch(error){
       keepExistingRowsOnFailure();
 

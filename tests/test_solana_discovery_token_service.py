@@ -516,3 +516,45 @@ def test_provider_resilience_transactions_fall_back_to_last_valid_payload(monkey
     assert result is not None
     assert result["transactions"] == [{"id": "trade-1", "side": "BUY"}]
     assert result["stale"] is True
+
+
+
+# TRANSACTIONS_FEED_V14_FRESHNESS_DIAGNOSTICS
+def test_transaction_freshness_separates_provider_and_cache_latency():
+    from datetime import datetime, timezone
+    from application.solana_discovery_token_service import _transaction_freshness
+
+    payload = {
+        "as_of": "2026-08-26T04:00:50+00:00",
+        "transactions": [{"id": "trade-1", "timestamp": "2026-08-26T04:00:00Z"}],
+    }
+
+    result = _transaction_freshness(
+        payload,
+        served_at=datetime(2026, 8, 26, 4, 1, 0, tzinfo=timezone.utc),
+        cache_hit=True,
+        stale=False,
+    )
+
+    assert result["trade_age_seconds"] == 60.0
+    assert result["provider_lag_seconds"] == 50.0
+    assert result["api_cache_age_seconds"] == 10.0
+    assert result["cache_hit"] is True
+    assert result["stale"] is False
+
+
+def test_transaction_freshness_handles_missing_trade_without_fabrication():
+    from datetime import datetime, timezone
+    from application.solana_discovery_token_service import _transaction_freshness
+
+    result = _transaction_freshness(
+        {"as_of": "2026-08-26T04:00:50+00:00", "transactions": []},
+        served_at=datetime(2026, 8, 26, 4, 1, 0, tzinfo=timezone.utc),
+        cache_hit=False,
+        stale=False,
+    )
+
+    assert result["latest_trade_at"] is None
+    assert result["trade_age_seconds"] is None
+    assert result["provider_lag_seconds"] is None
+    assert result["api_cache_age_seconds"] == 10.0
