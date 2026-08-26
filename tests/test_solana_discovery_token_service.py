@@ -536,9 +536,10 @@ def test_transaction_freshness_separates_provider_and_cache_latency():
         stale=False,
     )
 
-    assert result["trade_age_seconds"] == 60.0
-    assert result["provider_lag_seconds"] == 50.0
-    assert result["api_cache_age_seconds"] == 10.0
+    # TRANSACTIONS_FEED_V141_FRESHNESS_SEMANTICS_FIX
+    assert result["last_trade_age_seconds"] == 60.0
+    assert result["api_age_seconds"] == 10.0
+    assert "provider_lag_seconds" not in result
     assert result["cache_hit"] is True
     assert result["stale"] is False
 
@@ -555,6 +556,105 @@ def test_transaction_freshness_handles_missing_trade_without_fabrication():
     )
 
     assert result["latest_trade_at"] is None
-    assert result["trade_age_seconds"] is None
-    assert result["provider_lag_seconds"] is None
-    assert result["api_cache_age_seconds"] == 10.0
+    assert result["last_trade_age_seconds"] is None
+    assert result["api_age_seconds"] == 10.0
+    assert "provider_lag_seconds" not in result
+
+
+
+# TOKEN_WORKSPACE_V2452_PAIR_AGE_PROPAGATION_FIX
+def test_live_pair_age_uses_exact_pair_created_at_without_resetting_to_now():
+    from datetime import datetime, timezone
+    from application.solana_discovery_token_service import _live_pair_age
+
+    now = datetime(2026, 8, 26, 8, 15, 34, tzinfo=timezone.utc)
+    created_ms = 1787728595000  # 2026-08-26T07:16:35Z
+
+    label, hours = _live_pair_age(created_ms, now=now)
+
+    assert label == "58m"
+    assert hours is not None
+    assert 58 / 60 <= hours < 59 / 60
+
+
+def test_live_token_detail_overrides_stale_age_with_exact_live_pair_created_at():
+    from datetime import datetime, timezone
+
+    observed_now = datetime.now(timezone.utc)
+    created_ms = int((observed_now.timestamp() - (58 * 60)) * 1000)
+
+    feed = {
+        "updated_label": "Just now",
+        "candidates": [{
+            "token_address": TOKEN,
+            "pair_address": POOL,
+            "symbol": "TEST",
+            "name": "Test Token",
+            "price_usd": 0.1,
+            "liquidity_usd": 6000,
+            "volume_24h_usd": 2000,
+            "pair_age": "<1m",
+            "pair_age_hours": 0.0,
+        }],
+    }
+
+    def get(url, **kwargs):
+        if "dexscreener" in url:
+            return Response({"pairs": [{
+                "pairAddress": POOL,
+                "baseToken": {"address": TOKEN},
+                "priceUsd": "0.12",
+                "liquidity": {"usd": 7000},
+                "volume": {"h24": 3000},
+                "priceChange": {"h24": 4.5},
+                "marketCap": 120000,
+                "dexId": "raydium",
+                "url": "https://dexscreener.com/solana/pool",
+                "pairCreatedAt": created_ms,
+            }]})
+        return Response({"data": {"attributes": {"ohlcv_list": []}}})
+
+    result = load_solana_discovery_token(TOKEN, feed=feed, request_get=get)
+
+    assert result is not None
+    assert result["quote_status"] == "LIVE"
+    assert result["pair_age"] == "58m"
+    assert result["pair_age_hours"] is not None
+    assert 58 / 60 <= result["pair_age_hours"] < 59 / 60
+
+
+def test_live_token_detail_keeps_stored_age_when_live_pair_created_at_missing():
+    feed = {
+        "updated_label": "Just now",
+        "candidates": [{
+            "token_address": TOKEN,
+            "pair_address": POOL,
+            "symbol": "TEST",
+            "name": "Test Token",
+            "price_usd": 0.1,
+            "liquidity_usd": 6000,
+            "volume_24h_usd": 2000,
+            "pair_age": "52m",
+            "pair_age_hours": 52 / 60,
+        }],
+    }
+
+    def get(url, **kwargs):
+        if "dexscreener" in url:
+            return Response({"pairs": [{
+                "pairAddress": POOL,
+                "baseToken": {"address": TOKEN},
+                "priceUsd": "0.12",
+                "liquidity": {"usd": 7000},
+                "volume": {"h24": 3000},
+                "priceChange": {"h24": 4.5},
+                "dexId": "raydium",
+                "url": "https://dexscreener.com/solana/pool",
+            }]})
+        return Response({"data": {"attributes": {"ohlcv_list": []}}})
+
+    result = load_solana_discovery_token(TOKEN, feed=feed, request_get=get)
+
+    assert result is not None
+    assert result["pair_age"] == "52m"
+    assert abs(result["pair_age_hours"] - (52 / 60)) < 1e-9

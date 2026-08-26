@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from html import escape
 import json
+import re
 from typing import Any
 
 
@@ -97,49 +98,58 @@ def _external_link(value: Any) -> str:
     return url if url.startswith("https://") else ""
 
 
-def _pair_age_display(detail: dict[str, Any]) -> str:
-    # Prefer the current token-detail age field first. Older stored labels are
-    # only fallbacks because they may be stale or inherited from fixture/feed data.
-    for key in (
-        "age",
-        "pair_age",
-        "age_label",
-        "pair_age_label",
-        "freshness",
-        "freshness_label",
-    ):
-        value = detail.get(key)
-        if value is None:
-            continue
-        text = str(value).strip()
-        if text and text.lower() not in {
-            "none",
-            "unknown",
-            "unavailable",
-            "age unavailable",
-        }:
-            return text
+# TOKEN_WORKSPACE_V245_PRECISE_AGE_DISPLAY
+def _format_pair_age_hours(hours: float) -> str:
+    if hours < 0:
+        return "Age unavailable"
+    total_minutes = max(0, int(hours * 60))
+    if total_minutes < 1:
+        return "<1m"
+    if total_minutes < 60:
+        return f"{total_minutes}m"
+    total_hours, minutes = divmod(total_minutes, 60)
+    if total_hours < 24:
+        return f"{total_hours}h {minutes}m" if minutes else f"{total_hours}h"
+    days, hours_left = divmod(total_hours, 24)
+    return f"{days}d {hours_left}h" if hours_left else f"{days}d"
 
+
+def _normalize_pair_age_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text or text.lower() in {
+        "none", "unknown", "unavailable", "age unavailable",
+    }:
+        return None
+    compact = text.lower().replace(" ", "")
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)(m|h|d)", compact)
+    if not match:
+        return text
+    amount = float(match.group(1))
+    unit = match.group(2)
+    if unit == "m":
+        return _format_pair_age_hours(amount / 60.0)
+    if unit == "d":
+        return _format_pair_age_hours(amount * 24.0)
+    return _format_pair_age_hours(amount)
+
+
+def _pair_age_display(detail: dict[str, Any]) -> str:
+    # Prefer numeric age because it preserves sub-hour precision.
     for key in ("age_hours", "pair_age_hours", "hours_old"):
         try:
             hours = float(detail.get(key))
         except (TypeError, ValueError):
             continue
-        if hours < 1:
-            return "<1h"
-        return f"{hours:.0f}h"
+        return _format_pair_age_hours(hours)
 
-    return "Age unavailable"
-
-
-    for key in ("pair_age_hours", "age_hours", "hours_old"):
-        try:
-            hours = float(detail.get(key))
-        except (TypeError, ValueError):
-            continue
-        if hours < 1:
-            return "<1h"
-        return f"{hours:.0f}h"
+    # Older labels remain safe fallbacks.
+    for key in (
+        "age", "pair_age", "age_label", "pair_age_label",
+        "freshness", "freshness_label",
+    ):
+        normalized = _normalize_pair_age_text(detail.get(key))
+        if normalized:
+            return normalized
 
     return "Age unavailable"
 
@@ -257,7 +267,7 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
         '</div></div>'
         '<div class="token-meta-row">'
         f'{dex_html}<span class="token-meta-sep">&#8226;</span>'
-        f'<span class="token-age"><span aria-hidden="true">&#9201;</span> {age_text}</span>'
+        f'<span class="token-age"><svg class="token-age-leaf" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M20.7 3.3C14.6 3.6 9.4 5.7 6.5 9.1c-2.2 2.6-2.8 5.6-1.7 8.2 3.5-4.5 7.6-7.2 12.8-8.9-4.5 2.1-8 5-10.8 8.9 2.7.4 5.4-.7 7.4-3.1 2.6-3.1 3.7-7.8 3.5-10.9z"/></svg> {age_text}</span>'
         '<span class="token-meta-sep">&#8226;</span>'
         f'<span class="token-contract">Contract <code title="{token_attr}">{contract_short}</code></span>'
         f'<button class="copy-address token-copy" type="button" data-copy-address="{token_attr}">Copy</button>'
@@ -851,6 +861,20 @@ html[data-theme="intel"] .token-meta-row{border-color:#28313b}
 }
 .token-meta-row .token-info-link b{font-size:10px}
 .token-meta-row .token-info-link.unavailable{display:none}
+/* TOKEN_WORKSPACE_V2453_LEAF_AGE_ICON */
+.token-age{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+.token-age-leaf{
+  width:14px;
+  height:14px;
+  flex:0 0 14px;
+  fill:var(--green);
+  opacity:.95;
+}
+
 .token-overview-card .trader-tf-strip{margin-top:10px}
 .token-observation-note,
 .token-info-row,
@@ -1783,26 +1807,32 @@ __CANDLESTICK_CHART_PANEL__
     return remain>0 ? minutes+"m "+remain+"s" : minutes+"m";
   }
 
+  /* TRANSACTIONS_FEED_V141_FRESHNESS_SEMANTICS_FIX */
   function applyFreshnessDiagnostics(payload){
     if(!state||!payload||typeof payload!=="object") return;
     const freshness=payload.freshness;
     if(!freshness||typeof freshness!=="object") return;
 
-    const tradeAge=formatFreshnessSeconds(freshness.trade_age_seconds);
-    const apiAge=formatFreshnessSeconds(freshness.api_cache_age_seconds);
+    const lastTradeAge=formatFreshnessSeconds(
+      freshness.last_trade_age_seconds
+    );
+    const apiAge=formatFreshnessSeconds(freshness.api_age_seconds);
+
     const diagnostics=[];
-    if(tradeAge) diagnostics.push("trade "+tradeAge);
-    if(apiAge) diagnostics.push("api "+apiAge);
+    if(lastTradeAge) diagnostics.push("Last trade "+lastTradeAge);
+    if(apiAge) diagnostics.push("API age "+apiAge);
+
     if(diagnostics.length){
       state.textContent+=" · "+diagnostics.join(" · ");
     }
 
-    const providerLag=formatFreshnessSeconds(freshness.provider_lag_seconds);
     const detail=[];
-    if(providerLag) detail.push("provider lag "+providerLag);
     if(freshness.cache_hit===true) detail.push("cache hit");
     if(freshness.stale===true) detail.push("stale fallback");
-    if(freshness.latest_trade_at) detail.push("latest "+freshness.latest_trade_at);
+    if(freshness.latest_trade_at){
+      detail.push("latest trade "+freshness.latest_trade_at);
+    }
+
     if(detail.length) state.title=detail.join(" · ");
     else state.removeAttribute("title");
   }
@@ -1813,12 +1843,12 @@ __CANDLESTICK_CHART_PANEL__
     state.classList.remove("ready","unavailable","live","stale");
 
     if(mode==="LIVE"){
-      state.textContent=shown ? shown+" recent · LIVE" : "LIVE";
+      state.textContent="LIVE";
       state.classList.add("ready","live");
       return;
     }
 
-    state.textContent=shown ? shown+" recent · STALE" : "STALE";
+    state.textContent="STALE";
     state.classList.add("stale");
   }
 

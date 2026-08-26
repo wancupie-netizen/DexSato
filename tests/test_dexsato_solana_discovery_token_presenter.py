@@ -682,12 +682,13 @@ def test_transactions_feed_v14_renders_freshness_diagnostics():
     assert "TRANSACTIONS_FEED_V14_FRESHNESS_DIAGNOSTICS" in html
     assert "function formatFreshnessSeconds(value)" in html
     assert "function applyFreshnessDiagnostics(payload)" in html
-    assert "freshness.trade_age_seconds" in html
-    assert "freshness.provider_lag_seconds" in html
-    assert "freshness.api_cache_age_seconds" in html
-    assert 'diagnostics.push("trade "+tradeAge)' in html
-    assert 'diagnostics.push("api "+apiAge)' in html
-    assert 'detail.push("provider lag "+providerLag)' in html
+    # TRANSACTIONS_FEED_V141_FRESHNESS_SEMANTICS_FIX
+    assert "freshness.last_trade_age_seconds" in html
+    assert "freshness.api_age_seconds" in html
+    assert "freshness.provider_lag_seconds" not in html
+    assert 'diagnostics.push("Last trade "+lastTradeAge)' in html
+    assert 'diagnostics.push("API age "+apiAge)' in html
+    assert 'detail.push("provider lag "+providerLag)' not in html
     assert 'detail.push("cache hit")' in html
     assert 'detail.push("stale fallback")' in html
 
@@ -696,3 +697,81 @@ def test_transactions_feed_v14_renders_freshness_diagnostics():
     )
     diagnostics_pos = html.index("applyFreshnessDiagnostics(payload);")
     assert state_pos < diagnostics_pos
+
+
+
+# TRANSACTIONS_FEED_V141_FRESHNESS_SEMANTICS_FIX
+def test_transactions_feed_v141_hides_internal_row_count_from_user_status():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "MAX_VISIBLE_TRANSACTIONS=30" in html
+    assert "rows.slice(0,MAX_VISIBLE_TRANSACTIONS)" in html
+
+    assert 'state.textContent=shown ? shown+" recent · LIVE" : "LIVE"' not in html
+    assert 'state.textContent=shown ? shown+" recent · STALE" : "STALE"' not in html
+    assert 'state.textContent="LIVE"' in html
+    assert 'state.textContent="STALE"' in html
+
+    assert '"Last trade "+lastTradeAge' in html
+    assert '"API age "+apiAge' in html
+    assert "provider lag" not in html
+
+
+
+# TOKEN_WORKSPACE_V245_PRECISE_AGE_DISPLAY
+def test_token_workspace_v245_formats_subhour_age_in_minutes():
+    detail = dict(DETAIL)
+    detail.update({"age_hours": 34 / 60, "age": "0h", "pair_age_label": "0h"})
+    html = render_solana_discovery_token_page(detail)
+    assert "34m old" in html
+    assert "0h old" not in html
+
+
+def test_token_workspace_v245_formats_hour_and_day_age_precisely():
+    detail = dict(DETAIL)
+    detail["age_hours"] = 1 + (12 / 60)
+    assert "1h 12m old" in render_solana_discovery_token_page(detail)
+    detail["age_hours"] = 27
+    assert "1d 3h old" in render_solana_discovery_token_page(detail)
+
+
+def test_token_workspace_v245_normalizes_legacy_age_labels():
+    detail = dict(DETAIL)
+    for key in ("age_hours", "pair_age_hours", "hours_old"):
+        detail.pop(key, None)
+    detail["age"] = "0.5666667h"
+    assert "34m old" in render_solana_discovery_token_page(detail)
+
+
+def test_token_workspace_v245_keeps_unavailable_age_clean():
+    detail = dict(DETAIL)
+    for key in (
+        "age_hours", "pair_age_hours", "hours_old", "age", "pair_age",
+        "age_label", "pair_age_label", "freshness", "freshness_label",
+    ):
+        detail.pop(key, None)
+    html = render_solana_discovery_token_page(detail)
+    assert "Age unavailable" in html
+    assert "Age unavailable old" not in html
+
+
+# TOKEN_WORKSPACE_V2453_LEAF_AGE_ICON
+def test_token_workspace_v2453_uses_leaf_icon_for_pair_age():
+    detail = dict(DETAIL)
+    detail["age"] = "1h 5m"
+
+    html = render_solana_discovery_token_page(detail)
+
+    assert "TOKEN_WORKSPACE_V2453_LEAF_AGE_ICON" in html
+    assert 'class="token-age-leaf"' in html
+    assert 'viewBox="0 0 24 24"' in html
+    assert "1h 5m old" in html
+    assert '<span aria-hidden="true">&#9201;</span>' not in html
+
+
+def test_token_workspace_v2453_leaf_icon_is_decorative_and_css_sized():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert '<svg class="token-age-leaf" aria-hidden="true"' in html
+    assert ".token-age-leaf{" in html
+    assert "fill:var(--green)" in html

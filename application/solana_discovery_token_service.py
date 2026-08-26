@@ -51,6 +51,33 @@ def _number(value: Any) -> float | None:
         return None
 
 
+# TOKEN_WORKSPACE_V2452_PAIR_AGE_PROPAGATION_FIX
+def _live_pair_age(created_at: Any, *, now: datetime | None = None) -> tuple[str, float | None]:
+    current = now or datetime.now(timezone.utc)
+    try:
+        created = datetime.fromtimestamp(float(created_at) / 1000, tz=timezone.utc)
+        seconds = max(0.0, (current - created).total_seconds())
+    except (TypeError, ValueError, OSError, OverflowError):
+        return "Unavailable", None
+
+    hours = seconds / 3600.0
+    total_minutes = max(0, int(seconds // 60))
+
+    if total_minutes < 1:
+        label = "<1m"
+    elif total_minutes < 60:
+        label = f"{total_minutes}m"
+    else:
+        total_hours, minutes = divmod(total_minutes, 60)
+        if total_hours < 24:
+            label = f"{total_hours}h {minutes}m" if minutes else f"{total_hours}h"
+        else:
+            days, hours_left = divmod(total_hours, 24)
+            label = f"{days}d {hours_left}h" if hours_left else f"{days}d"
+
+    return label, hours
+
+
 def _live_pair(candidate: dict[str, Any], request_get: Callable[..., Any]) -> dict[str, Any] | None:
     pair_address = str(candidate.get("pair_address") or "")
     token_address = str(candidate.get("token_address") or "")
@@ -652,13 +679,15 @@ def _transaction_freshness(
             return None
         return max(0.0, round((newer - older).total_seconds(), 3))
 
+    # TRANSACTIONS_FEED_V141_FRESHNESS_SEMANTICS_FIX
+    # "Last trade age" describes market inactivity, not provider latency.
+    # "API age" describes how old the provider snapshot is when served.
     return {
         "served_at": served_at.isoformat(),
         "provider_fetched_at": fetched_at.isoformat() if fetched_at else None,
         "latest_trade_at": latest_trade_at.isoformat() if latest_trade_at else None,
-        "trade_age_seconds": age_seconds(served_at, latest_trade_at),
-        "provider_lag_seconds": age_seconds(fetched_at, latest_trade_at),
-        "api_cache_age_seconds": age_seconds(served_at, fetched_at),
+        "last_trade_age_seconds": age_seconds(served_at, latest_trade_at),
+        "api_age_seconds": age_seconds(served_at, fetched_at),
         "cache_hit": bool(cache_hit),
         "stale": bool(stale),
     }
@@ -810,6 +839,13 @@ def load_solana_discovery_token(
                     telegram_url = url
                 if social_type in {"twitter", "x"} and not twitter_url:
                     twitter_url = url
+
+            live_age_label, live_age_hours = _live_pair_age(
+                pair.get("pairCreatedAt")
+            )
+            if live_age_hours is not None:
+                detail["pair_age"] = live_age_label
+                detail["pair_age_hours"] = live_age_hours
 
             detail.update({
                 "price_usd": _number(pair.get("priceUsd")),

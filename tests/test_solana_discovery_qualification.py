@@ -86,3 +86,40 @@ def test_rotating_enrichment_eventually_checks_older_resolved_pairs(monkeypatch)
     assert len(second) == qualification.MAX_CANDIDATES_CHECKED
     assert first != second
     assert "pair-12" in second
+
+
+# TOKEN_WORKSPACE_V2451_EXACT_PAIR_AGE_SOURCE_FIX
+def test_pair_age_preserves_subhour_precision_from_exact_pair_created_at():
+    pair = dict(PAIR)
+    pair["pairCreatedAt"] = int((NOW.timestamp() - (34 * 60)) * 1000)
+    result = qualify_candidate(OBSERVED, pair, now=NOW)
+    assert result is not None
+    assert result["pair_age"] == "34m"
+    assert abs(result["pair_age_hours"] - (34 / 60)) < 1e-9
+
+
+def test_pair_age_preserves_hours_and_minutes_from_exact_pair_created_at():
+    pair = dict(PAIR)
+    pair["pairCreatedAt"] = int((NOW.timestamp() - ((1 * 60 + 12) * 60)) * 1000)
+    result = qualify_candidate(OBSERVED, pair, now=NOW)
+    assert result is not None
+    assert result["pair_age"] == "1h 12m"
+    assert abs(result["pair_age_hours"] - 1.2) < 1e-9
+
+
+def test_pair_age_preserves_day_and_hour_from_exact_pair_created_at():
+    pair = dict(PAIR)
+    pair["pairCreatedAt"] = int((NOW.timestamp() - (27 * 3600)) * 1000)
+    result = qualify_candidate(OBSERVED, pair, now=NOW)
+    assert result is not None
+    assert result["pair_age"] == "1d 3h"
+    assert abs(result["pair_age_hours"] - 27.0) < 1e-9
+
+
+def test_pair_age_fails_closed_when_exact_pair_created_at_is_invalid():
+    pair = dict(PAIR)
+    pair["pairCreatedAt"] = "not-a-timestamp"
+    result = qualify_candidate(OBSERVED, pair, now=NOW)
+    assert result is not None
+    assert result["pair_age"] == "Unavailable"
+    assert result["pair_age_hours"] is None
