@@ -775,3 +775,86 @@ def test_token_workspace_v2453_leaf_icon_is_decorative_and_css_sized():
     assert '<svg class="token-age-leaf" aria-hidden="true"' in html
     assert ".token-age-leaf{" in html
     assert "fill:var(--green)" in html
+
+
+
+# TRANSACTIONS_FEED_V15_FLOW_INTELLIGENCE
+def test_transactions_feed_v15_renders_compact_flow_intelligence():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TRANSACTIONS_FEED_V15_FLOW_INTELLIGENCE" in html
+    assert 'data-transactions-flow' in html
+    assert 'data-flow-buy-volume' in html
+    assert 'data-flow-sell-volume' in html
+    assert 'data-flow-net' in html
+    assert 'data-flow-largest' in html
+    assert "function calculateRecentFlow(rows)" in html
+    assert "function renderRecentFlow(rows)" in html
+
+
+def test_transactions_feed_v15_uses_same_30_row_window_as_table():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert ".slice(0,MAX_VISIBLE_TRANSACTIONS)" in html
+    assert "MAX_VISIBLE_TRANSACTIONS=30" in html
+    assert "netFlow:buyVolume-sellVolume" in html
+    assert 'side==="BUY"' in html
+    assert 'side==="SELL"' in html
+
+
+def test_transactions_feed_v15_refreshes_flow_after_exact_id_deduplication():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    dedupe_pos = html.index("deduped.push(item);")
+    rows_pos = html.index("renderRows(deduped);")
+    flow_pos = html.index("renderRecentFlow(deduped);")
+
+    assert dedupe_pos < rows_pos < flow_pos
+
+
+def test_transactions_feed_v15_failure_keeps_last_rendered_flow():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    load_pos = html.index("async function loadTransactions")
+    catch_pos = html.index("}catch(error){", load_pos)
+    catch_end = html.index("}finally{", catch_pos)
+    catch_block = html[catch_pos:catch_end]
+
+    assert "renderRecentFlow" not in catch_block
+    assert "keepExistingRowsOnFailure();" in catch_block
+
+
+
+# TRANSACTIONS_FEED_V151_FLOW_VISUAL_FINAL
+def test_transactions_feed_v151_final_colors_largest_trade_by_side():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TRANSACTIONS_FEED_V151_FLOW_VISUAL_FINAL" in html
+    assert ".flow-largest-tone.buy{color:var(--green)!important}" in html
+    assert ".flow-largest-tone.sell{color:var(--red)!important}" in html
+    assert 'class="flow-largest-tone" data-flow-largest' in html
+    assert 'class="flow-largest-tone" data-flow-largest-side' in html
+    assert 'node.classList.add(flow.largest.side.toLowerCase())' in html
+
+
+def test_transactions_feed_v151_final_adds_live_volume_visuals():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert 'data-flow-buy-meter' in html
+    assert 'data-flow-sell-meter' in html
+    assert 'data-flow-bias' in html
+    assert "const totalVolume=flow.buyVolume+flow.sellVolume;" in html
+    assert "(flow.buyVolume/totalVolume)*100" in html
+    assert "(flow.sellVolume/totalVolume)*100" in html
+    assert '"Buy pressure"' in html
+    assert '"Sell pressure"' in html
+    assert '"Balanced"' in html
+
+
+def test_transactions_feed_v151_final_preserves_v15_calculation_and_polling():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "netFlow:buyVolume-sellVolume" in html
+    assert "MAX_VISIBLE_TRANSACTIONS=30" in html
+    assert "const POLL_INTERVAL_MS=5000;" in html
+    assert "renderRecentFlow(deduped);" in html

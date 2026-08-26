@@ -368,6 +368,21 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
         '<h2>Transactions</h2>'
         '<span class="transactions-state" data-transactions-state>Loading</span>'
         '</div>'
+        '<div class="transactions-flow" data-transactions-flow aria-label="Recent transaction flow">'
+        '<div class="transactions-flow-item buy"><span>Buy volume</span>'
+        '<b data-flow-buy-volume>--</b><small data-flow-buy-count>-- buys</small>'
+        '<div class="transactions-flow-meter" aria-hidden="true"><i data-flow-buy-meter></i></div></div>'
+        '<div class="transactions-flow-item sell"><span>Sell volume</span>'
+        '<b data-flow-sell-volume>--</b><small data-flow-sell-count>-- sells</small>'
+        '<div class="transactions-flow-meter" aria-hidden="true"><i data-flow-sell-meter></i></div></div>'
+        '<div class="transactions-flow-item net" data-flow-net-card><span>Net flow</span>'
+        '<b data-flow-net>--</b><small class="transactions-flow-bias">'
+        '<i class="transactions-flow-bias-dot" aria-hidden="true"></i>'
+        '<span data-flow-bias>Balanced</span></small></div>'
+        '<div class="transactions-flow-item largest"><span>Largest trade</span>'
+        '<b class="flow-largest-tone" data-flow-largest>--</b>'
+        '<small class="flow-largest-tone" data-flow-largest-side>--</small></div>'
+        '</div>'
         '<div class="transactions-table-wrap">'
         '<table class="transactions-table">'
         '<thead><tr>'
@@ -1027,6 +1042,96 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 /* TRANSACTIONS_FEED_V13_LIVE_POLLING */
 .transactions-state.live{color:var(--green)}
 .transactions-state.stale{color:var(--amber)}
+
+/* TRANSACTIONS_FEED_V15_FLOW_INTELLIGENCE */
+/* TRANSACTIONS_FEED_V151_FLOW_VISUAL_FINAL */
+.transactions-flow-meter{
+  height:3px;
+  margin-top:7px;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(145,168,197,.12);
+}
+.transactions-flow-meter i{
+  display:block;
+  width:0;
+  height:100%;
+  border-radius:inherit;
+  transition:width .28s ease;
+}
+.transactions-flow-item.buy .transactions-flow-meter i{background:var(--green)}
+.transactions-flow-item.sell .transactions-flow-meter i{background:var(--red)}
+.flow-largest-tone.buy{color:var(--green)!important}
+.flow-largest-tone.sell{color:var(--red)!important}
+.transactions-flow-bias{
+  display:inline-flex!important;
+  align-items:center;
+  gap:5px;
+}
+.transactions-flow-bias-dot{
+  width:6px;
+  height:6px;
+  flex:0 0 6px;
+  border-radius:50%;
+  background:var(--muted);
+}
+.transactions-flow-item.net.positive .transactions-flow-bias-dot{background:var(--green)}
+.transactions-flow-item.net.negative .transactions-flow-bias-dot{background:var(--red)}
+@media (prefers-reduced-motion:reduce){
+  .transactions-flow-meter i{transition:none}
+}
+
+.transactions-flow{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  border-bottom:1px solid var(--line);
+  background:var(--panel2);
+}
+.transactions-flow-item{
+  min-width:0;
+  padding:10px 14px;
+  border-right:1px solid var(--line);
+}
+.transactions-flow-item:last-child{border-right:0}
+.transactions-flow-item span{
+  display:block;
+  color:var(--muted);
+  font:700 9px/1.2 var(--mono);
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+.transactions-flow-item b{
+  display:block;
+  margin-top:5px;
+  color:var(--text);
+  font:700 13px/1.2 var(--mono);
+  font-variant-numeric:tabular-nums lining-nums;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.transactions-flow-item small{
+  display:block;
+  margin-top:4px;
+  color:var(--muted);
+  font:10px/1.2 var(--mono);
+}
+.transactions-flow-item.buy b{color:var(--green)}
+.transactions-flow-item.sell b{color:var(--red)}
+.transactions-flow-item.net.positive b{color:var(--green)}
+.transactions-flow-item.net.negative b{color:var(--red)}
+.transactions-flow-item.net.flat b{color:var(--muted)}
+html[data-theme="intel"] .transactions-flow{
+  background:#121820;
+  border-bottom-color:#28313b;
+}
+html[data-theme="intel"] .transactions-flow-item{border-right-color:#28313b}
+@media(max-width:700px){
+  .transactions-flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .transactions-flow-item:nth-child(2){border-right:0}
+  .transactions-flow-item:nth-child(-n+2){border-bottom:1px solid var(--line)}
+}
+
 /* TRANSACTIONS_FEED_V122_COMPACT_LIVE_TABLE */
 .transactions-table-wrap{max-height:480px;overflow:auto;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable}
 .transactions-table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums lining-nums}
@@ -1655,6 +1760,19 @@ __CANDLESTICK_CHART_PANEL__
   const state=panel.querySelector("[data-transactions-state]");
   const scrollBox=panel.querySelector(".transactions-table-wrap");
 
+  /* TRANSACTIONS_FEED_V15_FLOW_INTELLIGENCE */
+  const flowBuyVolume=panel.querySelector("[data-flow-buy-volume]");
+  const flowBuyCount=panel.querySelector("[data-flow-buy-count]");
+  const flowSellVolume=panel.querySelector("[data-flow-sell-volume]");
+  const flowSellCount=panel.querySelector("[data-flow-sell-count]");
+  const flowNet=panel.querySelector("[data-flow-net]");
+  const flowNetCard=panel.querySelector("[data-flow-net-card]");
+  const flowBias=panel.querySelector("[data-flow-bias]");
+  const flowBuyMeter=panel.querySelector("[data-flow-buy-meter]");
+  const flowSellMeter=panel.querySelector("[data-flow-sell-meter]");
+  const flowLargest=panel.querySelector("[data-flow-largest]");
+  const flowLargestSide=panel.querySelector("[data-flow-largest-side]");
+
   /* TRANSACTIONS_FEED_V13_LIVE_POLLING */
   const POLL_INTERVAL_MS=5000;
   let pollInFlight=false;
@@ -1736,6 +1854,114 @@ __CANDLESTICK_CHART_PANEL__
   }
 
   const MAX_VISIBLE_TRANSACTIONS=30;
+
+  /* TRANSACTIONS_FEED_V15_FLOW_INTELLIGENCE */
+  function flowUsd(value,{signed=false}={}){
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    const abs=Math.abs(n);
+    let formatted;
+    if(abs>=1000000) formatted="$"+(abs/1000000).toFixed(abs>=10000000?1:2)+"M";
+    else if(abs>=1000) formatted="$"+(abs/1000).toFixed(abs>=10000?1:2)+"K";
+    else formatted="$"+abs.toLocaleString(undefined,{
+      minimumFractionDigits:abs<1?4:2,
+      maximumFractionDigits:abs<1?4:2
+    });
+    if(!signed||n===0) return formatted;
+    return (n>0?"+":"-")+formatted;
+  }
+
+  function calculateRecentFlow(rows){
+    const recent=(Array.isArray(rows)?rows:[])
+      .slice(0,MAX_VISIBLE_TRANSACTIONS);
+
+    let buyCount=0;
+    let sellCount=0;
+    let buyVolume=0;
+    let sellVolume=0;
+    let largest=null;
+
+    recent.forEach(item=>{
+      if(!item||typeof item!=="object") return;
+      const side=rawText(item.side).toUpperCase();
+      const volume=Number(item.volume_usd);
+      if(!Number.isFinite(volume)||volume<0) return;
+
+      if(side==="BUY"){
+        buyCount+=1;
+        buyVolume+=volume;
+      }else if(side==="SELL"){
+        sellCount+=1;
+        sellVolume+=volume;
+      }else{
+        return;
+      }
+
+      if(largest===null||volume>largest.volume){
+        largest={volume,side};
+      }
+    });
+
+    return {
+      buyCount,
+      sellCount,
+      buyVolume,
+      sellVolume,
+      netFlow:buyVolume-sellVolume,
+      largest
+    };
+  }
+
+  function renderRecentFlow(rows){
+    const flow=calculateRecentFlow(rows);
+
+    if(flowBuyVolume) flowBuyVolume.textContent=flowUsd(flow.buyVolume);
+    if(flowBuyCount) flowBuyCount.textContent=flow.buyCount+" buys";
+    if(flowSellVolume) flowSellVolume.textContent=flowUsd(flow.sellVolume);
+    if(flowSellCount) flowSellCount.textContent=flow.sellCount+" sells";
+    if(flowNet) flowNet.textContent=flowUsd(flow.netFlow,{signed:true});
+
+    if(flowNetCard){
+      flowNetCard.classList.remove("positive","negative","flat");
+      flowNetCard.classList.add(
+        flow.netFlow>0?"positive":flow.netFlow<0?"negative":"flat"
+      );
+    }
+
+    const totalVolume=flow.buyVolume+flow.sellVolume;
+    const buyShare=totalVolume>0 ? (flow.buyVolume/totalVolume)*100 : 0;
+    const sellShare=totalVolume>0 ? (flow.sellVolume/totalVolume)*100 : 0;
+
+    if(flowBuyMeter) flowBuyMeter.style.width=buyShare.toFixed(1)+"%";
+    if(flowSellMeter) flowSellMeter.style.width=sellShare.toFixed(1)+"%";
+
+    if(flowBias){
+      flowBias.textContent=flow.netFlow>0
+        ? "Buy pressure"
+        : flow.netFlow<0
+          ? "Sell pressure"
+          : "Balanced";
+    }
+
+    if(flowLargest){
+      flowLargest.textContent=flow.largest
+        ? flowUsd(flow.largest.volume)
+        : "--";
+    }
+    if(flowLargestSide){
+      flowLargestSide.textContent=flow.largest
+        ? flow.largest.side
+        : "--";
+    }
+
+    [flowLargest,flowLargestSide].forEach(node=>{
+      if(!node) return;
+      node.classList.remove("buy","sell");
+      if(flow.largest){
+        node.classList.add(flow.largest.side.toLowerCase());
+      }
+    });
+  }
 
   function captureScrollAnchor(){
     if(!scrollBox||scrollBox.scrollTop<=8) return null;
@@ -1897,6 +2123,7 @@ __CANDLESTICK_CHART_PANEL__
       });
 
       renderRows(deduped);
+      renderRecentFlow(deduped);
 
       const shown=Math.min(deduped.length,MAX_VISIBLE_TRANSACTIONS);
       setTransactionState(payload.stale===true?"STALE":"LIVE",shown);
