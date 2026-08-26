@@ -9,8 +9,11 @@
     const connect = sandbox.querySelector("[data-connect-wallet]");
     const quoteButton = sandbox.querySelector("[data-get-quote]");
     const amount = sandbox.querySelector("[data-quote-amount]");
+    const receiveAmount = sandbox.querySelector("[data-receive-amount]");
+    const inputError = sandbox.querySelector("[data-swap-input-error]");
     const quoteResult = sandbox.querySelector("[data-quote-result]");
     const acknowledgement = sandbox.querySelector("[data-swap-risk-ack]");
+    const confirmationSummary = sandbox.querySelector("[data-confirmation-summary]");
     const swapButton = sandbox.querySelector("[data-execute-swap]");
     const swapResult = sandbox.querySelector("[data-swap-result]");
     const tokenAddress = sandbox.dataset.tokenAddress;
@@ -20,6 +23,7 @@
     let walletAddress = "";
     let currentQuote = null;
     let pendingSignedOrder = null;
+    let confirmationOpen = false;
     let busy = false;
     let web3Promise = null;
 
@@ -60,12 +64,27 @@
 
     function clearPreparedState() {
         pendingSignedOrder = null;
-        swapButton.textContent = "Review and approve swap";
+    }
+
+    function clearConfirmation() {
+        confirmationOpen = false;
+        confirmationSummary.hidden = true;
+        confirmationSummary.replaceChildren();
+        swapButton.textContent = "Review transaction";
+    }
+
+    function setInputError(message) {
+        const text = present(message, "");
+        inputError.textContent = text;
+        inputError.hidden = !text;
     }
 
     function clearQuote() {
         currentQuote = null;
         clearPreparedState();
+        clearConfirmation();
+        receiveAmount.textContent = "—";
+        setInputError("");
         acknowledgement.checked = false;
         updateSwapAvailability();
     }
@@ -78,50 +97,120 @@
         container.appendChild(text);
     }
 
-    function addCell(grid, label, value) {
+    function addSummaryRow(container, label, value, className) {
         const cell = document.createElement("div");
-        cell.className = "quote-cell";
+        cell.className = className || "quote-summary-row-v27";
         const caption = document.createElement("span");
         caption.textContent = label;
         const result = document.createElement("b");
         result.textContent = present(value, "Unavailable");
         cell.append(caption, result);
-        grid.appendChild(cell);
+        container.appendChild(cell);
     }
 
-    function addFee(container, label, value) {
-        const row = document.createElement("div");
-        row.className = "fee-row";
-        const caption = document.createElement("span");
-        caption.textContent = label;
-        const amountText = document.createElement("b");
-        amountText.textContent = present(value, 0) + " bps";
-        row.append(caption, amountText);
-        container.appendChild(row);
+    function tokenOutput(payload) {
+        if (payload.output_amount_ui) {
+            const ui = Number(payload.output_amount_ui);
+            return (Number.isFinite(ui)
+                ? new Intl.NumberFormat(undefined, {maximumFractionDigits: 8}).format(ui)
+                : payload.output_amount_ui) + " " + tokenSymbol;
+        }
+        const raw = present(payload.output_amount_raw, "Unavailable");
+        return raw.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + " raw token units";
+    }
+
+    function compactOutput(payload) {
+        if (payload.output_amount_ui) return tokenOutput(payload).replace(" " + tokenSymbol, "");
+        const raw = Number(payload.output_amount_raw);
+        return Number.isFinite(raw)
+            ? new Intl.NumberFormat(undefined, {notation: "compact", maximumFractionDigits: 2}).format(raw)
+                + " raw"
+            : "—";
+    }
+
+    function minimumOutput(payload) {
+        if (payload.minimum_received_ui) {
+            const ui = Number(payload.minimum_received_ui);
+            return (Number.isFinite(ui)
+                ? new Intl.NumberFormat(undefined, {maximumFractionDigits: 8}).format(ui)
+                : payload.minimum_received_ui) + " " + tokenSymbol;
+        }
+        const minimum = Number(payload.minimum_received_raw);
+        const raw = Number(payload.output_amount_raw);
+        const ui = Number(payload.output_amount_ui);
+        if (payload.output_amount_ui && minimum > 0 && Number.isFinite(minimum)
+                && Number.isFinite(raw) && raw > 0 && Number.isFinite(ui)) {
+            return new Intl.NumberFormat(undefined, {maximumFractionDigits: 8})
+                .format(minimum * (ui / raw)) + " " + tokenSymbol;
+        }
+        if (minimum > 0 && Number.isFinite(minimum)) {
+            return String(payload.minimum_received_raw).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                + " raw token units";
+        }
+        return "Unavailable";
+    }
+
+    function slippageText(payload) {
+        const bps = Number(payload.slippage_bps);
+        return Number.isFinite(bps) && bps > 0 ? (bps / 100).toFixed(2) + "%" : "Unavailable";
+    }
+
+    function impactText(payload) {
+        const impact = Number(payload.price_impact_pct);
+        return Number.isFinite(impact)
+            ? new Intl.NumberFormat(undefined, {maximumFractionDigits: 4}).format(impact) + "%"
+            : "Unavailable";
     }
 
     function renderQuote(payload) {
-        quoteResult.className = "quote-result visible";
+        quoteResult.className = "quote-result quote-result-v27 visible";
         quoteResult.replaceChildren();
-        const grid = document.createElement("div");
-        grid.className = "quote-grid";
-        const output = payload.output_amount_ui
-            ? payload.output_amount_ui + " " + tokenSymbol
-            : payload.output_amount_raw + " raw token units";
-        addCell(grid, "Expected output", output);
-        addCell(grid, "Router", present(payload.router, "Jupiter"));
-        addCell(grid, "Price impact", payload.price_impact_pct === null
-            || payload.price_impact_pct === undefined
-            ? "Unavailable" : payload.price_impact_pct + "%");
-        addCell(grid, "Quote mode", present(payload.mode, "ExactIn"));
-        quoteResult.appendChild(grid);
-        addFee(quoteResult, "Jupiter / route fee", payload.jupiter_fee_bps);
-        addFee(quoteResult, "DexSato integrator fee", payload.dexsato_integrator_fee_bps);
-        const policy = document.createElement("p");
-        policy.className = "quote-policy";
-        policy.textContent = "Indicative quote · " + present(payload.as_of, "Time unavailable")
-            + ". Final output is confirmed only after settlement.";
-        quoteResult.appendChild(policy);
+        const header = document.createElement("div");
+        header.className = "quote-preview-head-v27";
+        const title = document.createElement("strong");
+        title.textContent = "Quote preview";
+        const fresh = document.createElement("span");
+        fresh.className = "quote-fresh-v27";
+        fresh.textContent = "● Updated just now";
+        header.append(title, fresh);
+        const summary = document.createElement("div");
+        summary.className = "quote-summary-v27";
+        addSummaryRow(summary, "Expected receive", tokenOutput(payload));
+        addSummaryRow(summary, "Minimum receive", minimumOutput(payload));
+        addSummaryRow(summary, "Token decimals", payload.output_decimals == null
+            ? "Unavailable · raw fallback"
+            : String(payload.output_decimals) + " · "
+                + present(payload.output_decimals_source, "verified mint"));
+        addSummaryRow(summary, "Price impact", impactText(payload));
+        addSummaryRow(summary, "Slippage", slippageText(payload));
+        addSummaryRow(summary, "Estimated network fee", "Shown by wallet");
+        addSummaryRow(summary, "Route", present(payload.router, "Jupiter"));
+        quoteResult.append(header, summary);
+        receiveAmount.textContent = compactOutput(payload);
+    }
+
+    function renderConfirmation(payload) {
+        confirmationSummary.replaceChildren();
+        const heading = document.createElement("h4");
+        heading.textContent = "Confirmation summary";
+        const note = document.createElement("p");
+        note.textContent = "Check these details before opening your wallet.";
+        const list = document.createElement("div");
+        list.className = "confirmation-list-v27";
+        addSummaryRow(list, "You pay", amount.value + " SOL", "confirmation-row-v27");
+        addSummaryRow(list, "Expected receive", tokenOutput(payload), "confirmation-row-v27");
+        addSummaryRow(list, "Minimum receive", minimumOutput(payload), "confirmation-row-v27");
+        addSummaryRow(list, "Token decimals", payload.output_decimals == null
+            ? "Unavailable · raw fallback"
+            : String(payload.output_decimals) + " · "
+                + present(payload.output_decimals_source, "verified mint"), "confirmation-row-v27");
+        addSummaryRow(list, "Price impact", impactText(payload), "confirmation-row-v27");
+        addSummaryRow(list, "Slippage", slippageText(payload), "confirmation-row-v27");
+        addSummaryRow(list, "Network fee", "Confirmed by wallet", "confirmation-row-v27");
+        confirmationSummary.append(heading, note, list);
+        confirmationSummary.hidden = false;
+        confirmationOpen = true;
+        swapButton.textContent = "Confirm in wallet";
     }
 
     async function requestJson(url, options) {
@@ -234,8 +323,10 @@
             }
             walletProvider = provider;
             walletAddress = String(key);
-            walletState.textContent = "Connected public key · " + walletAddress;
-            connect.textContent = "Wallet connected";
+            walletState.textContent = walletAddress.slice(0, 4) + "…"
+                + walletAddress.slice(-4) + " · Connected";
+            walletState.classList.add("connected");
+            connect.textContent = "Change";
             clearPreparedState();
             if (typeof provider.on === "function") {
                 provider.on("accountChanged", function (publicKey) {
@@ -243,17 +334,21 @@
                     if (changed !== walletAddress) {
                         walletAddress = changed;
                         walletState.textContent = changed
-                            ? "Wallet changed · " + changed : "Wallet disconnected.";
+                            ? changed.slice(0, 4) + "…" + changed.slice(-4) + " · Connected"
+                            : "Wallet disconnected.";
+                        walletState.classList.toggle("connected", Boolean(changed));
                         clearQuote();
                     }
                 });
                 provider.on("disconnect", function () {
                     walletAddress = "";
                     walletState.textContent = "Wallet disconnected.";
+                    walletState.classList.remove("connected");
                     clearQuote();
                 });
             }
         } catch (error) {
+            walletState.classList.remove("connected");
             walletState.textContent = present(error.message, "Wallet connection was not approved.");
         } finally {
             connect.disabled = false;
@@ -286,10 +381,18 @@
     });
 
     amount.addEventListener("input", clearQuote);
-    acknowledgement.addEventListener("change", updateSwapAvailability);
+    acknowledgement.addEventListener("change", function () {
+        if (!acknowledgement.checked) clearConfirmation();
+        updateSwapAvailability();
+    });
 
     swapButton.addEventListener("click", async function () {
         if (busy || !walletAddress || !currentQuote || !acknowledgement.checked) return;
+        if (!confirmationOpen) {
+            renderConfirmation(currentQuote);
+            updateSwapAvailability();
+            return;
+        }
         busy = true;
         updateSwapAvailability();
         try {
@@ -339,9 +442,22 @@
             };
             await relaySignedOrder(pendingSignedOrder);
         } catch (error) {
-            if (error.status === 400 || error.status === 410) clearPreparedState();
+            const message = present(error.message, "Jupiter swap could not be completed.");
+            const insufficientBalance = /insufficient sol balance/i.test(message);
+            if (error.status === 400 || error.status === 410) {
+                clearPreparedState();
+                clearConfirmation();
+                acknowledgement.checked = false;
+            }
+            if (insufficientBalance) {
+                setInputError(message);
+                swapResult.className = "quote-result";
+                swapResult.replaceChildren();
+                amount.focus();
+                amount.select();
+            }
             if (pendingSignedOrder) swapButton.textContent = "Retry signed transaction";
-            setResult(swapResult, present(error.message, "Jupiter swap could not be completed."), "quote-error");
+            if (!insufficientBalance) setResult(swapResult, message, "quote-error");
         } finally {
             busy = false;
             updateSwapAvailability();

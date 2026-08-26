@@ -19,6 +19,7 @@ from application.solana_discovery_feed_service import load_solana_discovery_feed
 
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
+SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112"
 SOL_DECIMALS = 9
 MIN_SOL_AMOUNT = Decimal("0.001")
@@ -79,6 +80,54 @@ def _label(value: Any, fallback: str) -> str:
     return candidate
 
 
+def _token_decimals(
+    mint: str,
+    provider_value: Any,
+    *,
+    rpc_url: str | None,
+    request_post: Callable[..., Any],
+) -> tuple[int | None, str | None]:
+    """Resolve token decimals, preferring a valid provider value then Solana RPC."""
+    try:
+        decimals = int(provider_value)
+        if 0 <= decimals <= 18:
+            return decimals, "Jupiter"
+    except (TypeError, ValueError):
+        pass
+
+    endpoint = (rpc_url or os.getenv("SOLANA_RPC_URL", "") or SOLANA_RPC_URL).strip()
+    try:
+        response = request_post(
+            endpoint,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTokenSupply",
+                "params": [mint],
+            },
+            headers={"accept": "application/json", "content-type": "application/json"},
+            timeout=8,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        value = payload.get("result", {}).get("value", {}) if isinstance(payload, dict) else {}
+        decimals = int(value.get("decimals"))
+        if 0 <= decimals <= 18:
+            return decimals, "Solana mint"
+    except (requests.RequestException, RuntimeError, TypeError, ValueError, AttributeError):
+        pass
+    return None, None
+
+
+def _raw_to_ui(value: Any, decimals: int | None) -> str | None:
+    if decimals is None or value is None or not str(value).isdigit():
+        return None
+    try:
+        return format(Decimal(str(value)) / (Decimal(10) ** decimals), "f")
+    except (InvalidOperation, ValueError):
+        return None
+
+
 def fetch_jupiter_quote(
     token_address: str,
     amount_sol: Any = "0.1",
@@ -86,6 +135,8 @@ def fetch_jupiter_quote(
     api_key: str | None = None,
     feed: dict[str, Any] | None = None,
     request_get: Callable[..., Any] = requests.get,
+    request_post: Callable[..., Any] = requests.post,
+    rpc_url: str | None = None,
 ) -> dict[str, Any]:
     """Return a bounded quote for WSOL to one qualified discovery token."""
     output_mint = str(token_address or "").strip()
@@ -139,14 +190,17 @@ def fetch_jupiter_quote(
     if out_amount is None or not str(out_amount).isdigit():
         raise JupiterQuoteUnavailable("Jupiter quote has no valid output amount.")
 
-    output_decimals = payload.get("outputDecimals")
-    output_ui: str | None = None
-    try:
-        decimals = int(output_decimals)
-        if 0 <= decimals <= 18:
-            output_ui = format(Decimal(str(out_amount)) / (10 ** decimals), "f")
-    except (TypeError, ValueError, InvalidOperation):
-        pass
+    decimals, decimals_source = _token_decimals(
+        output_mint,
+        payload.get("outputDecimals"),
+        rpc_url=rpc_url,
+        request_post=request_post,
+    )
+    output_ui = _raw_to_ui(out_amount, decimals)
+    minimum_raw = (
+        str(payload.get("otherAmountThreshold"))
+        if payload.get("otherAmountThreshold") is not None else None
+    )
 
     platform_fee = _platform_fee(payload)
     return {
@@ -160,10 +214,10 @@ def fetch_jupiter_quote(
         "input_amount_lamports": str(lamports),
         "output_amount_raw": str(out_amount),
         "output_amount_ui": output_ui,
-        "minimum_received_raw": (
-            str(payload.get("otherAmountThreshold"))
-            if payload.get("otherAmountThreshold") is not None else None
-        ),
+        "output_decimals": decimals,
+        "output_decimals_source": decimals_source,
+        "minimum_received_raw": minimum_raw,
+        "minimum_received_ui": _raw_to_ui(minimum_raw, decimals),
         "router": _label(payload.get("router"), "Jupiter"),
         "mode": _label(payload.get("mode"), "ExactIn"),
         "price_impact_pct": _number(payload.get("priceImpactPct")),
