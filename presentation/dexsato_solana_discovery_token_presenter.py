@@ -402,11 +402,93 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
     )
 
 
-def render_solana_discovery_token_page(detail: dict[str, Any]) -> str:
+# TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL
+def _coin_timeline_panel() -> str:
+    """Render an honest timeline shell until timestamped events are persisted."""
+    return (
+        '<section class="workspace-rail-card coin-timeline" data-coin-timeline>'
+        '<div class="workspace-rail-head"><h2>Coin Timeline</h2>'
+        '<small>Observed exact-pool events</small></div>'
+        '<div class="timeline-empty">'
+        '<i aria-hidden="true"></i>'
+        '<strong>Observation timeline starts here</strong>'
+        '<p>Timestamped changes will appear after DexSato observes them. '
+        'No earlier history is inferred.</p>'
+        '</div></section>'
+    )
+
+
+def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str:
+    """Render the current discovery archive as token navigation, not a ranking."""
+    candidates = feed.get("candidates") if isinstance(feed, dict) else None
+    rows = [dict(item) for item in candidates or [] if isinstance(item, dict)]
+    current_token = str(detail.get("token_address") or "")
+    if current_token:
+        selected = next(
+            (item for item in rows if str(item.get("token_address") or "") == current_token),
+            None,
+        )
+        other_rows = [
+            item for item in rows
+            if str(item.get("token_address") or "") != current_token
+        ]
+        rows = [{**(selected or {}), **detail}, *other_rows]
+
+    rendered: list[str] = []
+    seen: set[str] = set()
+    for item in rows:
+        token_address = str(item.get("token_address") or "").strip()
+        if not token_address or token_address in seen:
+            continue
+        seen.add(token_address)
+        symbol = escape(str(item.get("symbol") or "Unknown"))
+        quote = escape(str(item.get("quote_symbol") or "SOL"))
+        price = escape(_usd(item.get("price_usd")))
+        change_text, change_tone = _change_percent(item.get("change_24h"))
+        active = token_address == current_token
+        current = ' aria-current="page"' if active else ""
+        active_class = " active" if active else ""
+        initial = escape((str(item.get("symbol") or "?")[:1] or "?").upper())
+        image_url = _external_link(item.get("token_image_url"))
+        avatar = (
+            f'<img src="{escape(image_url, quote=True)}" alt="" loading="lazy" '
+            'referrerpolicy="no-referrer">'
+            if image_url else f'<span aria-hidden="true">{initial}</span>'
+        )
+        rendered.append(
+            f'<a class="coin-list-row{active_class}" href="/discovery/solana/'
+            f'{escape(token_address, quote=True)}"{current}>'
+            f'<span class="coin-list-avatar">{avatar}</span>'
+            f'<span class="coin-list-identity"><strong>{symbol} / {quote}</strong>'
+            f'<small>{price}</small></span>'
+            f'<b class="coin-list-change {escape(change_tone)}">{change_text}</b></a>'
+        )
+        if len(rendered) >= 30:
+            break
+
+    body = "".join(rendered) if rendered else (
+        '<div class="coin-list-empty">No discovery tokens are available.</div>'
+    )
+    return (
+        '<section class="workspace-rail-card coin-list" data-coin-list>'
+        '<div class="workspace-rail-head"><h2>Coin List</h2>'
+        '<a href="/discovery/solana">Open feed</a></div>'
+        '<label class="coin-list-search"><span class="sr-only">Search coin list</span>'
+        '<input type="search" placeholder="Search token or pair" data-coin-list-search></label>'
+        f'<div class="coin-list-rows" data-coin-list-rows>{body}</div></section>'
+    )
+
+
+def render_solana_discovery_token_page(
+    detail: dict[str, Any],
+    feed: dict[str, Any] | None = None,
+) -> str:
     """Render exact-token evidence and explicit wallet-approved Jupiter execution."""
     token_overview_card = _token_overview_card(detail)
     candlestick_chart_panel = _candlestick_chart_panel(detail)
     transactions_table_panel = _transactions_table_panel(detail)
+    coin_timeline_panel = _coin_timeline_panel()
+    coin_list_panel = _coin_list_panel(detail, feed)
     symbol = escape(str(detail.get("symbol") or "Unknown"))
     trader_tf_strip = _trader_timeframe_strip(detail)
     name = escape(str(detail.get("name") or "Unknown token"))
@@ -1213,13 +1295,57 @@ html[data-theme="intel"] .transactions-table th{background:#121820}
 html[data-theme="intel"] .transactions-table th,html[data-theme="intel"] .transactions-table td{border-bottom-color:#222b35}
 @media(max-width:700px){.transactions-table-wrap{max-height:400px}}
 
+/* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
+.shell{width:min(1780px,calc(100% - 24px))}
+.token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
+.workspace-main-v26{min-width:0}
+.workspace-main-v26 .token-overview-card{margin-top:0}
+.workspace-rail-v26{display:grid;gap:14px;position:sticky;top:14px;min-width:0}
+.workspace-rail-card{min-width:0;border:1px solid var(--line);background:var(--panel);overflow:hidden}
+.workspace-rail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:15px;border-bottom:1px solid var(--line)}
+.workspace-rail-head h2{margin:0;font:650 15px/1.2 var(--display);text-transform:uppercase;letter-spacing:.03em}
+.workspace-rail-head small{display:block;margin-top:5px;color:var(--muted);font-size:11px}
+.workspace-rail-head a{color:var(--blue);font-size:11px;text-decoration:none;white-space:nowrap}
+.timeline-empty{display:grid;justify-items:start;gap:7px;padding:18px 15px;color:var(--muted)}
+.timeline-empty i{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(38,212,154,.09)}
+.timeline-empty strong{color:var(--text);font-size:13px}
+.timeline-empty p{margin:0;font-size:12px;line-height:1.55}
+.coin-list-search{display:block;padding:12px 12px 8px}
+.coin-list-search input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:var(--panel2);color:var(--text);font:12px var(--ui)}
+.coin-list-rows{max-height:620px;overflow:auto;scrollbar-gutter:stable}
+.coin-list-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:10px 12px;border-top:1px solid var(--line);color:var(--text);text-decoration:none}
+.coin-list-row:hover{background:var(--panel2)}
+.coin-list-row.active{background:rgba(255,148,24,.055);box-shadow:inset 2px 0 var(--amber)}
+.coin-list-avatar{width:34px;height:34px;display:grid;place-items:center;overflow:hidden;border:1px solid var(--line);border-radius:50%;background:var(--panel2);font:700 13px var(--display)}
+.coin-list-avatar img{width:100%;height:100%;display:block;object-fit:cover}
+.coin-list-identity{min-width:0}
+.coin-list-identity strong,.coin-list-identity small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.coin-list-identity strong{font-size:12px}.coin-list-identity small{margin-top:3px;color:var(--muted);font:10px var(--mono)}
+.coin-list-change{font:650 10px var(--ui);font-variant-numeric:tabular-nums}.coin-list-change.up{color:var(--green)}.coin-list-change.down{color:var(--red)}.coin-list-change.unavailable{color:var(--muted)}
+.coin-list-empty{padding:18px 14px;color:var(--muted);font-size:12px}
+.workspace-right-v26{max-height:calc(100vh - 28px);overflow-y:auto;scrollbar-gutter:stable;overscroll-behavior:contain}
+.workspace-right-v26 .card{margin:0}html[data-theme="intel"] .workspace-right-v26 .decision-side-v2{position:static!important;top:auto!important}.workspace-right-v26 .jupiter{padding:16px}.workspace-right-v26 .jupiter h3{font-size:18px}.workspace-right-v26 .sandbox-note{font-size:12px}.workspace-right-v26 .market-snapshot-v26{position:static;padding:16px}.workspace-right-v26 .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-right-v26 .metric{padding:10px;min-height:62px}.workspace-right-v26 .metric .value{font-size:14px}.workspace-right-v26 .dexsato-evidence-strip{grid-template-columns:repeat(2,minmax(0,1fr))!important}.workspace-right-v26 .dexsato-evidence-item{padding:9px!important}.workspace-right-v26 .qualification h3{font-size:15px}.workspace-right-v26 .check{font-size:11px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+html[data-theme="intel"] .workspace-rail-card{border-color:#303a45;background:#0f141a}
+html[data-theme="intel"] .workspace-rail-head,html[data-theme="intel"] .coin-list-row{border-color:#28313b}
+html[data-theme="intel"] .coin-list-search input{border-color:#303a45;background:#121820}
+@media(max-width:1180px){.token-workspace-v26{grid-template-columns:minmax(0,1fr) minmax(290px,340px)}.workspace-main-v26{grid-column:1}.workspace-left-v26{grid-column:1/-1;grid-row:2;position:static;grid-template-columns:1fr 1fr}.workspace-right-v26{grid-column:2;grid-row:1;position:sticky}.coin-list-rows{max-height:340px}}
+@media(max-width:820px){.token-workspace-v26{grid-template-columns:1fr}.workspace-main-v26,.workspace-left-v26,.workspace-right-v26{grid-column:1;position:static}.workspace-main-v26{grid-row:1}.workspace-left-v26{grid-row:2}.workspace-right-v26{grid-row:3;grid-template-columns:1fr 1fr;max-height:none;overflow:visible}}
+@media(max-width:620px){.workspace-left-v26,.workspace-right-v26{grid-template-columns:1fr}.workspace-right-v26 .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 </style></head><body><main class="shell"><header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><strong>Solana Discovery</strong></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
+<div class="token-workspace-v26" data-token-workspace-v26>
+<aside class="workspace-rail-v26 workspace-left-v26" aria-label="Coin navigation and timeline">__COIN_TIMELINE_PANEL____COIN_LIST_PANEL__</aside>
+<section class="workspace-main-v26" aria-label="Selected token market evidence">
 __TOKEN_OVERVIEW_CARD__
 <section class="hero"><div><span class="eyebrow">Qualified exact-token workspace</span><h1>__SYMBOL__ / __QUOTE__</h1><p>Review observed market activity, exact-pool identity and disclosed risk before taking any action.</p></div><div class="status"><span class="eyebrow">Market data</span><b>__STATUS__</b><small>__STATUS_LABEL__</small></div></section>
 <section class="identity"><div class="identity-head"><div><span class="eyebrow">Token identity</span><h2>__NAME__</h2><span class="name">__DEX__ · Solana exact pool</span></div><div>__SOURCE_LINK__</div></div><div class="addresses"><div class="address"><span>Canonical token address</span><div class="address-row"><code title="__TOKEN__">__TOKEN_SHORT__</code><button class="copy-address" type="button" data-copy-address="__TOKEN__">Copy</button></div></div><div class="address"><span>Exact pool address</span><div class="address-row"><code title="__POOL__">__POOL_SHORT__</code><button class="copy-address" type="button" data-copy-address="__POOL__">Copy</button></div></div></div></section>
 __CANDLESTICK_CHART_PANEL__
-<div class="grid"><section class="card"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div><section class="qualification"><span class="eyebrow">Qualification evidence</span><h3>Checks passed for this feed</h3><div class="check">Solana token identity</div><div class="check">Exact token and pool match</div><div class="check">Observed liquidity threshold</div><div class="check">Observed 24h activity</div><div class="check">Fresh collector data</div><div class="source">Collector updated __UPDATED__</div></section></section>
-<aside><section class="card jupiter" data-jupiter-sandbox data-token-address="__TOKEN__" data-token-symbol="__SYMBOL__"><span class="eyebrow">Jupiter integration sandbox</span><h3>Controlled wallet-approved swap</h3><span class="badge">D6 · NON-CUSTODIAL PILOT</span><p class="sandbox-note">Review an indicative Jupiter quote before choosing whether to approve one real Solana mainnet transaction in your connected wallet.</p><div class="wallet-state" data-wallet-state>Wallet not connected · required for swap approval</div><div class="sandbox-form"><button class="sandbox-button" type="button" data-connect-wallet>Connect supported wallet</button><label for="jupiter-amount">Amount in SOL</label><input class="sandbox-input" id="jupiter-amount" data-quote-amount inputmode="decimal" type="number" min="0.001" max="100" step="0.001" value="0.1"><button class="sandbox-button primary" type="button" data-get-quote>Get Jupiter quote</button></div><div class="quote-result" data-quote-result aria-live="polite"></div><div class="swap-warning"><strong>Real Solana mainnet transaction</strong>Discovery tokens may lose value, liquidity may change, and network or Jupiter fees may apply. A quote is not a guaranteed settlement result.</div><label class="swap-consent"><input type="checkbox" data-swap-risk-ack>I understand the risks and will review the transaction in my own wallet.</label><button class="sandbox-button primary" type="button" data-execute-swap disabled>Review and approve swap</button><div class="quote-result" data-swap-result aria-live="polite"></div><p class="quote-policy">DexSato integrator fee: <strong>0 bps</strong>. Trades are routed through Jupiter. DexSato never asks for a seed phrase and does not hold private keys or funds. Transactions must be approved in your connected wallet.</p></section></aside></div>
+</section>
+<aside class="workspace-rail-v26 workspace-right-v26" aria-label="Execution sandbox and market snapshot">
+<section class="card jupiter" data-jupiter-sandbox data-token-address="__TOKEN__" data-token-symbol="__SYMBOL__"><span class="eyebrow">Jupiter integration sandbox</span><h3>Controlled wallet-approved swap</h3><span class="badge">D6 · NON-CUSTODIAL PILOT</span><p class="sandbox-note">Review an indicative Jupiter quote before choosing whether to approve one real Solana mainnet transaction in your connected wallet.</p><div class="wallet-state" data-wallet-state>Wallet not connected · required for swap approval</div><div class="sandbox-form"><button class="sandbox-button" type="button" data-connect-wallet>Connect supported wallet</button><label for="jupiter-amount">Amount in SOL</label><input class="sandbox-input" id="jupiter-amount" data-quote-amount inputmode="decimal" type="number" min="0.001" max="100" step="0.001" value="0.1"><button class="sandbox-button primary" type="button" data-get-quote>Get Jupiter quote</button></div><div class="quote-result" data-quote-result aria-live="polite"></div><div class="swap-warning"><strong>Real Solana mainnet transaction</strong>Discovery tokens may lose value, liquidity may change, and network or Jupiter fees may apply. A quote is not a guaranteed settlement result.</div><label class="swap-consent"><input type="checkbox" data-swap-risk-ack>I understand the risks and will review the transaction in my own wallet.</label><button class="sandbox-button primary" type="button" data-execute-swap disabled>Review and approve swap</button><div class="quote-result" data-swap-result aria-live="polite"></div><p class="quote-policy">DexSato integrator fee: <strong>0 bps</strong>. Trades are routed through Jupiter. DexSato never asks for a seed phrase and does not hold private keys or funds. Transactions must be approved in your connected wallet.</p></section>
+<section class="card market-snapshot-v26"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div><section class="qualification"><span class="eyebrow">Qualification evidence</span><h3>Checks passed for this feed</h3><div class="check">Solana token identity</div><div class="check">Exact token and pool match</div><div class="check">Observed liquidity threshold</div><div class="check">Observed 24h activity</div><div class="check">Fresh collector data</div><div class="source">Collector updated __UPDATED__</div></section></section>
+</aside></div>
 <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>Market observations, indicative quotes and transaction results are distinct.</span></footer></main><script src="/static/js/dexsato_solana_discovery_swap.js" defer></script><script>
 (function(){
   const options=[...document.querySelectorAll("[data-theme-option]")];
@@ -1243,6 +1369,18 @@ __CANDLESTICK_CHART_PANEL__
 
   options.forEach(button=>{
     button.addEventListener("click",()=>applyTheme(button.dataset.themeOption));
+  });
+})();
+</script>
+<script>
+/* TOKEN_WORKSPACE_V26A_COIN_LIST_FILTER */
+(function(){
+  const input=document.querySelector("[data-coin-list-search]");
+  const rows=[...document.querySelectorAll("[data-coin-list-rows] .coin-list-row")];
+  if(!input||!rows.length)return;
+  input.addEventListener("input",()=>{
+    const query=(input.value||"").trim().toLowerCase();
+    rows.forEach(row=>{row.hidden=Boolean(query)&&!row.textContent.toLowerCase().includes(query);});
   });
 })();
 </script>
@@ -1288,7 +1426,7 @@ __CANDLESTICK_CHART_PANEL__
   if(market) market.classList.add("decision-main-v2");
   if(jupiter) jupiter.classList.add("decision-side-v2");
 
-  if(market && jupiter && market.parentElement===jupiter.parentElement){
+  if(market && jupiter && market.parentElement===jupiter.parentElement && !market.parentElement.classList.contains("workspace-right-v26")){
     market.parentElement.classList.add("decision-grid-v2");
   }
 
@@ -2433,5 +2571,7 @@ __CANDLESTICK_CHART_PANEL__
     html = html.replace("__TRADER_TF_STRIP__", trader_tf_strip)
     html = html.replace("__TOKEN_OVERVIEW_CARD__", token_overview_card)
     html = html.replace("__CANDLESTICK_CHART_PANEL__", candlestick_chart_panel + transactions_table_panel)
+    html = html.replace("__COIN_TIMELINE_PANEL__", coin_timeline_panel)
+    html = html.replace("__COIN_LIST_PANEL__", coin_list_panel)
     return html
 

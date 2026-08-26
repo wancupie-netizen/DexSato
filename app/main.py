@@ -211,7 +211,8 @@ def solana_discovery_token(token_address: str) -> str:
     detail = load_solana_discovery_token(token_address)
     if detail is None:
         raise HTTPException(status_code=404, detail="Qualified discovery token is not available.")
-    return render_solana_discovery_token_page(detail)
+    feed = load_solana_discovery_feed()
+    return render_solana_discovery_token_page(detail, feed=feed)
 
 
 # CHART_V22_LIVE_CANDLE

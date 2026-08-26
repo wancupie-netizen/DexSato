@@ -77,7 +77,7 @@ def test_renders_controlled_non_custodial_jupiter_swap_and_discloses_risk():
     assert "does not hold private keys or funds" in html
     assert "Transactions must be approved in your connected wallet" in html
     assert html.index("Risk context") < html.index("Qualification evidence")
-    assert html.index("Qualification evidence") < html.index("Jupiter integration sandbox")
+    assert html.index("Jupiter integration sandbox") < html.index("Risk context")
     assert 'class="card jupiter" data-jupiter-sandbox' in html
 
 
@@ -100,6 +100,76 @@ def test_chart_fails_safely_when_unavailable():
     assert "Market candles unavailable for this timeframe." in html
     assert "Insufficient chart history" not in html
     assert "Only 0 closed 4H candles available" not in html
+
+
+# TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL
+def test_token_workspace_v26a_renders_three_column_shell_without_fake_timeline():
+    feed = {
+        "connected": True,
+        "candidates": [
+            {**DETAIL, "token_address": "TokenAddress123456789"},
+            {
+                "token_address": "SecondToken987654321",
+                "symbol": "NEXT",
+                "quote_symbol": "SOL",
+                "price_usd": 0.0042,
+                "change_24h": -2.5,
+            },
+        ],
+    }
+
+    html = render_solana_discovery_token_page(DETAIL, feed=feed)
+
+    assert "TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL" in html
+    assert 'class="token-workspace-v26"' in html
+    assert 'class="workspace-rail-v26 workspace-left-v26"' in html
+    assert 'class="workspace-main-v26"' in html
+    assert 'class="workspace-rail-v26 workspace-right-v26"' in html
+    assert html.index("Coin Timeline") < html.index("Coin List")
+    assert html.index("Coin List") < html.index("TEST / SOL")
+    assert html.index("Jupiter integration sandbox") < html.index("Market Snapshot")
+    assert "Observation timeline starts here" in html
+    assert "No earlier history is inferred." in html
+    assert "Pool detected" not in html
+    assert 'aria-current="page"' in html
+    assert 'href="/discovery/solana/SecondToken987654321"' in html
+    assert "Search token or pair" in html
+
+
+def test_token_workspace_v26a_coin_list_falls_back_to_selected_token():
+    html = render_solana_discovery_token_page(DETAIL, feed=None)
+
+    assert 'data-coin-list' in html
+    assert 'href="/discovery/solana/TokenAddress123456789"' in html
+    assert 'aria-current="page"' in html
+
+
+def test_token_workspace_v26a2_keeps_right_rail_cards_in_one_static_flow():
+    html = render_solana_discovery_token_page(DETAIL, feed=None)
+
+    assert ".workspace-right-v26{max-height:calc(100vh - 28px);overflow-y:auto" in html
+    assert 'html[data-theme="intel"] .workspace-right-v26 .decision-side-v2{position:static!important;top:auto!important}' in html
+    assert ".workspace-right-v26 .market-snapshot-v26{position:static" in html
+    assert "overscroll-behavior:contain" in html
+
+
+def test_token_workspace_v26a3_pins_and_highlights_active_coin_first():
+    feed = {
+        "candidates": [
+            {"token_address": "FirstFeedToken", "symbol": "FIRST"},
+            {**DETAIL, "token_address": "TokenAddress123456789"},
+            {"token_address": "LastFeedToken", "symbol": "LAST"},
+        ],
+    }
+
+    html = render_solana_discovery_token_page(DETAIL, feed=feed)
+
+    active = 'href="/discovery/solana/TokenAddress123456789" aria-current="page"'
+    first = 'href="/discovery/solana/FirstFeedToken"'
+    last = 'href="/discovery/solana/LastFeedToken"'
+    assert html.index(active) < html.index(first) < html.index(last)
+    assert 'class="coin-list-row active"' in html
+    assert ".coin-list-row.active{background:rgba(255,148,24,.055);box-shadow:inset 2px 0 var(--amber)}" in html
 
 def test_swap_client_requires_explicit_wallet_signing_and_preserves_same_origin_api_keys():
     script = (

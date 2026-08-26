@@ -114,13 +114,20 @@ def test_should_render_read_only_solana_discovery(mock_feed, mock_render):
 
 
 @patch("app.main.render_solana_discovery_token_page")
+@patch("app.main.load_solana_discovery_feed")
 @patch("app.main.load_solana_discovery_token")
-def test_should_render_qualified_solana_discovery_token(mock_load, mock_render):
+def test_should_render_qualified_solana_discovery_token(mock_load, mock_feed, mock_render):
     mock_load.return_value = {"token_address": "Token123"}
+    mock_feed.return_value = {"connected": True, "candidates": []}
     mock_render.return_value = "<html>Token workspace</html>"
 
     assert solana_discovery_token("Token123") == "<html>Token workspace</html>"
     mock_load.assert_called_once_with("Token123")
+    mock_feed.assert_called_once_with()
+    mock_render.assert_called_once_with(
+        {"token_address": "Token123"},
+        feed={"connected": True, "candidates": []},
+    )
 
 
 @patch("app.main.load_solana_discovery_token", return_value=None)
