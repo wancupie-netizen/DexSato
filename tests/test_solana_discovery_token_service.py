@@ -321,10 +321,15 @@ def test_transactions_service_fetches_only_exact_qualified_pool():
     assert result is not None
     assert result["token_address"] == TOKEN
     assert result["pair_address"] == POOL
-    assert len(calls) == 1
-    assert calls[0][0].endswith(f"/networks/solana/pools/{POOL}/trades")
-    assert calls[0][1] == {"token": "base"}
-    assert calls[0][2] == 10
+    assert len(calls) == 2
+    trades_call, aggregate_call = calls
+    assert trades_call[0].endswith(f"/networks/solana/pools/{POOL}/trades")
+    assert trades_call[1] == {"token": "base"}
+    assert trades_call[2] == 10
+    assert aggregate_call[0].endswith(f"/networks/solana/pools/{POOL}")
+    assert aggregate_call[1] is None
+    assert aggregate_call[2] == 10
+    assert all(f"/networks/solana/pools/{POOL}" in url for url, _, _ in calls)
     trade = result["transactions"][0]
     assert trade["side"] == "BUY"
     assert trade["token_amount"] == 1000.0
@@ -658,3 +663,18 @@ def test_live_token_detail_keeps_stored_age_when_live_pair_created_at_missing():
     assert result is not None
     assert result["pair_age"] == "52m"
     assert abs(result["pair_age_hours"] - (52 / 60)) < 1e-9
+
+
+# TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI
+def test_market_activity_normalizes_exact_pool_aggregate():
+    from application.solana_discovery_token_service import _normalize_market_activity
+    payload={"data":{"id":"solana_"+POOL,"attributes":{"address":POOL,"transactions":{"m5":{"buys":8,"sells":2,"buyers":6,"sellers":2}},"volume_usd":{"m5":"1200.5"}}}}
+    result=_normalize_market_activity(payload,POOL)
+    assert result["windows"]["m5"]["total_transactions"]==10
+    assert result["windows"]["m5"]["buy_percent"]==80.0
+    assert result["windows"]["m5"]["buyers"]==6
+    assert result["windows"]["m5"]["volume_usd"]==1200.5
+
+def test_market_activity_rejects_wrong_pool_payload():
+    from application.solana_discovery_token_service import _normalize_market_activity
+    assert _normalize_market_activity({"data":{"id":"solana_WRONG","attributes":{"address":"WRONG"}}},POOL)=={}

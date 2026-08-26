@@ -368,6 +368,11 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
         '<h2>Transactions</h2>'
         '<span class="transactions-state" data-transactions-state>Loading</span>'
         '</div>'
+        '<section class="market-activity" data-market-activity aria-label="Multi-timeframe exact-pool market activity">'
+        '<div class="market-activity-head"><div><span>Market Activity</span><small>Exact-pool broader participation</small></div><small data-market-activity-source>Loading aggregate</small></div>'
+        '<div class="market-activity-wrap"><table class="market-activity-table"><thead><tr><th>Metric</th><th>5M</th><th>15M</th><th>30M</th><th>1H</th><th>6H</th><th>24H</th></tr></thead>'
+        '<tbody data-market-activity-body><tr><td colspan="7">Loading exact-pool activity...</td></tr></tbody></table></div></section>'
+        '<div class="recent-flow-label"><span>Recent Flow</span><small>30 latest exact-pool trades</small></div>'
         '<div class="transactions-flow" data-transactions-flow aria-label="Recent transaction flow">'
         '<div class="transactions-flow-item buy"><span>Buy volume</span>'
         '<b data-flow-buy-volume>--</b><small data-flow-buy-count>-- buys</small>'
@@ -1030,6 +1035,10 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 .candlestick-trade-marker.buy{fill:var(--green);stroke:var(--panel2);stroke-width:1.4}
 .candlestick-trade-marker.sell{fill:var(--red);stroke:var(--panel2);stroke-width:1.4}
 .candlestick-trade-marker.large{stroke-width:1.8}
+/* CHART_V24_TRADE_SIZE_INTELLIGENCE */
+.candlestick-trade-marker.size-small{opacity:.62}
+.candlestick-trade-marker.size-medium{opacity:.84;stroke-width:1.6}
+.candlestick-trade-marker.size-large{opacity:1;stroke-width:2.2}
 .candlestick-trade-count{
   fill:var(--text);
   stroke:var(--panel2);
@@ -1112,6 +1121,25 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 @media (prefers-reduced-motion:reduce){
   .transactions-flow-meter i{transition:none}
 }
+
+/* TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI */
+.market-activity{border-bottom:1px solid var(--line);background:var(--panel)}
+.market-activity-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.market-activity-head span,.recent-flow-label span{display:block;color:var(--text);font:750 10px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.market-activity-head small,.recent-flow-label small{display:block;margin-top:3px;color:var(--muted);font:10px/1.2 var(--ui)}
+.market-activity-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.market-activity-table{width:100%;min-width:690px;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums lining-nums}
+.market-activity-table th,.market-activity-table td{padding:8px 10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:right;font:11px/1.25 var(--mono);white-space:nowrap}
+.market-activity-table th:last-child,.market-activity-table td:last-child{border-right:0}.market-activity-table tbody tr:last-child td{border-bottom:0}
+.market-activity-table th{color:var(--muted);background:var(--panel2);font-size:9px;letter-spacing:.05em;text-transform:uppercase}
+.market-activity-table th:first-child,.market-activity-table td:first-child{text-align:left;width:128px}
+.market-activity-table td:first-child{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:.04em}
+.market-activity-table tr.activity-buys td:not(:first-child),.market-activity-table tr.activity-buyers td:not(:first-child),.market-activity-table tr.activity-buy-percent td:not(:first-child){color:var(--green)}
+.market-activity-table tr.activity-sells td:not(:first-child),.market-activity-table tr.activity-sellers td:not(:first-child){color:var(--red)}
+.market-activity-table .activity-unavailable{color:var(--muted)!important}.recent-flow-label{padding:9px 14px 7px;background:var(--panel2);border-bottom:1px solid var(--line)}
+html[data-theme="intel"] .market-activity{background:#0f141a;border-bottom-color:#28313b}html[data-theme="intel"] .market-activity-table th{background:#121820}
+html[data-theme="intel"] .market-activity-table th,html[data-theme="intel"] .market-activity-table td{border-color:#222b35}
+@media(max-width:700px){.market-activity-head{align-items:flex-start;flex-direction:column}.market-activity-table{min-width:650px}}
 
 .transactions-flow{
   display:grid;
@@ -1521,6 +1549,31 @@ __CANDLESTICK_CHART_PANEL__
     return Math.floor(Number(timestamp)/seconds)*seconds;
   }
 
+  /* CHART_V24_TRADE_SIZE_INTELLIGENCE */
+  function tradeSizeThresholds(values){
+    const sorted=(Array.isArray(values)?values:[])
+      .map(Number)
+      .filter(value=>Number.isFinite(value)&&value>=0)
+      .sort((a,b)=>a-b);
+    if(!sorted.length) return {p50:0,p80:0};
+    const quantile=q=>{
+      const pos=(sorted.length-1)*q;
+      const lower=Math.floor(pos),upper=Math.ceil(pos);
+      if(lower===upper) return sorted[lower];
+      const weight=pos-lower;
+      return sorted[lower]*(1-weight)+sorted[upper]*weight;
+    };
+    return {p50:quantile(.50),p80:quantile(.80)};
+  }
+
+  function tradeSizeLabel(value,thresholds){
+    const n=Number(value);
+    if(!Number.isFinite(n)||n<0) return "SMALL";
+    if(n>thresholds.p80) return "LARGE";
+    if(n>thresholds.p50) return "MEDIUM";
+    return "SMALL";
+  }
+
   function tradeOverlayBuckets(rows,timeframe){
     const buckets=new Map();
     (Array.isArray(rows)?rows:[]).slice(0,30).forEach(item=>{
@@ -1547,7 +1600,7 @@ __CANDLESTICK_CHART_PANEL__
     const title=document.createElement("b");
     title.textContent=summary.side+" · "+tradeUsd(total);
     const detail=document.createElement("span");
-    detail.textContent=summary.trades.length+" trade"+(summary.trades.length===1?"":"s")+" · "+tradeTime(largest?.timestamp);
+    detail.textContent="Trade size: "+summary.size+" · "+summary.trades.length+" trade"+(summary.trades.length===1?"":"s")+" · "+tradeTime(largest?.timestamp);
     tip.append(title,detail);
     tip.hidden=false;
 
@@ -1571,6 +1624,8 @@ __CANDLESTICK_CHART_PANEL__
       .map(item=>Number(item?.volume_usd))
       .filter(Number.isFinite);
     const maxTrade=Math.max(...volumeValues,1);
+    /* CHART_V24_TRADE_SIZE_INTELLIGENCE */
+    const sizeThresholds=tradeSizeThresholds(volumeValues);
 
     visible.forEach((row,index)=>{
       const bucket=buckets.get(candleBucket(row.time,state.timeframe));
@@ -1582,7 +1637,9 @@ __CANDLESTICK_CHART_PANEL__
         if(!trades.length) return;
         const total=trades.reduce((sum,item)=>sum+item.volume,0);
         const largest=Math.max(...trades.map(item=>item.volume),0);
-        const radius=4+Math.min(4,Math.sqrt(largest/maxTrade)*4);
+        /* CHART_V24_TRADE_SIZE_INTELLIGENCE */
+        const size=tradeSizeLabel(largest,sizeThresholds);
+        const radius=size==="LARGE"?8:size==="MEDIUM"?6:4.5;
         const anchor=side==="BUY"?Number(row.low):Number(row.high);
         if(!Number.isFinite(anchor)) return;
         const markerY=side==="BUY"?y(anchor)+12:y(anchor)-12;
@@ -1592,7 +1649,7 @@ __CANDLESTICK_CHART_PANEL__
 
         const marker=make("polygon",{
           points,
-          class:"candlestick-trade-marker "+side.toLowerCase()+(largest>=maxTrade*.65?" large":"")
+          class:"candlestick-trade-marker "+side.toLowerCase()+(largest>=maxTrade*.65?" large":"")+" size-"+size.toLowerCase()
         });
         svg.append(marker);
 
@@ -1611,8 +1668,8 @@ __CANDLESTICK_CHART_PANEL__
           class:"candlestick-trade-hit",
           "data-trade-overlay-hit":"1"
         });
-        hit.addEventListener("pointerenter",event=>showTradeTooltip(event,{side,trades,total}));
-        hit.addEventListener("pointermove",event=>showTradeTooltip(event,{side,trades,total}));
+        hit.addEventListener("pointerenter",event=>showTradeTooltip(event,{side,trades,total,size}));
+        hit.addEventListener("pointermove",event=>showTradeTooltip(event,{side,trades,total,size}));
         hit.addEventListener("pointerleave",hideTradeTooltip);
         svg.append(hit);
       });
@@ -1941,6 +1998,11 @@ __CANDLESTICK_CHART_PANEL__
   const state=panel.querySelector("[data-transactions-state]");
   const scrollBox=panel.querySelector(".transactions-table-wrap");
 
+  /* TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI */
+  const marketActivityBody=panel.querySelector("[data-market-activity-body]");
+  const marketActivitySource=panel.querySelector("[data-market-activity-source]");
+  const MARKET_ACTIVITY_WINDOWS=["m5","m15","m30","h1","h6","h24"];
+
   /* TRANSACTIONS_FEED_V15_FLOW_INTELLIGENCE */
   const flowBuyVolume=panel.querySelector("[data-flow-buy-volume]");
   const flowBuyCount=panel.querySelector("[data-flow-buy-count]");
@@ -2050,6 +2112,19 @@ __CANDLESTICK_CHART_PANEL__
     });
     if(!signed||n===0) return formatted;
     return (n>0?"+":"-")+formatted;
+  }
+
+  /* TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI */
+  function activityNumber(value){const n=Number(value);return Number.isFinite(n)?Math.max(0,Math.round(n)).toLocaleString():"--";}
+  function activityPercent(value){const n=Number(value);return Number.isFinite(n)?n.toFixed(1)+"%":"--";}
+  function activityUsd(value){const n=Number(value);if(!Number.isFinite(n))return "--";if(n>=1000000)return "$"+(n/1000000).toFixed(n>=10000000?1:2)+"M";if(n>=1000)return "$"+(n/1000).toFixed(n>=10000?1:2)+"K";return "$"+n.toLocaleString(undefined,{maximumFractionDigits:2});}
+  function renderMarketActivity(activity){
+    if(!marketActivityBody)return;
+    const windows=activity&&typeof activity==="object"&&activity.windows&&typeof activity.windows==="object"?activity.windows:{};
+    const specs=[["Buys","buys","activity-buys",activityNumber],["Sells","sells","activity-sells",activityNumber],["Buyers","buyers","activity-buyers",activityNumber],["Sellers","sellers","activity-sellers",activityNumber],["Total Tx","total_transactions","activity-total",activityNumber],["Buy %","buy_percent","activity-buy-percent",activityPercent],["Total Volume","volume_usd","activity-volume",activityUsd]];
+    marketActivityBody.replaceChildren();
+    specs.forEach(([label,key,cls,formatter])=>{const tr=document.createElement("tr");tr.className=cls;tr.append(textCell(label));MARKET_ACTIVITY_WINDOWS.forEach(tf=>{const row=windows[tf];const value=row&&typeof row==="object"?row[key]:null;const td=textCell(formatter(value));if(value===null||value===undefined||!Number.isFinite(Number(value)))td.classList.add("activity-unavailable");tr.append(td);});marketActivityBody.append(tr);});
+    if(marketActivitySource)marketActivitySource.textContent=Object.keys(windows).length?"Exact-pool aggregate":"Aggregate unavailable";
   }
 
   function calculateRecentFlow(rows){
@@ -2305,6 +2380,7 @@ __CANDLESTICK_CHART_PANEL__
 
       renderRows(deduped);
       renderRecentFlow(deduped);
+      renderMarketActivity(payload.market_activity);
 
       /* CHART_V23_TRADE_OVERLAY */
       window.dispatchEvent(new CustomEvent("dexsato:transactions-updated",{

@@ -18,6 +18,12 @@ GECKO_TRADES_URL = (
     "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
     "{pair_address}/trades"
 )
+# TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI
+GECKO_POOL_URL = (
+    "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
+    "{pair_address}"
+)
+MARKET_ACTIVITY_WINDOWS = ("m5", "m15", "m30", "h1", "h6", "h24")
 GECKO_OHLCV_URL = (
     "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
     "{pair_address}/ohlcv/hour"
@@ -612,6 +618,35 @@ def _normalize_exact_pool_trades(payload: Any, token_address: str) -> list[dict[
     return transactions
 
 
+# TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI
+def _normalize_market_activity(payload: Any, pair_address: str) -> dict[str, Any]:
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, dict): return {}
+    attrs = data.get("attributes") if isinstance(data.get("attributes"), dict) else {}
+    returned = str(attrs.get("address") or "")
+    data_id = str(data.get("id") or "")
+    if returned != pair_address and not data_id.endswith("_" + pair_address): return {}
+    tx = attrs.get("transactions") if isinstance(attrs.get("transactions"), dict) else {}
+    vols = attrs.get("volume_usd") if isinstance(attrs.get("volume_usd"), dict) else {}
+    windows = {}
+    for tf in MARKET_ACTIVITY_WINDOWS:
+        row = tx.get(tf) if isinstance(tx.get(tf), dict) else {}
+        buys=_number(row.get("buys")); sells=_number(row.get("sells"))
+        buyers=_number(row.get("buyers")); sellers=_number(row.get("sellers")); volume=_number(vols.get(tf))
+        if all(v is None for v in (buys,sells,buyers,sellers,volume)): continue
+        b=max(0,int(buys)) if buys is not None else None; se=max(0,int(sells)) if sells is not None else None
+        total=b+se if b is not None and se is not None else None
+        pct=(b/total*100.0) if total else None
+        windows[tf]={"buys":b,"sells":se,"buyers":max(0,int(buyers)) if buyers is not None else None,"sellers":max(0,int(sellers)) if sellers is not None else None,"total_transactions":total,"buy_percent":round(pct,2) if pct is not None else None,"volume_usd":volume}
+    return {"pair_address":pair_address,"windows":windows,"source":"GeckoTerminal exact-pool aggregate"}
+
+
+def _load_market_activity_provider(pair_address: str, request_get: Callable[..., Any]) -> dict[str, Any]:
+    response=request_get(GECKO_POOL_URL.format(pair_address=pair_address),timeout=10)
+    response.raise_for_status()
+    return _normalize_market_activity(response.json(),pair_address)
+
+
 def _load_solana_discovery_transactions_provider(
     token_address: str,
     *,
@@ -636,10 +671,17 @@ def _load_solana_discovery_transactions_provider(
     )
     response.raise_for_status()
 
+    # TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI
+    try:
+        market_activity = _load_market_activity_provider(pair_address, request_get)
+    except (requests.RequestException, RuntimeError, TypeError, ValueError):
+        market_activity = {}
+
     return {
         "token_address": address,
         "pair_address": pair_address,
         "transactions": _normalize_exact_pool_trades(response.json(), address),
+        "market_activity": market_activity,
         "as_of": datetime.now(timezone.utc).isoformat(),
         "source": "GeckoTerminal exact-pool trades",
     }
@@ -719,6 +761,13 @@ def _copy_transaction_payload(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(rows, list)
         else []
     )
+    activity=payload.get("market_activity")
+    if isinstance(activity,dict):
+        ac=dict(activity); windows=activity.get("windows")
+        ac["windows"]={str(k):dict(v) for k,v in windows.items() if isinstance(v,dict)} if isinstance(windows,dict) else {}
+        copied["market_activity"]=ac
+    else:
+        copied["market_activity"]={}
     return copied
 
 

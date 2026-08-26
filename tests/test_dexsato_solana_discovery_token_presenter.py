@@ -898,3 +898,59 @@ def test_chart_v23_trade_overlay_preserves_existing_chart_controls():
     assert "CHART_V22_LIVE_CANDLE" in html
     assert 'state.visibleCount=clamp(state.visibleCount+(event.deltaY>0?6:-6)' in html
     assert 'button.dataset.candleTimeframe' in html
+
+
+
+# CHART_V24_TRADE_SIZE_INTELLIGENCE
+def test_chart_v24_trade_size_uses_relative_recent_distribution():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "CHART_V24_TRADE_SIZE_INTELLIGENCE" in html
+    assert "function tradeSizeThresholds(values)" in html
+    assert "p50:quantile(.50)" in html
+    assert "p80:quantile(.80)" in html
+    assert "function tradeSizeLabel(value,thresholds)" in html
+    assert 'if(n>thresholds.p80) return "LARGE"' in html
+    assert 'if(n>thresholds.p50) return "MEDIUM"' in html
+
+
+def test_chart_v24_trade_size_changes_marker_size_without_moving_overlay():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert 'const radius=size==="LARGE"?8:size==="MEDIUM"?6:4.5;' in html
+    assert '" size-"+size.toLowerCase()' in html
+    assert ".candlestick-trade-marker.size-small" in html
+    assert ".candlestick-trade-marker.size-medium" in html
+    assert ".candlestick-trade-marker.size-large" in html
+    # v2.3 positioning remains untouched.
+    assert 'const markerY=side==="BUY"?y(anchor)+12:y(anchor)-12;' in html
+
+
+def test_chart_v24_trade_size_tooltip_discloses_size_class():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert 'detail.textContent="Trade size: "+summary.size' in html
+    assert 'showTradeTooltip(event,{side,trades,total,size})' in html
+
+
+def test_chart_v24_preserves_v23_trade_mapping_and_live_wiring():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "CHART_V23_TRADE_OVERLAY" in html
+    assert "function tradeOverlayBuckets(rows,timeframe)" in html
+    assert 'window.addEventListener("dexsato:transactions-updated"' in html
+    assert 'window.dispatchEvent(new CustomEvent("dexsato:transactions-updated"' in html
+    assert "const POLL_INTERVAL_MS=5000;" in html
+
+
+# TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI
+def test_transactions_v16b_renders_market_activity_ui():
+    html=render_solana_discovery_token_page(DETAIL)
+    assert "TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI" in html
+    assert "Market Activity" in html and "Exact-pool broader participation" in html
+    assert "Exact-pool aggregate" in html
+    assert "GeckoTerminal" not in html
+    assert "30 latest exact-pool trades" in html
+    assert '["Buyers","buyers"' in html
+    assert '["Total Volume","volume_usd"' in html
+    assert 'renderMarketActivity(payload.market_activity);' in html
