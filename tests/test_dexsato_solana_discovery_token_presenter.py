@@ -858,3 +858,43 @@ def test_transactions_feed_v151_final_preserves_v15_calculation_and_polling():
     assert "MAX_VISIBLE_TRANSACTIONS=30" in html
     assert "const POLL_INTERVAL_MS=5000;" in html
     assert "renderRecentFlow(deduped);" in html
+
+
+
+# CHART_V23_TRADE_OVERLAY
+def test_chart_v23_trade_overlay_maps_recent_transactions_to_candles():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "CHART_V23_TRADE_OVERLAY" in html
+    assert 'const TIMEFRAME_SECONDS={"1m":60,"5m":300,"15m":900,"30m":1800,"1H":3600,"4H":14400};' in html
+    assert "function tradeOverlayBuckets(rows,timeframe)" in html
+    assert "candleBucket(ts,timeframe)" in html
+    assert "drawTradeOverlay(visible,slot,left,y);" in html
+
+
+def test_chart_v23_trade_overlay_has_buy_sell_markers_and_tooltip():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert ".candlestick-trade-marker.buy" in html
+    assert ".candlestick-trade-marker.sell" in html
+    assert 'class:"candlestick-trade-marker "+side.toLowerCase()' in html
+    assert "function showTradeTooltip(event,summary)" in html
+    assert 'title.textContent=summary.side+" · "+tradeUsd(total);' in html
+
+
+def test_chart_v23_trade_overlay_refreshes_from_live_transactions():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert 'window.addEventListener("dexsato:transactions-updated"' in html
+    assert 'window.dispatchEvent(new CustomEvent("dexsato:transactions-updated"' in html
+    assert "detail:{transactions:deduped.slice(0,MAX_VISIBLE_TRANSACTIONS)}" in html
+    assert "const POLL_INTERVAL_MS=5000;" in html
+
+
+def test_chart_v23_trade_overlay_preserves_existing_chart_controls():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "CHART_V21_INTERACTIVE_TRADING_CHART" in html
+    assert "CHART_V22_LIVE_CANDLE" in html
+    assert 'state.visibleCount=clamp(state.visibleCount+(event.deltaY>0?6:-6)' in html
+    assert 'button.dataset.candleTimeframe' in html

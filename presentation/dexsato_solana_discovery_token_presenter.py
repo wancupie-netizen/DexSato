@@ -1025,6 +1025,38 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 
 
 /* CHART_V22_LIVE_CANDLE */
+/* CHART_V23_TRADE_OVERLAY */
+.candlestick-trade-marker{vector-effect:non-scaling-stroke;pointer-events:none}
+.candlestick-trade-marker.buy{fill:var(--green);stroke:var(--panel2);stroke-width:1.4}
+.candlestick-trade-marker.sell{fill:var(--red);stroke:var(--panel2);stroke-width:1.4}
+.candlestick-trade-marker.large{stroke-width:1.8}
+.candlestick-trade-count{
+  fill:var(--text);
+  stroke:var(--panel2);
+  stroke-width:3px;
+  paint-order:stroke;
+  font:700 9px var(--mono);
+  pointer-events:none;
+}
+.candlestick-trade-hit{fill:transparent;cursor:crosshair}
+.candlestick-trade-tooltip{
+  position:absolute;
+  z-index:5;
+  min-width:132px;
+  max-width:220px;
+  padding:7px 9px;
+  border:1px solid var(--line);
+  border-radius:5px;
+  background:var(--panel);
+  color:var(--text);
+  box-shadow:0 8px 24px rgba(0,0,0,.28);
+  font:10px/1.45 var(--mono);
+  pointer-events:none;
+}
+.candlestick-trade-tooltip b{display:block;margin-bottom:2px}
+.candlestick-trade-tooltip.buy b{color:var(--green)}
+.candlestick-trade-tooltip.sell b{color:var(--red)}
+.candlestick-trade-tooltip[hidden]{display:none}
 .candle-live-state{display:inline-flex;align-items:center;gap:6px;color:var(--green);font:700 10px/1 var(--mono);letter-spacing:.04em}
 .candle-live-state i{width:6px;height:6px;border-radius:50%;background:currentColor}
 .candle-live-state.stale{color:var(--amber)}
@@ -1447,6 +1479,152 @@ __CANDLESTICK_CHART_PANEL__
 
   const state={timeframe:"5m",visibleCount:60,offset:0,dragging:false,dragStartX:0,dragStartOffset:0,geometry:null,liveInFlight:false};
 
+  /* CHART_V23_TRADE_OVERLAY */
+  let tradeOverlayRows=[];
+  let tradeTooltip=null;
+  const TIMEFRAME_SECONDS={"1m":60,"5m":300,"15m":900,"30m":1800,"1H":3600,"4H":14400};
+
+  function ensureTradeTooltip(){
+    if(tradeTooltip) return tradeTooltip;
+    const stage=panel.querySelector(".candlestick-stage");
+    if(!stage) return null;
+    tradeTooltip=document.createElement("div");
+    tradeTooltip.className="candlestick-trade-tooltip";
+    tradeTooltip.hidden=true;
+    stage.append(tradeTooltip);
+    return tradeTooltip;
+  }
+
+  function tradeTimestampSeconds(value){
+    const ms=Date.parse(String(value||""));
+    return Number.isFinite(ms)?Math.floor(ms/1000):null;
+  }
+
+  function tradeUsd(value){
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    if(Math.abs(n)>=1000) return "$"+(n/1000).toFixed(n>=10000?1:2)+"K";
+    return "$"+n.toLocaleString(undefined,{
+      minimumFractionDigits:n<1?4:2,
+      maximumFractionDigits:n<1?4:2
+    });
+  }
+
+  function tradeTime(value){
+    const d=new Date(String(value||""));
+    if(Number.isNaN(d.getTime())) return "--";
+    return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  }
+
+  function candleBucket(timestamp,timeframe){
+    const seconds=TIMEFRAME_SECONDS[timeframe]||60;
+    return Math.floor(Number(timestamp)/seconds)*seconds;
+  }
+
+  function tradeOverlayBuckets(rows,timeframe){
+    const buckets=new Map();
+    (Array.isArray(rows)?rows:[]).slice(0,30).forEach(item=>{
+      if(!item||typeof item!=="object") return;
+      const ts=tradeTimestampSeconds(item.timestamp);
+      const side=String(item.side||"").toUpperCase();
+      const volume=Number(item.volume_usd);
+      if(!Number.isFinite(ts)||!["BUY","SELL"].includes(side)||!Number.isFinite(volume)) return;
+      const key=candleBucket(ts,timeframe);
+      if(!buckets.has(key)) buckets.set(key,{BUY:[],SELL:[]});
+      buckets.get(key)[side].push({timestamp:item.timestamp,volume,side});
+    });
+    return buckets;
+  }
+
+  function showTradeTooltip(event,summary){
+    const tip=ensureTradeTooltip();
+    if(!tip) return;
+    tip.classList.remove("buy","sell");
+    tip.classList.add(summary.side.toLowerCase());
+    const total=summary.trades.reduce((sum,item)=>sum+item.volume,0);
+    const largest=summary.trades.reduce((best,item)=>!best||item.volume>best.volume?item:best,null);
+    tip.replaceChildren();
+    const title=document.createElement("b");
+    title.textContent=summary.side+" · "+tradeUsd(total);
+    const detail=document.createElement("span");
+    detail.textContent=summary.trades.length+" trade"+(summary.trades.length===1?"":"s")+" · "+tradeTime(largest?.timestamp);
+    tip.append(title,detail);
+    tip.hidden=false;
+
+    const stage=panel.querySelector(".candlestick-stage");
+    const rect=stage?.getBoundingClientRect();
+    if(rect){
+      tip.style.left=Math.max(8,Math.min(rect.width-230,event.clientX-rect.left+12))+"px";
+      tip.style.top=Math.max(8,event.clientY-rect.top-46)+"px";
+    }
+  }
+
+  function hideTradeTooltip(){
+    if(tradeTooltip) tradeTooltip.hidden=true;
+  }
+
+  function drawTradeOverlay(visible,slot,left,y){
+    if(!visible.length||!tradeOverlayRows.length) return;
+    const buckets=tradeOverlayBuckets(tradeOverlayRows,state.timeframe);
+    const volumeValues=tradeOverlayRows
+      .slice(0,30)
+      .map(item=>Number(item?.volume_usd))
+      .filter(Number.isFinite);
+    const maxTrade=Math.max(...volumeValues,1);
+
+    visible.forEach((row,index)=>{
+      const bucket=buckets.get(candleBucket(row.time,state.timeframe));
+      if(!bucket) return;
+      const x=left+slot*(index+.5);
+
+      ["BUY","SELL"].forEach(side=>{
+        const trades=bucket[side];
+        if(!trades.length) return;
+        const total=trades.reduce((sum,item)=>sum+item.volume,0);
+        const largest=Math.max(...trades.map(item=>item.volume),0);
+        const radius=4+Math.min(4,Math.sqrt(largest/maxTrade)*4);
+        const anchor=side==="BUY"?Number(row.low):Number(row.high);
+        if(!Number.isFinite(anchor)) return;
+        const markerY=side==="BUY"?y(anchor)+12:y(anchor)-12;
+        const points=side==="BUY"
+          ? `${x},${markerY-5} ${x-radius},${markerY+4} ${x+radius},${markerY+4}`
+          : `${x},${markerY+5} ${x-radius},${markerY-4} ${x+radius},${markerY-4}`;
+
+        const marker=make("polygon",{
+          points,
+          class:"candlestick-trade-marker "+side.toLowerCase()+(largest>=maxTrade*.65?" large":"")
+        });
+        svg.append(marker);
+
+        if(trades.length>1){
+          const count=make("text",{
+            x:x+(radius+3),
+            y:markerY+3,
+            class:"candlestick-trade-count"
+          });
+          count.textContent=String(trades.length);
+          svg.append(count);
+        }
+
+        const hit=make("circle",{
+          cx:x,cy:markerY,r:Math.max(10,radius+4),
+          class:"candlestick-trade-hit",
+          "data-trade-overlay-hit":"1"
+        });
+        hit.addEventListener("pointerenter",event=>showTradeTooltip(event,{side,trades,total}));
+        hit.addEventListener("pointermove",event=>showTradeTooltip(event,{side,trades,total}));
+        hit.addEventListener("pointerleave",hideTradeTooltip);
+        svg.append(hit);
+      });
+    });
+  }
+
+  window.addEventListener("dexsato:transactions-updated",event=>{
+    const rows=event?.detail?.transactions;
+    tradeOverlayRows=Array.isArray(rows)?rows:[];
+    draw();
+  });
+
   function formatPrice(value){
     const n=Number(value);
     if(!Number.isFinite(n)) return "--";
@@ -1569,6 +1747,9 @@ __CANDLESTICK_CHART_PANEL__
       svg.append(make("line",{x1:x,y1:yHigh,x2:x,y2:yLow,class:"candlestick-wick "+cls}));
       svg.append(make("rect",{x:x-bodyWidth/2,y:Math.min(yOpen,yClose),width:bodyWidth,height:Math.max(1.5,Math.abs(yOpen-yClose)),rx:.5,class:"candlestick-body "+cls}));
     });
+
+    /* CHART_V23_TRADE_OVERLAY */
+    drawTradeOverlay(visible,slot,left,y);
 
     const timeStep=Math.max(1,Math.floor(visible.length/6));
     visible.forEach((row,index)=>{
@@ -2124,6 +2305,11 @@ __CANDLESTICK_CHART_PANEL__
 
       renderRows(deduped);
       renderRecentFlow(deduped);
+
+      /* CHART_V23_TRADE_OVERLAY */
+      window.dispatchEvent(new CustomEvent("dexsato:transactions-updated",{
+        detail:{transactions:deduped.slice(0,MAX_VISIBLE_TRANSACTIONS)}
+      }));
 
       const shown=Math.min(deduped.length,MAX_VISIBLE_TRANSACTIONS);
       setTransactionState(payload.stale===true?"STALE":"LIVE",shown);
