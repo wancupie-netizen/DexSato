@@ -147,10 +147,10 @@ def test_token_workspace_v26a_coin_list_falls_back_to_selected_token():
 def test_token_workspace_v26a2_keeps_right_rail_cards_in_one_static_flow():
     html = render_solana_discovery_token_page(DETAIL, feed=None)
 
-    assert ".workspace-right-v26{max-height:calc(100vh - 28px);overflow-y:auto" in html
+    assert ".workspace-right-v26{position:static;max-height:none;overflow:visible" in html
     assert 'html[data-theme="intel"] .workspace-right-v26 .decision-side-v2{position:static!important;top:auto!important}' in html
     assert ".workspace-right-v26 .market-snapshot-v26{position:static" in html
-    assert "overscroll-behavior:contain" in html
+    assert "overscroll-behavior:auto" in html
 
 
 def test_token_workspace_v26a3_pins_and_highlights_active_coin_first():
@@ -170,6 +170,15 @@ def test_token_workspace_v26a3_pins_and_highlights_active_coin_first():
     assert html.index(active) < html.index(first) < html.index(last)
     assert 'class="coin-list-row active"' in html
     assert ".coin-list-row.active{background:rgba(255,148,24,.055);box-shadow:inset 2px 0 var(--amber)}" in html
+
+
+def test_token_workspace_v26a4_removes_competing_vertical_scrollbars():
+    html = render_solana_discovery_token_page(DETAIL, feed=None)
+
+    assert ".workspace-right-v26{position:static;max-height:none;overflow:visible" in html
+    assert ".transactions-table-wrap{max-height:none;overflow-x:auto;overflow-y:visible" in html
+    assert "html{scrollbar-width:none}html::-webkit-scrollbar{display:none}" in html
+    assert ".coin-list-rows{max-height:620px;overflow:auto" in html
 
 def test_swap_client_requires_explicit_wallet_signing_and_preserves_same_origin_api_keys():
     script = (
@@ -608,7 +617,7 @@ def test_transactions_feed_v121_robust_ui_mount():
 
 
 # TRANSACTIONS_FEED_V122_COMPACT_LIVE_TABLE
-def test_transactions_feed_v122_compacts_rows_and_keeps_internal_scroll():
+def test_transactions_feed_v122_compacts_rows_without_vertical_scroll_trap():
     candle = {
         "time": 1700000000,
         "open": 1.0,
@@ -626,8 +635,7 @@ def test_transactions_feed_v122_compacts_rows_and_keeps_internal_scroll():
     }
     html = render_solana_discovery_token_page(detail)
     assert "TRANSACTIONS_FEED_V122_COMPACT_LIVE_TABLE" in html
-    assert "max-height:480px" in html
-    assert "overflow:auto" in html
+    assert ".transactions-table-wrap{max-height:none;overflow-x:auto;overflow-y:visible" in html
     assert "position:sticky" in html
     assert "top:0" in html
     assert "MAX_VISIBLE_TRANSACTIONS=30" in html
