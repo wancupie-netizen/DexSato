@@ -1032,3 +1032,12 @@ def test_transactions_v16b_renders_market_activity_ui():
     assert '["Buyers","buyers"' in html
     assert '["Total Volume","volume_usd"' in html
     assert 'renderMarketActivity(payload.market_activity);' in html
+
+
+def test_transactions_v26b_places_readable_market_activity_summary_after_trades():
+    html=render_solana_discovery_token_page(DETAIL)
+
+    assert html.index('data-transactions-body') < html.index('data-market-activity aria-label=')
+    assert '.market-activity-head span{display:block;color:var(--text);font:750 12px/1.25 var(--mono)' in html
+    assert '.market-activity-table th,.market-activity-table td{padding:10px 12px' in html
+    assert 'font:12px/1.35 var(--mono)' in html

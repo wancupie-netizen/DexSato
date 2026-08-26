@@ -368,10 +368,6 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
         '<h2>Transactions</h2>'
         '<span class="transactions-state" data-transactions-state>Loading</span>'
         '</div>'
-        '<section class="market-activity" data-market-activity aria-label="Multi-timeframe exact-pool market activity">'
-        '<div class="market-activity-head"><div><span>Market Activity</span><small>Exact-pool broader participation</small></div><small data-market-activity-source>Loading aggregate</small></div>'
-        '<div class="market-activity-wrap"><table class="market-activity-table"><thead><tr><th>Metric</th><th>5M</th><th>15M</th><th>30M</th><th>1H</th><th>6H</th><th>24H</th></tr></thead>'
-        '<tbody data-market-activity-body><tr><td colspan="7">Loading exact-pool activity...</td></tr></tbody></table></div></section>'
         '<div class="recent-flow-label"><span>Recent Flow</span><small>30 latest exact-pool trades</small></div>'
         '<div class="transactions-flow" data-transactions-flow aria-label="Recent transaction flow">'
         '<div class="transactions-flow-item buy"><span>Buy volume</span>'
@@ -398,7 +394,12 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
         '<tr class="transactions-placeholder">'
         '<td colspan="7">Loading recent exact-pool transactions...</td>'
         '</tr>'
-        '</tbody></table></div></section>'
+        '</tbody></table></div>'
+        '<section class="market-activity" data-market-activity aria-label="Multi-timeframe exact-pool market activity">'
+        '<div class="market-activity-head"><div><span>Market Activity</span><small>Exact-pool broader participation</small></div><small data-market-activity-source>Loading aggregate</small></div>'
+        '<div class="market-activity-wrap"><table class="market-activity-table"><thead><tr><th>Metric</th><th>5M</th><th>15M</th><th>30M</th><th>1H</th><th>6H</th><th>24H</th></tr></thead>'
+        '<tbody data-market-activity-body><tr><td colspan="7">Loading exact-pool activity...</td></tr></tbody></table></div></section>'
+        '</section>'
     )
 
 
@@ -1205,17 +1206,19 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 }
 
 /* TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI */
-.market-activity{border-bottom:1px solid var(--line);background:var(--panel)}
-.market-activity-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
-.market-activity-head span,.recent-flow-label span{display:block;color:var(--text);font:750 10px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase}
-.market-activity-head small,.recent-flow-label small{display:block;margin-top:3px;color:var(--muted);font:10px/1.2 var(--ui)}
+.market-activity{border-top:1px solid var(--line);background:var(--panel)}
+.market-activity-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.market-activity-head span{display:block;color:var(--text);font:750 12px/1.25 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.market-activity-head small{display:block;margin-top:4px;color:var(--muted);font:11px/1.3 var(--ui)}
+.recent-flow-label span{display:block;color:var(--text);font:750 10px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.recent-flow-label small{display:block;margin-top:3px;color:var(--muted);font:10px/1.2 var(--ui)}
 .market-activity-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .market-activity-table{width:100%;min-width:690px;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums lining-nums}
-.market-activity-table th,.market-activity-table td{padding:8px 10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:right;font:11px/1.25 var(--mono);white-space:nowrap}
+.market-activity-table th,.market-activity-table td{padding:10px 12px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:right;font:12px/1.35 var(--mono);white-space:nowrap}
 .market-activity-table th:last-child,.market-activity-table td:last-child{border-right:0}.market-activity-table tbody tr:last-child td{border-bottom:0}
-.market-activity-table th{color:var(--muted);background:var(--panel2);font-size:9px;letter-spacing:.05em;text-transform:uppercase}
+.market-activity-table th{color:var(--muted);background:var(--panel2);font-size:10px;letter-spacing:.05em;text-transform:uppercase}
 .market-activity-table th:first-child,.market-activity-table td:first-child{text-align:left;width:128px}
-.market-activity-table td:first-child{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:.04em}
+.market-activity-table td:first-child{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.04em}
 .market-activity-table tr.activity-buys td:not(:first-child),.market-activity-table tr.activity-buyers td:not(:first-child),.market-activity-table tr.activity-buy-percent td:not(:first-child){color:var(--green)}
 .market-activity-table tr.activity-sells td:not(:first-child),.market-activity-table tr.activity-sellers td:not(:first-child){color:var(--red)}
 .market-activity-table .activity-unavailable{color:var(--muted)!important}.recent-flow-label{padding:9px 14px 7px;background:var(--panel2);border-bottom:1px solid var(--line)}
