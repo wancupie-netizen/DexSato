@@ -1000,6 +1000,9 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 .transactions-state{color:var(--muted);font:700 10px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase}
 .transactions-state.ready{color:var(--green)}
 .transactions-state.unavailable{color:var(--amber)}
+/* TRANSACTIONS_FEED_V13_LIVE_POLLING */
+.transactions-state.live{color:var(--green)}
+.transactions-state.stale{color:var(--amber)}
 /* TRANSACTIONS_FEED_V122_COMPACT_LIVE_TABLE */
 .transactions-table-wrap{max-height:480px;overflow:auto;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable}
 .transactions-table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums lining-nums}
@@ -1626,6 +1629,11 @@ __CANDLESTICK_CHART_PANEL__
   const url=panel.dataset.transactionsUrl||"";
   const tbody=panel.querySelector("[data-transactions-body]");
   const state=panel.querySelector("[data-transactions-state]");
+  const scrollBox=panel.querySelector(".transactions-table-wrap");
+
+  /* TRANSACTIONS_FEED_V13_LIVE_POLLING */
+  const POLL_INTERVAL_MS=5000;
+  let pollInFlight=false;
 
   const rawText=(value)=>value===null||value===undefined?"":String(value);
   const compact=(value)=>{
@@ -1705,7 +1713,32 @@ __CANDLESTICK_CHART_PANEL__
 
   const MAX_VISIBLE_TRANSACTIONS=30;
 
+  function captureScrollAnchor(){
+    if(!scrollBox||scrollBox.scrollTop<=8) return null;
+
+    const rows=[...tbody.querySelectorAll("tr[data-transaction-id]")];
+    const top=scrollBox.scrollTop;
+    const anchor=rows.find(row=>row.offsetTop+row.offsetHeight>top);
+    if(!anchor) return null;
+
+    return {
+      id:anchor.dataset.transactionId||"",
+      delta:anchor.offsetTop-top
+    };
+  }
+
+  function restoreScrollAnchor(anchor){
+    if(!anchor||!scrollBox||!anchor.id) return;
+
+    const rows=[...tbody.querySelectorAll("tr[data-transaction-id]")];
+    const matched=rows.find(row=>row.dataset.transactionId===anchor.id);
+    if(matched){
+      scrollBox.scrollTop=Math.max(0,matched.offsetTop-anchor.delta);
+    }
+  }
+
   function renderRows(rows){
+    const scrollAnchor=captureScrollAnchor();
     tbody.replaceChildren();
     const visibleRows=rows.slice(0,MAX_VISIBLE_TRANSACTIONS);
 
@@ -1736,10 +1769,42 @@ __CANDLESTICK_CHART_PANEL__
       );
       tbody.append(tr);
     });
+
+    restoreScrollAnchor(scrollAnchor);
   }
 
-  async function loadTransactions(){
-    if(!url) return;
+  function setTransactionState(mode,shown=0){
+    if(!state) return;
+
+    state.classList.remove("ready","unavailable","live","stale");
+
+    if(mode==="LIVE"){
+      state.textContent=shown ? shown+" recent · LIVE" : "LIVE";
+      state.classList.add("ready","live");
+      return;
+    }
+
+    state.textContent=shown ? shown+" recent · STALE" : "STALE";
+    state.classList.add("stale");
+  }
+
+  function keepExistingRowsOnFailure(){
+    const existing=tbody.querySelector("tr[data-transaction-id]");
+    if(existing) return;
+
+    const placeholder=tbody.querySelector(".transactions-placeholder");
+    if(placeholder){
+      const cell=placeholder.querySelector("td");
+      if(cell) cell.textContent="Recent transactions are temporarily unavailable.";
+      placeholder.classList.add("transactions-error");
+    }
+  }
+
+  async function loadTransactions(force=false){
+    if(!url||pollInFlight) return;
+    if(document.hidden&&!force) return;
+
+    pollInFlight=true;
 
     try{
       const response=await fetch(url,{
@@ -1752,37 +1817,44 @@ __CANDLESTICK_CHART_PANEL__
       if(!response.ok) throw new Error("transactions unavailable");
 
       const payload=await response.json();
-      const rows=Array.isArray(payload.transactions)
+      const incoming=Array.isArray(payload.transactions)
         ? payload.transactions
         : [];
-      renderRows(rows);
 
-      if(state){
-        const shown=Math.min(rows.length,MAX_VISIBLE_TRANSACTIONS);
-        state.textContent=shown ? shown+" recent" : "Loaded";
-        state.classList.remove("unavailable");
-        state.classList.add("ready");
-      }
+      const deduped=[];
+      const seen=new Set();
+
+      incoming.forEach(item=>{
+        if(!item||typeof item!=="object") return;
+        const id=rawText(item.id);
+        if(!id||seen.has(id)) return;
+        seen.add(id);
+        deduped.push(item);
+      });
+
+      renderRows(deduped);
+
+      const shown=Math.min(deduped.length,MAX_VISIBLE_TRANSACTIONS);
+      setTransactionState(payload.stale===true?"STALE":"LIVE",shown);
     }catch(error){
-      tbody.replaceChildren();
+      keepExistingRowsOnFailure();
 
-      const tr=document.createElement("tr");
-      tr.className="transactions-error";
-      const td=document.createElement("td");
-      td.colSpan=7;
-      td.textContent="Recent transactions are temporarily unavailable.";
-      tr.append(td);
-      tbody.append(tr);
+      const existingCount=tbody.querySelectorAll(
+        "tr[data-transaction-id]"
+      ).length;
 
-      if(state){
-        state.textContent="Unavailable";
-        state.classList.remove("ready");
-        state.classList.add("unavailable");
-      }
+      setTransactionState("STALE",existingCount);
+    }finally{
+      pollInFlight=false;
     }
   }
 
-  loadTransactions();
+  loadTransactions(true);
+  window.setInterval(()=>loadTransactions(false),POLL_INTERVAL_MS);
+
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden) loadTransactions(true);
+  });
 })();
 </script>
 

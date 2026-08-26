@@ -531,7 +531,9 @@ def test_transactions_feed_v121_robust_ui_mount():
     assert 'credentials:"same-origin"' in html
     assert 'cache:"no-store"' in html
     assert "https://solscan.io/tx/" in html
-    assert "loadTransactions();" in html
+    # TRANSACTIONS_FEED_V131_LEGACY_TEST_ALIGNMENT_ONLY
+    # v1.3 supersedes the one-shot loader with immediate forced load + polling.
+    assert "loadTransactions(true);" in html
 
 
 
@@ -561,7 +563,8 @@ def test_transactions_feed_v122_compacts_rows_and_keeps_internal_scroll():
     assert "MAX_VISIBLE_TRANSACTIONS=30" in html
     assert "rows.slice(0,MAX_VISIBLE_TRANSACTIONS)" in html
     assert "visibleRows.forEach" in html
-    assert 'state.textContent=shown ? shown+" recent" : "Loaded"' in html
+    # v1.3 owns loaded-state presentation through LIVE/STALE.
+    assert 'setTransactionState(payload.stale===true?"STALE":"LIVE",shown)' in html
     assert "setInterval(loadTransactions" not in html
 
 
@@ -592,10 +595,80 @@ def test_transactions_feed_v1221_defines_rows_before_loaded_state():
     html = render_solana_discovery_token_page(detail)
 
     assert "TRANSACTIONS_FEED_V1221_UI_SCOPE_FIX" in html
-    assert "const rows=Array.isArray(payload.transactions)" in html
-    assert "renderRows(rows);" in html
-    assert "Math.min(rows.length,MAX_VISIBLE_TRANSACTIONS)" in html
+    # v1.3 names provider rows `incoming` before exact-id deduplication.
+    assert "const incoming=Array.isArray(payload.transactions)" in html
+    # TRANSACTIONS_FEED_V1311_SCOPE_TEST_ALIGNMENT
+    # v1.3 renders the exact-id deduplicated collection, not raw provider rows.
+    assert "renderRows(deduped);" in html
+    # TRANSACTIONS_FEED_V1312_FINAL_LEGACY_COUNT_ALIGNMENT
+    # v1.3 counts the exact-id deduplicated collection rendered to the table.
+    assert "Math.min(deduped.length,MAX_VISIBLE_TRANSACTIONS)" in html
 
-    rows_pos = html.index("const rows=Array.isArray(payload.transactions)")
-    state_pos = html.index("Math.min(rows.length,MAX_VISIBLE_TRANSACTIONS)")
-    assert rows_pos < state_pos
+    # TRANSACTIONS_FEED_V1313_FINAL_ORDERING_ALIGNMENT
+    # v1.3 defines incoming, deduplicates to deduped, then computes state.
+    incoming_pos = html.index("const incoming=Array.isArray(payload.transactions)")
+    render_pos = html.index("renderRows(deduped);")
+    state_pos = html.index("Math.min(deduped.length,MAX_VISIBLE_TRANSACTIONS)")
+    assert incoming_pos < render_pos < state_pos
+
+
+
+# TRANSACTIONS_FEED_V13_LIVE_POLLING
+def test_transactions_feed_v13_live_polling_preserves_rows_on_failure():
+    candle = {
+        "time": 1700000000,
+        "open": 1.0,
+        "high": 1.2,
+        "low": 0.9,
+        "close": 1.1,
+        "volume": 100.0,
+    }
+
+    detail = dict(DETAIL)
+    detail["token_address"] = "TokenAddress123456789"
+    detail["symbol"] = "TEST"
+    detail["candlestick_timeframes"] = {
+        "1m": [candle],
+        "5m": [candle],
+        "15m": [candle],
+        "30m": [candle],
+        "1H": [candle],
+        "4H": [candle],
+    }
+
+    html = render_solana_discovery_token_page(detail)
+
+    assert "TRANSACTIONS_FEED_V13_LIVE_POLLING" in html
+    assert "const POLL_INTERVAL_MS=5000" in html
+    assert "let pollInFlight=false" in html
+    assert "if(!url||pollInFlight) return" in html
+    assert "if(document.hidden&&!force) return" in html
+    assert "window.setInterval(()=>loadTransactions(false),POLL_INTERVAL_MS)" in html
+    assert 'document.addEventListener("visibilitychange"' in html
+    assert 'if(!document.hidden) loadTransactions(true)' in html
+
+    assert "const seen=new Set()" in html
+    assert "if(!id||seen.has(id)) return" in html
+    assert "seen.add(id)" in html
+    assert "MAX_VISIBLE_TRANSACTIONS=30" in html
+
+    assert "function keepExistingRowsOnFailure()" in html
+    assert 'tbody.querySelector("tr[data-transaction-id]")' in html
+
+    loader_start = html.index("async function loadTransactions(force=false)")
+    loader_end = html.index("loadTransactions(true);", loader_start)
+    loader = html[loader_start:loader_end]
+    assert "tbody.replaceChildren();" not in loader
+
+    assert 'setTransactionState(payload.stale===true?"STALE":"LIVE",shown)' in html
+    assert 'setTransactionState("STALE",existingCount)' in html
+
+
+def test_transactions_feed_v13_preserves_scroll_anchor_during_live_updates():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "function captureScrollAnchor()" in html
+    assert "function restoreScrollAnchor(anchor)" in html
+    assert "scrollBox.scrollTop<=8" in html
+    assert "row.dataset.transactionId===anchor.id" in html
+    assert "restoreScrollAnchor(scrollAnchor);" in html
