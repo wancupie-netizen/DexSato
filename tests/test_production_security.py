@@ -12,6 +12,8 @@ from application.production_security import (
     ProductionLoggingMiddleware,
     SecurityHeadersMiddleware,
     _PRODUCTION_LOGGER,
+    _RateRule,
+    _SlidingWindowLimiter,
     allowed_hosts,
     application_host,
     production_log_level,
@@ -159,6 +161,19 @@ def test_boundary_rate_limits_sensitive_route():
     assert statuses == [200, 200, 200, 429]
 
 
+def test_rate_limiter_sweeps_stale_buckets_and_bounds_new_clients():
+    rule = _RateRule("test", 2, 60)
+    limiter = _SlidingWindowLimiter(maximum_buckets=2)
+
+    assert limiter.allow("client-a", rule, 1.0) is True
+    assert limiter.allow("client-b", rule, 1.0) is True
+    assert limiter.allow("client-c", rule, 1.0) is False
+    assert len(limiter._events) == 2
+
+    assert limiter.allow("client-c", rule, 902.0) is True
+    assert list(limiter._events) == [("client-c", "test")]
+
+
 def test_security_headers_are_attached_without_echoing_request_id():
     async def downstream(scope, receive, send):
         await send({"type": "http.response.start", "status": 200, "headers": []})
@@ -188,6 +203,47 @@ def test_security_headers_are_attached_without_echoing_request_id():
     assert headers[b"referrer-policy"] == b"no-referrer"
     assert b"frame-ancestors 'none'" in headers[b"content-security-policy"]
     assert headers[b"x-request-id"] != b"attacker-controlled"
+    assert b"cache-control" not in headers
+
+
+def test_sensitive_jupiter_and_operator_responses_are_never_cached():
+    async def downstream(scope, receive, send):
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"cache-control", b"public, max-age=3600")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    async def headers_for(path):
+        middleware = SecurityHeadersMiddleware(downstream)
+        sent = []
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message):
+            sent.append(message)
+
+        scope = {"type": "http", "method": "POST", "path": path, "headers": []}
+        await middleware(scope, receive, send)
+        return dict(sent[0]["headers"])
+
+    paths = [
+        "/api/discovery/solana/Mint111/jupiter-quote",
+        "/api/discovery/solana/Mint111/jupiter-order",
+        "/api/discovery/solana/Mint111/jupiter-execute",
+        "/content-control/login",
+        "/content-control/generate",
+        "/telegram/send",
+    ]
+    for path in paths:
+        headers = asyncio.run(headers_for(path))
+        assert headers[b"cache-control"] == b"no-store, max-age=0"
+        assert headers[b"pragma"] == b"no-cache"
+        assert headers[b"expires"] == b"0"
 
 
 def test_production_logging_uses_sanitized_route_and_excludes_request_contents():

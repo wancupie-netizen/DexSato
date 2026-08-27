@@ -157,6 +157,11 @@ def maximum_request_bytes() -> int:
     return _positive_int("DEXSATO_MAX_REQUEST_BYTES", 16_384, maximum=1_048_576)
 
 
+def maximum_rate_limit_buckets() -> int:
+    """Bound per-process limiter memory without silently evicting active clients."""
+    return _positive_int("DEXSATO_RATE_LIMIT_MAX_BUCKETS", 10_000, maximum=100_000)
+
+
 def internal_endpoints_enabled() -> bool:
     raw = os.getenv("DEXSATO_INTERNAL_ENDPOINTS_ENABLED", "false" if production_mode() else "true")
     return raw.strip().lower() in {"1", "true", "yes", "on"}
@@ -232,20 +237,41 @@ _GENERAL_API_RULE = _RateRule("api", 120, 60)
 
 
 class _SlidingWindowLimiter:
-    def __init__(self) -> None:
+    _STALE_AFTER_SECONDS = 900
+    _SWEEP_INTERVAL_SECONDS = 60
+
+    def __init__(self, *, maximum_buckets: int | None = None) -> None:
         self._events: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+        self._last_seen: dict[tuple[str, str], float] = {}
         self._lock = threading.Lock()
+        self._maximum_buckets = maximum_buckets or maximum_rate_limit_buckets()
+        self._last_sweep = 0.0
+
+    def _sweep(self, now: float) -> None:
+        if now - self._last_sweep < self._SWEEP_INTERVAL_SECONDS:
+            return
+        cutoff = now - self._STALE_AFTER_SECONDS
+        stale = [key for key, last_seen in self._last_seen.items() if last_seen <= cutoff]
+        for key in stale:
+            self._events.pop(key, None)
+            self._last_seen.pop(key, None)
+        self._last_sweep = now
 
     def allow(self, client: str, rule: _RateRule, now: float) -> bool:
         key = (client, rule.name)
         cutoff = now - rule.seconds
         with self._lock:
+            self._sweep(now)
+            if key not in self._events and len(self._events) >= self._maximum_buckets:
+                return False
             events = self._events[key]
             while events and events[0] <= cutoff:
                 events.popleft()
             if len(events) >= rule.limit:
+                self._last_seen[key] = now
                 return False
             events.append(now)
+            self._last_seen[key] = now
             return True
 
 
@@ -350,16 +376,31 @@ class SecurityHeadersMiddleware:
     def __init__(self, app: object) -> None:
         self.app = app
 
+    @staticmethod
+    def _requires_no_store(path: str) -> bool:
+        if path.startswith("/content-control") or path == "/telegram/send":
+            return True
+        if not path.startswith("/api/discovery/solana/"):
+            return False
+        return path.endswith(("/jupiter-quote", "/jupiter-order", "/jupiter-execute"))
+
     async def __call__(self, scope: dict[str, object], receive: object, send: object) -> None:
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
 
         request_id = _request_id(scope).encode("ascii")
+        no_store = self._requires_no_store(str(scope.get("path") or ""))
 
         async def secure_send(message: dict[str, object]) -> None:
             if message.get("type") == "http.response.start":
                 headers = list(message.get("headers", []))
+                if no_store:
+                    headers = [
+                        (key, value)
+                        for key, value in headers
+                        if bytes(key).lower() not in {b"cache-control", b"pragma", b"expires"}
+                    ]
                 headers.extend(
                     [
                         (b"content-security-policy", self._CSP.encode("ascii")),
@@ -370,6 +411,14 @@ class SecurityHeadersMiddleware:
                         (b"x-request-id", request_id),
                     ]
                 )
+                if no_store:
+                    headers.extend(
+                        [
+                            (b"cache-control", b"no-store, max-age=0"),
+                            (b"pragma", b"no-cache"),
+                            (b"expires", b"0"),
+                        ]
+                    )
                 if production_mode():
                     headers.append((b"strict-transport-security", b"max-age=31536000; includeSubDomains"))
                 message = {**message, "headers": headers}
