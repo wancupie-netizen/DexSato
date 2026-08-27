@@ -326,6 +326,17 @@ def test_token_workspace_supports_market_intelligence_theme():
     assert 'data-theme-option="intel"' in html
     assert 'data-theme-option="plain"' in html
     assert 'html[data-theme="intel"]' in html
+
+
+def test_v283_evidence_strip_has_structural_css_in_every_theme():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TOKEN_WORKSPACE_V283_THEME_PARITY" in html
+    assert ".dexsato-evidence-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr))" in html
+    assert ".dexsato-evidence-label{display:block;margin-bottom:5px" in html
+    assert ".dexsato-evidence-value{display:flex;align-items:center;gap:7px" in html
+    assert ".dexsato-evidence-dot{width:7px;height:7px" in html
+    assert 'html[data-theme="plain"]{color-scheme:light;--bg:#f5f7fa;--panel:#fff;--panel2:#eef3f8;--line:#c8d3df' in html
     assert 'localStorage.getItem("dexsato-theme")' in html
 
 
