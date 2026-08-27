@@ -144,11 +144,35 @@ def _update_archive(
     qualified: list[dict[str, Any]],
     *,
     qualified_at: str,
+    diagnostics: dict[str, dict[str, Any]] | None = None,
+    default_diagnostic: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Persist all discoveries; limit only the public front feed to 100 rows."""
     with _archive_connection(directory) as connection:
         _migrate_legacy_history(connection, directory, fallback_at=qualified_at)
         connection.execute("UPDATE discoveries SET currently_qualified = 0")
+
+        existing_rows = connection.execute("SELECT token_address, payload_json FROM discoveries").fetchall()
+        for existing_token, payload_json in existing_rows:
+            try:
+                existing_payload = json.loads(payload_json)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(existing_payload, dict):
+                continue
+            assessment = (diagnostics or {}).get(str(existing_token)) or default_diagnostic or {
+                "evaluated": False,
+                "qualified": False,
+                "code": "not_observed_current_scan",
+                "title": "Not observed in current scan",
+                "message": "This archived token was not present in the current collector candidate set.",
+                "scan_at": qualified_at,
+            }
+            existing_payload["current_qualification"] = dict(assessment)
+            connection.execute(
+                "UPDATE discoveries SET payload_json = ? WHERE token_address = ?",
+                (json.dumps(existing_payload, ensure_ascii=False), existing_token),
+            )
 
         for item in qualified:
             if not isinstance(item, dict):
@@ -160,6 +184,13 @@ def _update_archive(
             payload = dict(item)
             payload["currently_qualified"] = True
             payload["last_qualified_at"] = qualified_at
+            payload["current_qualification"] = (diagnostics or {}).get(token) or {
+                "evaluated": True,
+                "qualified": True,
+                "code": "qualified",
+                "title": "Qualified now",
+                "message": "Current identity, exact-pool, liquidity and 24h activity checks passed.",
+            }
             last_seen_at = str(item.get("last_seen_at") or "").strip() or None
 
             connection.execute(
@@ -236,6 +267,29 @@ def _archive_record(row: tuple[Any, ...]) -> dict[str, Any] | None:
         record["last_seen_at"] = last_seen_at
     record["currently_qualified"] = bool(current_flag)
     return record
+
+
+def load_solana_discovery_record(
+    token_address: str,
+    output_dir: Path | str = DEFAULT_OUTPUT_DIR,
+) -> dict[str, Any] | None:
+    """Load one persistent observation by exact mint without front-page limits."""
+    token = str(token_address or "").strip()
+    if not token or len(token) > 80:
+        return None
+    directory = Path(output_dir)
+    if not (directory / DISCOVERY_ARCHIVE_DB).exists():
+        return None
+    with _archive_connection(directory) as connection:
+        row = connection.execute(
+            """
+            SELECT payload_json, first_qualified_at, last_qualified_at,
+                   last_seen_at, currently_qualified
+            FROM discoveries WHERE token_address = ?
+            """,
+            (token,),
+        ).fetchone()
+    return _archive_record(row) if row is not None else None
 
 
 def _terminal_archive_view(
@@ -393,16 +447,36 @@ def load_solana_discovery_feed(
     generated_at = status.get("generated_at")
     updated_label, fresh = _freshness_label(generated_at, now=current_time)
     collector_status = str(status.get("collector_status") or "Unknown").strip().title()
-    qualified = qualify_discovery_candidates(state["candidates"], now=current_time) if fresh else []
+    diagnostics: dict[str, dict[str, Any]] = {}
+    if fresh:
+        qualified = qualify_discovery_candidates(
+            state["candidates"], now=current_time, diagnostics=diagnostics
+        )
+        default_diagnostic = None
+    else:
+        qualified = []
+        default_diagnostic = {
+            "evaluated": False,
+            "qualified": False,
+            "code": "collector_not_fresh",
+            "title": "Collector data is not fresh",
+            "message": "Qualification was not evaluated because the collector snapshot is stale.",
+        }
     qualified_at = (
         str(generated_at).strip()
         if isinstance(generated_at, str) and generated_at.strip()
         else current_time.isoformat()
     )
+    for diagnostic in diagnostics.values():
+        diagnostic["scan_at"] = qualified_at
+    if default_diagnostic is not None:
+        default_diagnostic["scan_at"] = qualified_at
     archive_feed, archive_total = _update_archive(
         directory,
         qualified,
         qualified_at=qualified_at,
+        diagnostics=diagnostics,
+        default_diagnostic=default_diagnostic,
     )
     terminal_data = (
         _terminal_archive_view(

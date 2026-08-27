@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 import requests
 
-from application.solana_discovery_feed_service import load_solana_discovery_feed
+from application.solana_discovery_feed_service import load_solana_discovery_feed, load_solana_discovery_record
 
 
 DEXSCREENER_PAIR_URL = "https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
@@ -867,14 +867,16 @@ def load_solana_discovery_token(
     address = str(token_address or "").strip()
     if not address or len(address) > 80 or "/" in address:
         return None
-    public_feed = feed if feed is not None else load_solana_discovery_feed()
-    candidates = public_feed.get("candidates") if isinstance(public_feed, dict) else None
-    if not isinstance(candidates, list):
-        return None
-    candidate = next(
-        (item for item in candidates if isinstance(item, dict) and item.get("token_address") == address),
-        None,
-    )
+    if feed is None:
+        candidate = load_solana_discovery_record(address)
+    else:
+        candidates = feed.get("candidates") if isinstance(feed, dict) else None
+        if not isinstance(candidates, list):
+            return None
+        candidate = next(
+            (item for item in candidates if isinstance(item, dict) and item.get("token_address") == address),
+            None,
+        )
     if candidate is None:
         return None
 
@@ -983,5 +985,9 @@ def load_solana_discovery_token(
         hourly_candles,
         four_hour_candles,
     )
-    detail["feed_updated_label"] = public_feed.get("updated_label")
+    detail["feed_updated_label"] = (
+        str(feed.get("updated_label") or "Unknown")
+        if isinstance(feed, dict)
+        else str(candidate.get("feed_updated_label") or "Unknown")
+    )
     return detail

@@ -1,4 +1,4 @@
-"""Quote-only Jupiter sandbox for qualified Solana Discovery tokens.
+"""Quote-only Jupiter sandbox for observed Solana Discovery tokens.
 
 This module never requests, builds, signs or submits a transaction.  The
 Jupiter order endpoint is called without a taker so the result remains a
@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 import requests
 
-from application.solana_discovery_feed_service import load_solana_discovery_feed
+from application.solana_discovery_feed_service import load_solana_discovery_record
 
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
@@ -138,23 +138,25 @@ def fetch_jupiter_quote(
     request_post: Callable[..., Any] = requests.post,
     rpc_url: str | None = None,
 ) -> dict[str, Any]:
-    """Return a bounded quote for WSOL to one qualified discovery token."""
+    """Return a bounded quote for WSOL to one observed discovery token."""
     output_mint = str(token_address or "").strip()
     if not _valid_solana_address(output_mint):
         raise ValueError("A valid Solana token address is required.")
 
-    public_feed = feed if feed is not None else load_solana_discovery_feed()
-    candidates = public_feed.get("candidates") if isinstance(public_feed, dict) else None
-    qualified = next(
-        (
-            candidate for candidate in candidates or []
-            if isinstance(candidate, dict)
-            and str(candidate.get("token_address") or "") == output_mint
-        ),
-        None,
-    )
-    if qualified is None:
-        raise ValueError("Token is not a qualified Solana Discovery candidate.")
+    if feed is None:
+        observed = load_solana_discovery_record(output_mint)
+    else:
+        candidates = feed.get("candidates") if isinstance(feed, dict) else None
+        observed = next(
+            (
+                candidate for candidate in candidates or []
+                if isinstance(candidate, dict)
+                and str(candidate.get("token_address") or "") == output_mint
+            ),
+            None,
+        )
+    if observed is None:
+        raise ValueError("Token is not an observed Solana Discovery token.")
 
     amount, lamports = _amount_lamports(amount_sol)
     resolved_key = (api_key if api_key is not None else os.getenv("JUPITER_API_KEY", "")).strip()

@@ -226,7 +226,7 @@ def solana_discovery(view: str = "qualified", page: int = 1, q: str = "") -> str
     response_class=HTMLResponse,
 )
 def solana_discovery_token(token_address: str) -> str:
-    """Display one qualified exact-token workspace and its controlled swap pilot."""
+    """Display one observed exact-token workspace and its controlled swap flow."""
     detail = load_solana_discovery_token(token_address)
     if detail is None:
         raise HTTPException(status_code=404, detail="Qualified discovery token is not available.")
@@ -283,7 +283,7 @@ def solana_discovery_jupiter_quote(
     token_address: str,
     amount_sol: str = "0.1",
 ) -> dict[str, object]:
-    """Return a quote-only Jupiter order for one qualified discovery token."""
+    """Return a quote-only Jupiter order for one observed discovery token."""
     from application.jupiter_quote_service import (
         JupiterQuoteNotConfigured,
         JupiterQuoteUnavailable,

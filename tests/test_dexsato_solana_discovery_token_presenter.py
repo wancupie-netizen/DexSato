@@ -11,6 +11,7 @@ DETAIL = {
     "pair_age": "2h", "quote_status": "LIVE", "quote_label": "Live exact-pool observation",
     "evidence": "Observed liquidity and activity.", "risk_label": "Security unavailable",
     "source_url": "https://dexscreener.com/solana/pool", "feed_updated_label": "4 min ago",
+    "currently_qualified": True,
     "chart": [
         {"close": .10}, {"close": .11}, {"close": .105},
         {"close": .115}, {"close": .108}, {"close": .12},
@@ -78,9 +79,53 @@ def test_renders_controlled_non_custodial_jupiter_swap_and_discloses_risk():
     assert "Pool verification is not token verification" in html
     assert "never holds your funds" in html
     assert "You approve every transaction in your wallet" in html
-    assert html.index("Risk context") < html.index("Qualification evidence")
+    assert html.index("Risk context") < html.index("Current qualification")
     assert html.index("Jupiter swap") < html.index("Risk context")
     assert 'class="card jupiter jupiter-v27" data-jupiter-sandbox' in html
+
+
+def test_archive_observation_keeps_user_directed_swap_controls_with_context():
+    html = render_solana_discovery_token_page({**DETAIL, "currently_qualified": False})
+
+    assert "Jupiter swap" in html
+    assert "Swap SOL for TEST" in html
+    assert "Previously discovered" in html
+    assert "This token was previously discovered by DexSato." in html
+    assert "Check the latest market data and quote before you continue." in html
+    assert "Not evaluated in this scan" in html
+    assert "No current scan assessment was recorded for this archived observation." in html
+    assert "This qualification status is analysis context, not a trading restriction." not in html
+    assert '<section class="card jupiter jupiter-v27" data-jupiter-sandbox' in html
+    assert "Connect wallet" in html
+    assert "Get Jupiter quote" in html
+    assert "Review transaction" in html
+
+
+def test_renders_recorded_current_qualification_reason_and_labels_history():
+    html = render_solana_discovery_token_page({
+        **DETAIL,
+        "currently_qualified": False,
+        "last_qualified_at": "2026-08-27T23:48:00+00:00",
+        "current_qualification": {
+            "evaluated": True,
+            "qualified": False,
+            "code": "liquidity_below_threshold",
+            "title": "Liquidity below qualification threshold",
+            "message": "Observed liquidity $4,900.00 is below the required $5,000.00.",
+            "scan_at": "2026-08-27T23:50:00+00:00",
+        },
+    })
+
+    assert "Current qualification" in html
+    assert "Liquidity below qualification threshold" in html
+    assert "Observed liquidity $4,900.00 is below the required $5,000.00." in html
+    assert "Last confirmed checks" in html
+    assert "Last qualified:" in html
+    assert "Current scan:" in html
+    assert "2026-08-27T23:48:00+00:00" not in html
+    assert "2026-08-27T23:50:00+00:00" not in html
+    assert "Collector updated Unknown" not in html
+    assert "Checks passed for this feed" not in html
 
 
 
@@ -346,6 +391,7 @@ def test_token_workspace_v2_decision_layout_is_ui_only():
         "token_address": "token-address", "pair_address": "pair-address",
         "dex_id": "pumpswap", "quote_status": "LIVE",
         "quote_label": "Live exact-pool observation", "chart": [],
+        "currently_qualified": True,
     })
     assert "Token Workspace v2 Decision Layout" in html
     assert "dexsato-evidence-strip" in html

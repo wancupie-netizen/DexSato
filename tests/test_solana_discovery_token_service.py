@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from application.solana_discovery_token_service import load_solana_discovery_token
 
 
@@ -75,6 +77,28 @@ def test_falls_back_to_stored_observation_when_provider_fails():
     assert result["quote_status"] == "STORED"
     assert result["price_usd"] == .1
     assert result["chart"] == []
+
+
+@patch("application.solana_discovery_token_service.load_solana_discovery_record")
+def test_loads_persistent_archive_record_without_requiring_front_feed(mock_record):
+    mock_record.return_value = {
+        **FEED["candidates"][0],
+        "currently_qualified": False,
+        "current_qualification": {
+            "title": "Not evaluated in this scan",
+            "message": "The rotating scan did not select this token.",
+        },
+    }
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("provider failed")
+
+    result = load_solana_discovery_token(TOKEN, request_get=fail, request_post=fail)
+
+    assert result is not None
+    assert result["token_address"] == TOKEN
+    assert result["currently_qualified"] is False
+    assert result["feed_updated_label"] == "Unknown"
 
 def test_trader_timeframe_changes_uses_closed_minute_history():
     from application.solana_discovery_token_service import _trader_timeframe_changes

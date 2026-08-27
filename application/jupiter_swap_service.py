@@ -1,4 +1,4 @@
-"""Controlled, non-custodial Jupiter execution for qualified discovery tokens.
+"""Controlled, non-custodial Jupiter execution for observed discovery tokens.
 
 Only unsigned provider transactions and user-approved signed transactions pass
 through this service. Wallet keys, seed phrases, and funds never enter DexSato.
@@ -32,7 +32,7 @@ from application.jupiter_quote_service import (
     _platform_fee,
     _valid_solana_address,
 )
-from application.solana_discovery_feed_service import load_solana_discovery_feed
+from application.solana_discovery_feed_service import load_solana_discovery_record
 
 
 JUPITER_EXECUTE_URL = "https://api.jup.ag/swap/v2/execute"
@@ -42,6 +42,22 @@ MAX_PENDING_ORDERS_PER_WALLET = 4
 MAX_TRANSACTION_BYTES = 4096
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 BASE58_DIGITS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+SYSTEM_PROGRAM = "11111111111111111111111111111111"
+COMPUTE_BUDGET_PROGRAM = "ComputeBudget111111111111111111111111111111"
+TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+ASSOCIATED_TOKEN_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+JUPITER_V6_PROGRAM = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+DEFAULT_ALLOWED_SWAP_PROGRAMS = frozenset(
+    {
+        SYSTEM_PROGRAM,
+        COMPUTE_BUDGET_PROGRAM,
+        TOKEN_PROGRAM,
+        TOKEN_2022_PROGRAM,
+        ASSOCIATED_TOKEN_PROGRAM,
+        JUPITER_V6_PROGRAM,
+    }
+)
 
 
 @dataclass(slots=True)
@@ -55,6 +71,13 @@ class _PendingOrder:
     signed_digest: bytes | None = None
     executing: bool = False
     completed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _CompiledInstruction:
+    program_index: int
+    account_indices: tuple[int, ...]
+    data: bytes
 
 
 _pending_orders: dict[str, _PendingOrder] = {}
@@ -93,6 +116,26 @@ def _base58_bytes(address: str) -> bytes:
     return raw
 
 
+def _base58_text(raw: bytes) -> str:
+    number = int.from_bytes(raw, "big")
+    encoded = ""
+    while number:
+        number, remainder = divmod(number, 58)
+        encoded = BASE58_DIGITS[remainder] + encoded
+    zeroes = len(raw) - len(raw.lstrip(b"\x00"))
+    return "1" * zeroes + (encoded or ("" if zeroes else "1"))
+
+
+def _allowed_swap_programs() -> frozenset[str]:
+    configured = os.getenv("DEXSATO_ALLOWED_SWAP_PROGRAMS", "").strip()
+    if not configured:
+        return DEFAULT_ALLOWED_SWAP_PROGRAMS
+    programs = {item.strip() for item in configured.split(",") if item.strip()}
+    if not programs or any(not _valid_solana_address(item) for item in programs):
+        raise JupiterQuoteNotConfigured("Allowed Solana swap programs are not configured correctly.")
+    return frozenset(programs)
+
+
 def _shortvec(data: bytes, offset: int) -> tuple[int, int]:
     value = 0
     for shift in range(0, 21, 7):
@@ -106,7 +149,9 @@ def _shortvec(data: bytes, offset: int) -> tuple[int, int]:
     raise JupiterSwapRejected("Jupiter returned an invalid Solana transaction.")
 
 
-def _transaction_parts(value: Any) -> tuple[bytes, list[bytes], bytes, list[bytes]]:
+def _transaction_parts(
+    value: Any,
+) -> tuple[bytes, list[bytes], bytes, list[bytes], list[bytes], list[_CompiledInstruction]]:
     if not isinstance(value, str) or not value or len(value) > MAX_TRANSACTION_BYTES * 2:
         raise JupiterSwapRejected("A valid base64 Solana transaction is required.")
     try:
@@ -125,12 +170,14 @@ def _transaction_parts(value: Any) -> tuple[bytes, list[bytes], bytes, list[byte
     signatures = [raw[offset + index * 64:offset + (index + 1) * 64]
                   for index in range(signature_count)]
     message = raw[signatures_end:]
-    cursor = 1 if message[0] & 0x80 else 0
-    if cursor and (message[0] & 0x7F) != 0:
+    versioned = bool(message[0] & 0x80)
+    cursor = 1 if versioned else 0
+    if versioned and (message[0] & 0x7F) != 0:
         raise JupiterSwapRejected("Unsupported Solana transaction version.")
     if len(message) < cursor + 3:
         raise JupiterSwapRejected("Jupiter returned an incomplete Solana message.")
     required_signatures = message[cursor]
+    readonly_signed = message[cursor + 1]
     if required_signatures != signature_count:
         raise JupiterSwapRejected("Solana transaction signer metadata did not match.")
     account_count, cursor = _shortvec(message, cursor + 3)
@@ -141,7 +188,105 @@ def _transaction_parts(value: Any) -> tuple[bytes, list[bytes], bytes, list[byte
         raise JupiterSwapRejected("Jupiter returned incomplete Solana account data.")
     accounts = [message[cursor + index * 32:cursor + (index + 1) * 32]
                 for index in range(account_count)]
-    return raw, signatures, message, accounts[:required_signatures]
+    cursor = accounts_end + 32
+    instruction_count, cursor = _shortvec(message, cursor)
+    if instruction_count < 1 or instruction_count > 64:
+        raise JupiterSwapRejected("Solana transaction instruction count is invalid.")
+    instructions: list[_CompiledInstruction] = []
+    for _ in range(instruction_count):
+        if cursor >= len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete Solana instructions.")
+        program_index = message[cursor]
+        account_index_count, cursor = _shortvec(message, cursor + 1)
+        accounts_end = cursor + account_index_count
+        if accounts_end > len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete Solana instruction accounts.")
+        account_indices = tuple(message[cursor:accounts_end])
+        data_length, cursor = _shortvec(message, accounts_end)
+        data_end = cursor + data_length
+        if data_end > len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete Solana instruction data.")
+        instructions.append(_CompiledInstruction(program_index, account_indices, message[cursor:data_end]))
+        cursor = data_end
+
+    loaded_accounts = 0
+    if versioned:
+        lookup_count, cursor = _shortvec(message, cursor)
+        if lookup_count > 16:
+            raise JupiterSwapRejected("Solana transaction has too many address lookups.")
+        for _ in range(lookup_count):
+            if cursor + 32 > len(message):
+                raise JupiterSwapRejected("Jupiter returned incomplete address lookup data.")
+            cursor += 32
+            writable_count, cursor = _shortvec(message, cursor)
+            cursor += writable_count
+            readonly_count, cursor = _shortvec(message, cursor)
+            cursor += readonly_count
+            loaded_accounts += writable_count + readonly_count
+            if cursor > len(message):
+                raise JupiterSwapRejected("Jupiter returned incomplete address lookup indexes.")
+    if cursor != len(message):
+        raise JupiterSwapRejected("Jupiter returned trailing Solana transaction data.")
+
+    total_accounts = len(accounts) + loaded_accounts
+    if any(
+        instruction.program_index >= total_accounts
+        or any(index >= total_accounts for index in instruction.account_indices)
+        for instruction in instructions
+    ):
+        raise JupiterSwapRejected("Solana transaction instruction account index is invalid.")
+    if readonly_signed != 0:
+        raise JupiterSwapRejected("Transaction payer must be a writable signer.")
+    return raw, signatures, message, accounts[:required_signatures], accounts, instructions
+
+
+def _validate_transaction_policy(
+    signer_accounts: list[bytes],
+    static_accounts: list[bytes],
+    instructions: list[_CompiledInstruction],
+    wallet_bytes: bytes,
+    input_lamports: int,
+) -> int:
+    """Validate signer, payer, program and bounded SOL-transfer policy."""
+    if signer_accounts != [wallet_bytes] or not static_accounts or static_accounts[0] != wallet_bytes:
+        raise JupiterSwapRejected("Connected wallet must be the sole transaction signer and payer.")
+
+    allowed = _allowed_swap_programs()
+    jupiter_seen = False
+    system_transferred = 0
+    for instruction in instructions:
+        if instruction.program_index >= len(static_accounts):
+            raise JupiterSwapRejected("Solana instruction program must use a verified static account.")
+        program = _base58_text(static_accounts[instruction.program_index])
+        if program not in allowed:
+            raise JupiterSwapRejected("Jupiter transaction uses a program that is not allowed.")
+        if program == JUPITER_V6_PROGRAM:
+            jupiter_seen = True
+            if 0 not in instruction.account_indices:
+                raise JupiterSwapRejected("Jupiter instruction is not authorized by the connected wallet.")
+        elif program == SYSTEM_PROGRAM:
+            if len(instruction.data) != 12 or int.from_bytes(instruction.data[:4], "little") != 2:
+                raise JupiterSwapRejected("Unsupported System Program instruction in Jupiter transaction.")
+            if not instruction.account_indices or instruction.account_indices[0] != 0:
+                raise JupiterSwapRejected("System transfer is not sourced from the connected wallet.")
+            transferred = int.from_bytes(instruction.data[4:], "little")
+            system_transferred += transferred
+            if transferred < 1 or system_transferred > input_lamports:
+                raise JupiterSwapRejected("System transfer exceeds the approved SOL amount.")
+        elif program in {TOKEN_PROGRAM, TOKEN_2022_PROGRAM}:
+            if not instruction.data or instruction.data[0] not in {9, 17}:
+                raise JupiterSwapRejected("Unsupported token-program instruction in Jupiter transaction.")
+            if instruction.data[0] == 9 and 0 not in instruction.account_indices:
+                raise JupiterSwapRejected("Token close instruction is not authorized by the connected wallet.")
+        elif program == ASSOCIATED_TOKEN_PROGRAM:
+            if instruction.data not in {b"", b"\x00", b"\x01"}:
+                raise JupiterSwapRejected("Unsupported associated-token instruction in Jupiter transaction.")
+            if not instruction.account_indices or instruction.account_indices[0] != 0:
+                raise JupiterSwapRejected("Associated-token creation is not paid by the connected wallet.")
+
+    if not jupiter_seen:
+        raise JupiterSwapRejected("Jupiter transaction does not invoke the approved Jupiter program.")
+    return 0
 
 
 def _expiry(payload: dict[str, Any], current: datetime) -> datetime:
@@ -158,15 +303,23 @@ def _expiry(payload: dict[str, Any], current: datetime) -> datetime:
     return min(maximum, provider_expiry.astimezone(timezone.utc))
 
 
-def _qualified_token(token_address: str, feed: dict[str, Any] | None) -> str:
+def _observed_token(token_address: str, feed: dict[str, Any] | None) -> str:
     token = str(token_address or "").strip()
     if not _valid_solana_address(token):
         raise JupiterSwapRejected("A valid Solana token address is required.")
-    public_feed = feed if feed is not None else load_solana_discovery_feed()
-    candidates = public_feed.get("candidates") if isinstance(public_feed, dict) else None
-    if not any(isinstance(item, dict) and str(item.get("token_address") or "") == token
-               for item in candidates or []):
-        raise JupiterSwapRejected("Token is not a qualified Solana Discovery candidate.")
+    if feed is None:
+        observed = load_solana_discovery_record(token)
+    else:
+        candidates = feed.get("candidates") if isinstance(feed, dict) else None
+        observed = next(
+            (
+                item for item in candidates or []
+                if isinstance(item, dict) and str(item.get("token_address") or "") == token
+            ),
+            None,
+        )
+    if observed is None:
+        raise JupiterSwapRejected("Token is not an observed Solana Discovery token.")
     return token
 
 
@@ -213,7 +366,7 @@ def prepare_jupiter_swap(
     """Request an unsigned Jupiter transaction for one explicitly approved wallet."""
     if risk_acknowledged is not True:
         raise JupiterSwapRejected("Mainnet swap risk must be explicitly acknowledged.")
-    output_mint = _qualified_token(token_address, feed)
+    output_mint = _observed_token(token_address, feed)
     wallet = str(wallet_address or "").strip()
     wallet_bytes = _base58_bytes(wallet)
     amount, lamports = _amount_lamports(amount_sol)
@@ -253,11 +406,14 @@ def prepare_jupiter_swap(
     if REQUEST_ID_PATTERN.fullmatch(request_id) is None:
         raise JupiterSwapRejected("Jupiter did not return a valid swap request identifier.")
     unsigned = payload.get("transaction")
-    _, signatures, message, signer_accounts = _transaction_parts(unsigned)
-    try:
-        wallet_index = signer_accounts.index(wallet_bytes)
-    except ValueError as error:
-        raise JupiterSwapRejected("Connected wallet is not a signer of the Jupiter transaction.") from error
+    _, signatures, message, signer_accounts, static_accounts, instructions = _transaction_parts(unsigned)
+    wallet_index = _validate_transaction_policy(
+        signer_accounts,
+        static_accounts,
+        instructions,
+        wallet_bytes,
+        lamports,
+    )
     if signatures[wallet_index] != bytes(64):
         raise JupiterSwapRejected("Jupiter unexpectedly returned an already-signed wallet transaction.")
 
@@ -318,14 +474,14 @@ def execute_jupiter_swap(
     now: Callable[[], datetime] = _utcnow,
 ) -> dict[str, Any]:
     """Relay one wallet-signed, unchanged Jupiter transaction for settlement."""
-    token = _qualified_token(token_address, feed)
+    token = _observed_token(token_address, feed)
     wallet = str(wallet_address or "").strip()
     wallet_bytes = _base58_bytes(wallet)
     order_id = str(request_id or "")
     if REQUEST_ID_PATTERN.fullmatch(order_id) is None:
         raise JupiterSwapRejected("A valid Jupiter swap request identifier is required.")
 
-    raw, signatures, message, signer_accounts = _transaction_parts(signed_transaction)
+    raw, signatures, message, signer_accounts, _, _ = _transaction_parts(signed_transaction)
     signed_digest = hashlib.sha256(raw).digest()
     resolved_key = _api_key(api_key)
     current = now()

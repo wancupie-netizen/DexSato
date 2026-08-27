@@ -10,12 +10,18 @@ from application.jupiter_quote_service import (
     JupiterQuoteUnavailable,
 )
 from application.jupiter_swap_service import (
+    COMPUTE_BUDGET_PROGRAM,
+    JUPITER_V6_PROGRAM,
+    SYSTEM_PROGRAM,
     MAX_PENDING_ORDERS_PER_WALLET,
     JUPITER_EXECUTE_URL,
     JUPITER_ORDER_URL,
     JupiterSwapExpired,
     JupiterSwapRejected,
     _pending_orders,
+    _base58_bytes,
+    _CompiledInstruction,
+    _validate_transaction_policy,
     execute_jupiter_swap,
     prepare_jupiter_swap,
 )
@@ -24,15 +30,41 @@ from application.jupiter_swap_service import (
 WALLET = "11111111111111111111111111111111"
 TOKEN = "22222222222222222222222222222222"
 OTHER_TOKEN = "33333333333333333333333333333333"
-FEED = {"candidates": [{"token_address": TOKEN, "symbol": "TEST"}]}
+UNAPPROVED_PROGRAM = "Vote111111111111111111111111111111111111111"
+FEED = {
+    "candidates": [
+        {"token_address": TOKEN, "symbol": "TEST", "currently_qualified": True}
+    ]
+}
 NOW = datetime(2026, 8, 23, 8, 0, tzinfo=timezone.utc)
 
 
-def _transaction(signature=None, *, change_message=False):
+def _transaction(
+    signature=None,
+    *,
+    change_message=False,
+    program=JUPITER_V6_PROGRAM,
+    include_wallet=True,
+    extra_signer=False,
+):
     signer = bytes(32)
+    other_signer = bytes([3]) * 32
+    program_bytes = _base58_bytes(program)
     recent_blockhash = bytes([7 if change_message else 6]) * 32
-    message = bytes([128, 1, 0, 0, 1]) + signer + recent_blockhash + bytes([0, 0])
-    transaction = bytes([1]) + (signature or bytes(64)) + message
+    signer_count = 2 if extra_signer else 1
+    accounts = signer + (other_signer if extra_signer else b"") + program_bytes
+    program_index = signer_count
+    instruction_accounts = bytes([0]) if include_wallet else bytes([program_index])
+    message = (
+        bytes([128, signer_count, 0, 1, signer_count + 1])
+        + accounts
+        + recent_blockhash
+        + bytes([1, program_index, 1])
+        + instruction_accounts
+        + bytes([1, 1, 0])
+    )
+    signatures = (signature or bytes(64)) + (bytes(64) if extra_signer else b"")
+    transaction = bytes([signer_count]) + signatures + message
     return base64.b64encode(transaction).decode("ascii")
 
 
@@ -76,7 +108,7 @@ def _prepare(payload=None, **changes):
     )
 
 
-def test_prepares_unsigned_order_bound_to_qualified_token_amount_and_wallet():
+def test_prepares_unsigned_order_bound_to_observed_token_amount_and_wallet():
     _pending_orders.clear()
     request_get = Mock(return_value=_response(_order()))
 
@@ -116,7 +148,7 @@ def test_requires_explicit_risk_acknowledgement_before_requesting_order():
 
 def test_rejects_unknown_token_invalid_wallet_and_out_of_range_amount():
     _pending_orders.clear()
-    with pytest.raises(JupiterSwapRejected, match="qualified"):
+    with pytest.raises(JupiterSwapRejected, match="observed"):
         prepare_jupiter_swap(
             OTHER_TOKEN, "0.1", WALLET, risk_acknowledged=True,
             api_key="key", feed=FEED,
@@ -130,6 +162,60 @@ def test_rejects_unknown_token_invalid_wallet_and_out_of_range_amount():
         prepare_jupiter_swap(
             TOKEN, "101", WALLET, risk_acknowledged=True,
             api_key="key", feed=FEED,
+        )
+
+
+def test_allows_historical_observation_without_current_qualification():
+    historical = {
+        "candidates": [
+            {"token_address": TOKEN, "symbol": "TEST", "currently_qualified": False}
+        ]
+    }
+    _pending_orders.clear()
+    order = prepare_jupiter_swap(
+        TOKEN,
+        "0.1",
+        WALLET,
+        risk_acknowledged=True,
+        api_key="key",
+        feed=historical,
+        request_get=Mock(return_value=_response(_order(request_id="archive-order"))),
+        now=lambda: NOW,
+    )
+    assert order["status"] == "WALLET_APPROVAL_REQUIRED"
+    assert order["output_mint"] == TOKEN
+
+
+def test_rejects_extra_signer_unapproved_program_and_missing_wallet_authority():
+    cases = [
+        ({"transaction": _transaction(extra_signer=True)}, "sole transaction signer"),
+        ({"transaction": _transaction(program=UNAPPROVED_PROGRAM)}, "program that is not allowed"),
+        ({"transaction": _transaction(program=COMPUTE_BUDGET_PROGRAM)}, "approved Jupiter program"),
+        ({"transaction": _transaction(include_wallet=False)}, "not authorized"),
+    ]
+    for index, (changes, expected) in enumerate(cases):
+        _pending_orders.clear()
+        with pytest.raises(JupiterSwapRejected, match=expected):
+            _prepare(_order(request_id=f"policy-{index}", **changes))
+
+
+def test_rejects_cumulative_system_transfers_above_approved_sol_amount():
+    wallet = _base58_bytes(WALLET)
+    static_accounts = [
+        wallet,
+        _base58_bytes(SYSTEM_PROGRAM),
+        _base58_bytes(JUPITER_V6_PROGRAM),
+    ]
+    transfer = (2).to_bytes(4, "little") + (60_000_000).to_bytes(8, "little")
+    instructions = [
+        _CompiledInstruction(1, (0, 1), transfer),
+        _CompiledInstruction(1, (0, 1), transfer),
+        _CompiledInstruction(2, (0,), b"\x01"),
+    ]
+
+    with pytest.raises(JupiterSwapRejected, match="exceeds"):
+        _validate_transaction_policy(
+            [wallet], static_accounts, instructions, wallet, 100_000_000
         )
 
 

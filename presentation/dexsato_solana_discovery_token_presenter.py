@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from html import escape
 import json
 import re
@@ -24,6 +25,26 @@ def _usd(value: Any) -> str:
 
 def _short(value: str) -> str:
     return f"{value[:9]}…{value[-9:]}" if len(value) > 24 else value
+
+
+def _relative_timestamp(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "Not recorded"
+    try:
+        observed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return "Not recorded"
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    seconds = max(0, int((datetime.now(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds()))
+    if seconds < 60:
+        return "Just now"
+    if seconds < 3600:
+        return f"{seconds // 60} min ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86400}d ago"
 
 
 def _chart_svg(candles: list[dict[str, Any]]) -> str:
@@ -521,6 +542,27 @@ def render_solana_discovery_token_page(
     chart = ""
     status = escape(str(detail.get("quote_status") or "STORED"))
     status_label = escape(str(detail.get("quote_label") or "Stored collector observation"))
+    assessment = detail.get("current_qualification") if isinstance(detail.get("current_qualification"), dict) else {}
+    if detail.get("currently_qualified") is True:
+        qualification_title = escape(str(assessment.get("title") or "Qualified now"))
+        qualification_message = escape(str(assessment.get("message") or "Current identity, exact-pool, liquidity and 24h activity checks passed."))
+        qualification_tone = "qualified"
+    else:
+        qualification_title = escape(str(assessment.get("title") or "Not evaluated in this scan"))
+        qualification_message = escape(str(assessment.get("message") or "No current scan assessment was recorded for this archived observation."))
+        qualification_tone = "not-qualified"
+    last_qualified = escape(_relative_timestamp(detail.get("last_qualified_at")))
+    current_scan = escape(_relative_timestamp(assessment.get("scan_at")))
+    qualification_panel = (
+        f'<section class="qualification qualification-vp0d3 {qualification_tone}">'
+        '<span class="eyebrow">Current qualification</span>'
+        f'<h3>{qualification_title}</h3><p class="qualification-reason">{qualification_message}</p>'
+        '<span class="eyebrow qualification-history-label">Last confirmed checks</span>'
+        '<div class="check">Solana token identity</div><div class="check">Exact token and pool match</div>'
+        '<div class="check">Observed liquidity threshold</div><div class="check">Observed 24h activity</div>'
+        f'<div class="source">Last qualified: {last_qualified}<br>Current scan: {current_scan}</div>'
+        '</section>'
+    )
     html = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>__SYMBOL__ · Solana Discovery</title>
 <script>try{const t=localStorage.getItem("dexsato-theme");if(t==="plain"||t==="intel")document.documentElement.dataset.theme=t;}catch(error){}</script>
@@ -1362,6 +1404,11 @@ html[data-theme="intel"] .coin-list-search input{border-color:#303a45;background
 .jupiter-v27{gap:11px}.jupiter-v27>.eyebrow{margin:0 0 -7px;font-size:9px!important}.jupiter-v27 h3{line-height:1.15}.jupiter-v27 .badge{margin-top:-4px;padding:3px 6px;font-size:8px;opacity:.8}.wallet-bar-v27{padding:7px 8px;min-height:42px}.wallet-bar-v27 .wallet-state{font:650 12px/1.3 var(--ui)}.wallet-bar-v27 .wallet-state.connected{color:var(--green)}.wallet-bar-v27 .wallet-state.connected:before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(34,210,127,.08);vertical-align:1px}.wallet-bar-v27 .sandbox-button{padding:6px 8px;font-size:10px}.swap-pay-v27{text-align:center;padding:16px 13px}.swap-pay-v27 .swap-leg-head-v27{justify-content:center;flex-direction:column;gap:7px}.swap-pay-v27 .swap-amount-v27{text-align:center;margin-top:8px}.swap-pay-v27 .swap-leg-note-v27{text-align:center}.token-pill-v27{display:inline-flex;align-items:center;gap:5px}.solana-mark-v27{width:14px;height:12px;display:block;flex:0 0 auto}
 /* TOKEN_WORKSPACE_V272_QUOTE_FAILURE_STATE */
 .swap-input-error-v272{display:block;margin:8px auto 0;padding:7px 8px;border-radius:4px;background:rgba(255,95,120,.07);color:var(--red);font:650 10px/1.4 var(--ui);text-align:left}.swap-input-error-v272[hidden]{display:none}
+/* PHASE02_P0D2_ARCHIVE_SWAP_GATING */
+.jupiter-archive-gate{display:grid;gap:11px}.jupiter-archive-gate h3{margin:0!important}.jupiter-archive-gate .badge{justify-self:start}.archive-swap-message{margin:2px 0 0;padding:12px;border:1px solid var(--line);border-left:2px solid var(--amber);border-radius:5px;background:var(--panel2);color:var(--muted);font-size:12px;line-height:1.55}.archive-swap-message strong{display:block;margin-bottom:4px;color:var(--text);font-size:13px}.archive-swap-action{display:block;width:100%;padding:10px 12px;border:1px solid var(--amber);border-radius:5px;color:var(--amber);font:700 12px var(--ui);text-align:center;text-decoration:none}.archive-swap-action:hover{background:rgba(255,148,24,.06)}
+.archive-trade-notice{padding:10px 11px;border:1px solid rgba(255,148,24,.35);border-left:2px solid var(--amber);border-radius:5px;background:rgba(255,148,24,.05);color:var(--muted);font-size:10px;line-height:1.5}.archive-trade-notice strong{display:block;margin-bottom:3px;color:var(--amber);font-size:11px}
+/* PHASE02_P0D3_QUALIFICATION_REASON_TRANSPARENCY */
+.qualification-vp0d3 h3{margin:5px 0 6px}.qualification-reason{margin:0 0 13px;padding:11px;border-left:2px solid var(--amber);background:var(--panel2);color:var(--muted);font-size:11px;line-height:1.55}.qualification-vp0d3.qualified .qualification-reason{border-left-color:var(--green)}.qualification-history-label{display:block;margin-top:4px;color:var(--muted)}
 /* TOKEN_OBSERVATION_V28_LEFT_RAIL */
 .token-observation-v28{padding:17px}.token-observation-v28 .workspace-rail-head{padding:0 0 12px}.token-observation-rows{border-top:1px solid var(--line)}.token-observation-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}.token-observation-row span{color:var(--muted);font-size:11px}.token-observation-value{text-align:right;font:650 12px/1.35 var(--mono)}.token-observation-value.up,.token-observation-value.verified{color:var(--green)}.token-observation-value.down{color:var(--red)}.token-observation-note{margin:13px 0 0;padding:10px 11px;border-left:2px solid var(--amber);background:rgba(255,148,24,.055);color:var(--muted);font-size:10px;line-height:1.45}
 
@@ -2605,5 +2652,17 @@ __CANDLESTICK_CHART_PANEL__
     html = html.replace("__CANDLESTICK_CHART_PANEL__", candlestick_chart_panel + transactions_table_panel)
     html = html.replace("__TOKEN_OBSERVATION_PANEL__", token_observation_panel)
     html = html.replace("__COIN_LIST_PANEL__", coin_list_panel)
+    qualification_start = html.index('<section class="qualification">')
+    qualification_pair_end = html.index('</section></section>', qualification_start)
+    qualification_end = qualification_pair_end + len('</section>')
+    html = html[:qualification_start] + qualification_panel + html[qualification_end:]
+    if detail.get("currently_qualified") is not True:
+        badge = '<span class="badge">NON-CUSTODIAL</span>'
+        archive_notice = (
+            '<div class="archive-trade-notice"><strong>Previously discovered</strong>'
+            'This token was previously discovered by DexSato. '
+            'Check the latest market data and quote before you continue.</div>'
+        )
+        html = html.replace(badge, badge + archive_notice, 1)
     return html
 

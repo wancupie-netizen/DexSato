@@ -103,19 +103,31 @@ def qualify_candidate(
     pair: dict[str, Any] | None,
     *,
     now: datetime,
+    diagnostic: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Reject ambiguous identities, missing market evidence and weak activity."""
+    def reject(code: str, title: str, message: str) -> None:
+        if diagnostic is not None:
+            diagnostic.update({"evaluated": True, "qualified": False, "code": code, "title": title, "message": message})
+
     if not isinstance(pair, dict):
+        reject("provider_unavailable", "Market verification unavailable", "The exact-pool provider did not return a usable response in this scan.")
         return None
     token_address = str(observed.get("token_address") or "").strip()
     pair_address = str(observed.get("pair_address") or "").strip()
     base = pair.get("baseToken") if isinstance(pair.get("baseToken"), dict) else {}
     quote = pair.get("quoteToken") if isinstance(pair.get("quoteToken"), dict) else {}
     if not token_address or not pair_address:
+        reject("identity_unresolved", "Token identity unresolved", "A token mint and exact pair address are both required.")
         return None
-    if pair.get("chainId") != "solana" or not _same(pair.get("pairAddress"), pair_address):
+    if pair.get("chainId") != "solana":
+        reject("wrong_network", "Solana identity check failed", "The provider did not identify this exact pool as Solana.")
+        return None
+    if not _same(pair.get("pairAddress"), pair_address):
+        reject("pair_mismatch", "Exact-pool match failed", "The provider pair address did not match the observed pair.")
         return None
     if not _same(base.get("address"), token_address):
+        reject("token_mismatch", "Token identity mismatch", "The provider base-token mint did not match the observed token.")
         return None
     liquidity = _number((pair.get("liquidity") or {}).get("usd"))
     volume = _number((pair.get("volume") or {}).get("h24"))
@@ -126,9 +138,17 @@ def qualify_candidate(
     buys_24h = _number(h24_txns.get("buys"))
     sells_24h = _number(h24_txns.get("sells"))
     if liquidity is None or volume is None or price is None:
+        missing = ", ".join(name for name, value in (("price", price), ("liquidity", liquidity), ("24h volume", volume)) if value is None)
+        reject("market_data_incomplete", "Market data incomplete", f"The provider did not supply valid {missing} data in this scan.")
         return None
-    if liquidity < MIN_LIQUIDITY_USD or volume < MIN_VOLUME_24H_USD:
+    if liquidity < MIN_LIQUIDITY_USD:
+        reject("liquidity_below_threshold", "Liquidity below qualification threshold", f"Observed liquidity ${liquidity:,.2f} is below the required ${MIN_LIQUIDITY_USD:,.2f}.")
         return None
+    if volume < MIN_VOLUME_24H_USD:
+        reject("volume_below_threshold", "24h activity below qualification threshold", f"Observed 24h volume ${volume:,.2f} is below the required ${MIN_VOLUME_24H_USD:,.2f}.")
+        return None
+    if diagnostic is not None:
+        diagnostic.update({"evaluated": True, "qualified": True, "code": "qualified", "title": "Qualified now", "message": "Current identity, exact-pool, liquidity and 24h activity checks passed."})
     return {
         "token_address": token_address,
         "pair_address": pair_address,
@@ -160,6 +180,7 @@ def qualify_discovery_candidates(
     *,
     now: datetime,
     request_get: Callable[..., Any] = requests.get,
+    diagnostics: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Enrich only a bounded, newest-first set of unique resolved pools."""
     resolved = [item for item in candidates.values() if isinstance(item, dict) and item.get("token_address") and item.get("pair_address")]
@@ -218,15 +239,39 @@ def qualify_discovery_candidates(
             ]
 
             _ENRICHMENT_CURSOR = (start + take) % len(unique_resolved)
+    if diagnostics is not None:
+        for item in unique_resolved:
+            token = str(item["token_address"])
+            diagnostics[token] = {
+                "evaluated": False,
+                "qualified": False,
+                "code": "not_evaluated_scan",
+                "title": "Not evaluated in this scan",
+                "message": "The bounded rotating scan did not select this token in the current cycle.",
+            }
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=min(4, max(1, len(selected)))) as executor:
         futures = {executor.submit(_cached_pair, str(item["pair_address"]), request_get): item for item in selected}
         for future in as_completed(futures):
+            observed = futures[future]
+            token = str(observed.get("token_address") or "")
+            diagnostic = diagnostics.setdefault(token, {}) if diagnostics is not None else None
             try:
-                qualified = qualify_candidate(futures[future], future.result(), now=now)
+                qualified = qualify_candidate(observed, future.result(), now=now, diagnostic=diagnostic)
             except Exception:
+                if diagnostic is not None:
+                    diagnostic.update({"evaluated": True, "qualified": False, "code": "verification_error", "title": "Market verification unavailable", "message": "The qualification check could not be completed in this scan."})
                 continue
             if qualified is not None:
                 results.append(qualified)
     results.sort(key=lambda item: (item["last_seen_at"], item["volume_24h_usd"]), reverse=True)
+    if diagnostics is not None:
+        for item in results[MAX_PUBLIC_CANDIDATES:]:
+            diagnostics[str(item["token_address"])] = {
+                "evaluated": True,
+                "qualified": False,
+                "code": "outside_public_limit",
+                "title": "Outside current public result limit",
+                "message": "The token passed the checks but ranked outside the bounded public result for this cycle.",
+            }
     return results[:MAX_PUBLIC_CANDIDATES]

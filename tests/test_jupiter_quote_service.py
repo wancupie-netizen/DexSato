@@ -12,7 +12,11 @@ from application.jupiter_quote_service import (
 
 
 TOKEN = "11111111111111111111111111111111"
-FEED = {"candidates": [{"token_address": TOKEN, "symbol": "TEST"}]}
+FEED = {
+    "candidates": [
+        {"token_address": TOKEN, "symbol": "TEST", "currently_qualified": True}
+    ]
+}
 
 
 def _response(payload):
@@ -103,10 +107,31 @@ def test_keeps_explicit_raw_fallback_when_mint_decimals_are_unavailable():
 
 
 def test_rejects_unknown_candidate_and_invalid_amount():
-    with pytest.raises(ValueError, match="qualified"):
+    with pytest.raises(ValueError, match="observed"):
         fetch_jupiter_quote(TOKEN, "0.1", api_key="key", feed={"candidates": []})
     with pytest.raises(ValueError, match="between"):
         fetch_jupiter_quote(TOKEN, "1000", api_key="key", feed=FEED)
+
+
+def test_allows_historical_observation_without_current_qualification():
+    historical = {
+        "candidates": [
+            {"token_address": TOKEN, "symbol": "TEST", "currently_qualified": False}
+        ]
+    }
+    request_get = Mock(return_value=_response({
+        "inputMint": WRAPPED_SOL_MINT,
+        "outputMint": TOKEN,
+        "inAmount": "100000000",
+        "outAmount": "2500000",
+        "outputDecimals": 6,
+        "transaction": None,
+    }))
+    quote = fetch_jupiter_quote(
+        TOKEN, "0.1", api_key="key", feed=historical, request_get=request_get,
+    )
+    assert quote["status"] == "QUOTE_READY"
+    assert quote["output_mint"] == TOKEN
 
 
 def test_requires_server_api_key():

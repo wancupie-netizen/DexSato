@@ -42,6 +42,32 @@ def test_rejects_wrong_network_or_low_activity():
     assert qualify_candidate(OBSERVED, {**PAIR, "chainId": "bsc"}, now=NOW) is None
     assert qualify_candidate(OBSERVED, {**PAIR, "volume": {"h24": 999}}, now=NOW) is None
 
+
+def test_records_exact_current_scan_rejection_reason_without_guessing():
+    diagnostic = {}
+    result = qualify_candidate(
+        OBSERVED,
+        {**PAIR, "liquidity": {"usd": 4999}},
+        now=NOW,
+        diagnostic=diagnostic,
+    )
+
+    assert result is None
+    assert diagnostic == {
+        "evaluated": True,
+        "qualified": False,
+        "code": "liquidity_below_threshold",
+        "title": "Liquidity below qualification threshold",
+        "message": "Observed liquidity $4,999.00 is below the required $5,000.00.",
+    }
+
+
+def test_records_provider_failure_as_unavailable_not_as_market_failure():
+    diagnostic = {}
+    assert qualify_candidate(OBSERVED, None, now=NOW, diagnostic=diagnostic) is None
+    assert diagnostic["code"] == "provider_unavailable"
+    assert "did not return a usable response" in diagnostic["message"]
+
 def test_rotating_enrichment_eventually_checks_older_resolved_pairs(monkeypatch):
     import application.solana_discovery_qualification as qualification
 

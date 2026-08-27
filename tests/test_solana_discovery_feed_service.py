@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from application.solana_discovery_feed_service import load_solana_discovery_feed
+from application.solana_discovery_feed_service import load_solana_discovery_feed, load_solana_discovery_record
 
 
 NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
@@ -130,6 +130,47 @@ def test_history_survives_scan_with_zero_current_qualifications(mock_qualify, tm
     assert result["qualified_candidates"] == 0
     assert [item["token_address"] for item in result["candidates"]] == ["token-a"]
     assert result["candidates"][0]["currently_qualified"] is False
+    assert result["candidates"][0]["current_qualification"]["code"] == "not_observed_current_scan"
+
+
+@patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
+def test_persists_actual_current_scan_qualification_diagnostic(mock_qualify, tmp_path):
+    candidate = {
+        "token_address": "token-a",
+        "pair_address": "pair-a",
+        "symbol": "AAA",
+        "last_seen_at": "2026-08-22T11:54:00+00:00",
+    }
+    _write_feed_files(tmp_path, {"a": candidate})
+
+    def qualify(_candidates, *, now, diagnostics):
+        diagnostics["token-a"] = {
+            "evaluated": True,
+            "qualified": False,
+            "code": "volume_below_threshold",
+            "title": "24h activity below qualification threshold",
+            "message": "Observed 24h volume $900.00 is below the required $1,000.00.",
+        }
+        return []
+
+    mock_qualify.side_effect = qualify
+    # Seed history first so an unqualified current assessment has an archive row.
+    with sqlite3.connect(tmp_path / "discovery_archive.sqlite3") as connection:
+        connection.execute("""
+            CREATE TABLE discoveries (token_address TEXT PRIMARY KEY, pair_address TEXT NOT NULL,
+            payload_json TEXT NOT NULL, first_qualified_at TEXT NOT NULL, last_qualified_at TEXT NOT NULL,
+            last_seen_at TEXT, currently_qualified INTEGER NOT NULL DEFAULT 0)
+        """)
+        connection.execute(
+            "INSERT INTO discoveries VALUES (?, ?, ?, ?, ?, ?, 0)",
+            ("token-a", "pair-a", json.dumps(candidate), NOW.isoformat(), NOW.isoformat(), candidate["last_seen_at"]),
+        )
+
+    result = load_solana_discovery_feed(tmp_path, now=NOW)
+    assessment = result["candidates"][0]["current_qualification"]
+    assert assessment["code"] == "volume_below_threshold"
+    assert assessment["message"] == "Observed 24h volume $900.00 is below the required $1,000.00."
+    assert assessment["scan_at"] == "2026-08-22T11:55:00+00:00"
 
 
 @patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
@@ -154,6 +195,9 @@ def test_archive_is_unbounded_while_front_feed_is_limited_to_100(mock_qualify, t
 
     with sqlite3.connect(tmp_path / "discovery_archive.sqlite3") as connection:
         assert connection.execute("SELECT COUNT(*) FROM discoveries").fetchone()[0] == 125
+    archived = load_solana_discovery_record("token-124", tmp_path)
+    assert archived is not None
+    assert archived["token_address"] == "token-124"
 
 
 @patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
