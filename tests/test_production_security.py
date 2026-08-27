@@ -55,8 +55,12 @@ def test_only_reviewed_actionable_jupiter_error_is_public():
         "Insufficient SOL balance. Reduce the swap amount or add SOL to your connected wallet."
     )
     provider_detail = RuntimeError("provider trace id=secret-upstream-detail")
+    wallet_quota = RuntimeError(
+        "This wallet has too many pending swap reviews. Complete or wait for an existing review to expire."
+    )
 
     assert safe_jupiter_error_detail(actionable) == str(actionable)
+    assert safe_jupiter_error_detail(wallet_quota) == str(wallet_quota)
     assert safe_jupiter_error_detail(provider_detail) == "Jupiter swap is temporarily unavailable."
 
 

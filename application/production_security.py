@@ -67,6 +67,7 @@ def allowed_hosts() -> list[str]:
 _ACTIONABLE_JUPITER_ERRORS = frozenset(
     {
         "Insufficient SOL balance. Reduce the swap amount or add SOL to your connected wallet.",
+        "This wallet has too many pending swap reviews. Complete or wait for an existing review to expire.",
     }
 )
 

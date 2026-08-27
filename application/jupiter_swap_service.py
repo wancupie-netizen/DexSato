@@ -38,6 +38,7 @@ from application.solana_discovery_feed_service import load_solana_discovery_feed
 JUPITER_EXECUTE_URL = "https://api.jup.ag/swap/v2/execute"
 ORDER_LIFETIME_SECONDS = 120
 MAX_PENDING_ORDERS = 256
+MAX_PENDING_ORDERS_PER_WALLET = 4
 MAX_TRANSACTION_BYTES = 4096
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 BASE58_DIGITS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -169,13 +170,22 @@ def _qualified_token(token_address: str, feed: dict[str, Any] | None) -> str:
     return token
 
 
-def _prune_orders(current: datetime) -> None:
+def _prune_orders(current: datetime, wallet_address: str) -> None:
     stale = [key for key, value in _pending_orders.items()
              if value.expires_at <= current or value.completed]
     for key in stale:
         _pending_orders.pop(key, None)
     if len(_pending_orders) >= MAX_PENDING_ORDERS:
         raise JupiterQuoteUnavailable("The swap pilot is temporarily busy.")
+    wallet_orders = sum(
+        1
+        for value in _pending_orders.values()
+        if value.wallet_address == wallet_address
+    )
+    if wallet_orders >= MAX_PENDING_ORDERS_PER_WALLET:
+        raise JupiterQuoteUnavailable(
+            "This wallet has too many pending swap reviews. Complete or wait for an existing review to expire."
+        )
 
 
 def _order_error_message(payload: dict[str, Any]) -> str | None:
@@ -208,6 +218,9 @@ def prepare_jupiter_swap(
     wallet_bytes = _base58_bytes(wallet)
     amount, lamports = _amount_lamports(amount_sol)
     resolved_key = _api_key(api_key)
+
+    with _pending_lock:
+        _prune_orders(now(), wallet)
 
     try:
         response = request_get(
@@ -263,7 +276,7 @@ def prepare_jupiter_swap(
         last_valid_block_height=last_height_text,
     )
     with _pending_lock:
-        _prune_orders(current)
+        _prune_orders(current, wallet)
         if request_id in _pending_orders:
             raise JupiterSwapRejected("Jupiter returned a duplicate active swap request.")
         _pending_orders[request_id] = pending

@@ -42,6 +42,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.concurrency import run_in_threadpool
 
 from application.content_control_service import (
     COOKIE_NAME,
@@ -334,7 +335,8 @@ async def solana_discovery_jupiter_order(
         {"amount_sol", "wallet_address", "risk_acknowledged"},
     )
     try:
-        return prepare_jupiter_swap(
+        return await run_in_threadpool(
+            prepare_jupiter_swap,
             token_address,
             payload.get("amount_sol"),
             str(payload.get("wallet_address") or ""),
@@ -368,7 +370,8 @@ async def solana_discovery_jupiter_execute(
         {"request_id", "wallet_address", "signed_transaction"},
     )
     try:
-        return execute_jupiter_swap(
+        return await run_in_threadpool(
+            execute_jupiter_swap,
             token_address,
             str(payload.get("request_id") or ""),
             str(payload.get("wallet_address") or ""),

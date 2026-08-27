@@ -10,6 +10,7 @@ from application.jupiter_quote_service import (
     JupiterQuoteUnavailable,
 )
 from application.jupiter_swap_service import (
+    MAX_PENDING_ORDERS_PER_WALLET,
     JUPITER_EXECUTE_URL,
     JUPITER_ORDER_URL,
     JupiterSwapExpired,
@@ -150,6 +151,18 @@ def test_surfaces_insufficient_sol_balance_as_actionable_message():
     )
     with pytest.raises(JupiterQuoteUnavailable, match="Insufficient SOL balance"):
         _prepare(payload)
+
+
+def test_one_wallet_cannot_fill_the_global_pending_order_store():
+    _pending_orders.clear()
+    for index in range(MAX_PENDING_ORDERS_PER_WALLET):
+        order = _prepare(_order(request_id=f"wallet-quota-{index}"))
+        assert order["status"] == "WALLET_APPROVAL_REQUIRED"
+
+    with pytest.raises(JupiterQuoteUnavailable, match="too many pending swap reviews"):
+        _prepare(_order(request_id="wallet-quota-overflow"))
+
+    assert len(_pending_orders) == MAX_PENDING_ORDERS_PER_WALLET
 
 
 def test_rejects_provider_token_wallet_amount_and_transaction_mismatches():

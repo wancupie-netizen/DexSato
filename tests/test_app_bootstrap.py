@@ -3,6 +3,7 @@ Tests for DexSato V1 FastAPI Application.
 """
 
 import asyncio
+import threading
 import requests
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -267,6 +268,28 @@ def test_should_prepare_unsigned_swap_only_after_explicit_risk_acknowledgement(m
 
 
 @patch("application.jupiter_swap_service.prepare_jupiter_swap")
+def test_jupiter_order_work_runs_outside_the_event_loop_thread(mock_prepare):
+    caller_thread = threading.get_ident()
+
+    def prepared(*_args, **_kwargs):
+        assert threading.get_ident() != caller_thread
+        return {"status": "WALLET_APPROVAL_REQUIRED", "request_id": "thread-order"}
+
+    mock_prepare.side_effect = prepared
+    request = Mock()
+    request.json = AsyncMock(return_value={
+        "amount_sol": "0.1",
+        "wallet_address": "11111111111111111111111111111111",
+        "risk_acknowledged": True,
+    })
+
+    result = asyncio.run(
+        solana_discovery_jupiter_order("22222222222222222222222222222222", request)
+    )
+    assert result["request_id"] == "thread-order"
+
+
+@patch("application.jupiter_swap_service.prepare_jupiter_swap")
 def test_should_preserve_actionable_jupiter_order_error_message(mock_prepare):
     from application.jupiter_quote_service import JupiterQuoteUnavailable
 
@@ -312,6 +335,28 @@ def test_should_relay_a_wallet_signed_transaction_without_accepting_wallet_secre
         "22222222222222222222222222222222", "order-1",
         "11111111111111111111111111111111", "c2lnbmVk",
     )
+
+
+@patch("application.jupiter_swap_service.execute_jupiter_swap")
+def test_jupiter_execute_work_runs_outside_the_event_loop_thread(mock_execute):
+    caller_thread = threading.get_ident()
+
+    def executed(*_args, **_kwargs):
+        assert threading.get_ident() != caller_thread
+        return {"status": "SWAP_CONFIRMED", "signature": "555555"}
+
+    mock_execute.side_effect = executed
+    request = Mock()
+    request.json = AsyncMock(return_value={
+        "request_id": "order-1",
+        "wallet_address": "11111111111111111111111111111111",
+        "signed_transaction": "c2lnbmVk",
+    })
+
+    result = asyncio.run(
+        solana_discovery_jupiter_execute("22222222222222222222222222222222", request)
+    )
+    assert result["status"] == "SWAP_CONFIRMED"
 
 
 @patch("application.jupiter_swap_service.prepare_jupiter_swap")
