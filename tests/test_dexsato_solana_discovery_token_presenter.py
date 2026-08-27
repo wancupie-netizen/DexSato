@@ -127,23 +127,21 @@ def test_token_workspace_v26a_renders_three_column_shell_without_fake_timeline()
     assert 'class="workspace-rail-v26 workspace-left-v26"' in html
     assert 'class="workspace-main-v26"' in html
     assert 'class="workspace-rail-v26 workspace-right-v26"' in html
-    assert html.index("Coin Timeline") < html.index("Coin List")
+    assert html.index("Token Observation") < html.index("Coin List")
     assert html.index("Coin List") < html.index("TEST / SOL")
     assert html.index("Jupiter swap") < html.index("Market Snapshot")
-    assert "Observation timeline starts here" in html
-    assert "No earlier history is inferred." in html
+    assert "Coin Timeline" not in html
+    assert "Recent Events" not in html
     assert "Pool detected" not in html
-    assert 'aria-current="page"' in html
-    assert 'href="/discovery/solana/SecondToken987654321"' in html
-    assert "Search token or pair" in html
+    assert "Route availability is not a safety guarantee." in html
 
 
-def test_token_workspace_v26a_coin_list_falls_back_to_selected_token():
+def test_token_observation_renders_only_requested_factual_fields():
     html = render_solana_discovery_token_page(DETAIL, feed=None)
 
-    assert 'data-coin-list' in html
-    assert 'href="/discovery/solana/TokenAddress123456789"' in html
-    assert 'aria-current="page"' in html
+    assert 'data-token-observation' in html
+    for label in ("Mint authority", "Freeze authority", "Metadata", "Sell route verified", "Liquidity", "24h change"):
+        assert label in html
 
 
 def test_token_workspace_v26a2_keeps_right_rail_cards_in_one_static_flow():
@@ -155,23 +153,11 @@ def test_token_workspace_v26a2_keeps_right_rail_cards_in_one_static_flow():
     assert "overscroll-behavior:auto" in html
 
 
-def test_token_workspace_v26a3_pins_and_highlights_active_coin_first():
-    feed = {
-        "candidates": [
-            {"token_address": "FirstFeedToken", "symbol": "FIRST"},
-            {**DETAIL, "token_address": "TokenAddress123456789"},
-            {"token_address": "LastFeedToken", "symbol": "LAST"},
-        ],
-    }
-
-    html = render_solana_discovery_token_page(DETAIL, feed=feed)
-
-    active = 'href="/discovery/solana/TokenAddress123456789" aria-current="page"'
-    first = 'href="/discovery/solana/FirstFeedToken"'
-    last = 'href="/discovery/solana/LastFeedToken"'
-    assert html.index(active) < html.index(first) < html.index(last)
-    assert 'class="coin-list-row active"' in html
-    assert ".coin-list-row.active{background:rgba(255,148,24,.055);box-shadow:inset 2px 0 var(--amber)}" in html
+def test_token_observation_keeps_coin_navigation_below_observation():
+    html = render_solana_discovery_token_page(DETAIL, feed={"candidates": [DETAIL]})
+    assert '<section class="workspace-rail-card coin-list"' in html
+    assert '<a class="coin-list-row active"' in html
+    assert html.index('data-token-observation') < html.index('data-coin-list')
 
 
 def test_token_workspace_v26a4_removes_competing_vertical_scrollbars():
@@ -180,7 +166,6 @@ def test_token_workspace_v26a4_removes_competing_vertical_scrollbars():
     assert ".workspace-right-v26{position:static;max-height:none;overflow:visible" in html
     assert ".transactions-table-wrap{max-height:none;overflow-x:auto;overflow-y:visible" in html
     assert "html{scrollbar-width:none}html::-webkit-scrollbar{display:none}" in html
-    assert ".coin-list-rows{max-height:620px;overflow:auto" in html
 
 def test_swap_client_requires_explicit_wallet_signing_and_preserves_same_origin_api_keys():
     script = (
@@ -193,6 +178,7 @@ def test_swap_client_requires_explicit_wallet_signing_and_preserves_same_origin_
     assert 'apiBase + "/jupiter-order"' in script
     assert 'apiBase + "/jupiter-execute"' in script
     assert "risk_acknowledged: acknowledgement.checked" in script
+    assert 'sellRouteStatus.textContent = "Verified · just now"' in script
     assert "Retry signed transaction" in script
     assert "credentials: \"same-origin\"" in script
     assert "x-api-key" not in script

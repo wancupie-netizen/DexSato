@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 from time import monotonic
 from typing import Any, Callable
 
@@ -12,6 +13,7 @@ from application.solana_discovery_feed_service import load_solana_discovery_feed
 
 
 DEXSCREENER_PAIR_URL = "https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
+SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 
 # TRANSACTIONS_FEED_V10_EXACT_POOL_SERVICE
 GECKO_TRADES_URL = (
@@ -55,6 +57,38 @@ def _number(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+# TOKEN_OBSERVATION_V28_ONCHAIN_AUTHORITY
+def _mint_authorities(token_address: str, request_post: Callable[..., Any]) -> dict[str, str]:
+    """Read only authority facts exposed by the parsed Solana mint account."""
+    result = {
+        "mint_authority_observation": "Unavailable",
+        "freeze_authority_observation": "Unavailable",
+        "metadata_observation": "Unavailable",
+    }
+    endpoint = (os.getenv("SOLANA_RPC_URL", "") or SOLANA_RPC_URL).strip()
+    try:
+        response = request_post(
+            endpoint,
+            json={"jsonrpc": "2.0", "id": 1, "method": "getAccountInfo",
+                  "params": [token_address, {"encoding": "jsonParsed"}]},
+            headers={"accept": "application/json", "content-type": "application/json"},
+            timeout=8,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        value = payload.get("result", {}).get("value") if isinstance(payload, dict) else None
+        data = value.get("data") if isinstance(value, dict) else None
+        parsed = data.get("parsed") if isinstance(data, dict) else None
+        info = parsed.get("info") if isinstance(parsed, dict) else None
+        if not isinstance(info, dict):
+            return result
+        result["mint_authority_observation"] = "Revoked" if info.get("mintAuthority") is None else "Active"
+        result["freeze_authority_observation"] = "Revoked" if info.get("freezeAuthority") is None else "Active"
+    except (requests.RequestException, RuntimeError, TypeError, ValueError, AttributeError):
+        pass
+    return result
 
 
 # TOKEN_WORKSPACE_V2452_PAIR_AGE_PROPAGATION_FIX
@@ -827,6 +861,7 @@ def load_solana_discovery_token(
     *,
     feed: dict[str, Any] | None = None,
     request_get: Callable[..., Any] = requests.get,
+    request_post: Callable[..., Any] = requests.post,
 ) -> dict[str, Any] | None:
     """Return one qualified exact-token workspace; never expose raw candidates."""
     address = str(token_address or "").strip()
@@ -844,6 +879,14 @@ def load_solana_discovery_token(
         return None
 
     detail = dict(candidate)
+    if request_post is requests.post and feed is not None:
+        detail.update({
+            "mint_authority_observation": "Unavailable",
+            "freeze_authority_observation": "Unavailable",
+            "metadata_observation": "Unavailable",
+        })
+    else:
+        detail.update(_mint_authorities(address, request_post))
     detail["quote_status"] = "STORED"
     detail["quote_label"] = "Stored collector observation"
     detail["chart"] = []

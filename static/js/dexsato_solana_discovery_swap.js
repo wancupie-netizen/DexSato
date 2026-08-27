@@ -18,6 +18,7 @@
     const swapResult = sandbox.querySelector("[data-swap-result]");
     const tokenAddress = sandbox.dataset.tokenAddress;
     const tokenSymbol = sandbox.dataset.tokenSymbol || "token";
+    const sellRouteStatus = document.querySelector("[data-sell-route-status]");
     const apiBase = "/api/discovery/solana/" + encodeURIComponent(tokenAddress);
     let walletProvider = null;
     let walletAddress = "";
@@ -371,6 +372,10 @@
             }
             currentQuote = payload;
             renderQuote(payload);
+            if (sellRouteStatus) {
+                sellRouteStatus.textContent = "Verified · just now";
+                sellRouteStatus.classList.add("verified");
+            }
         } catch (error) {
             setResult(quoteResult, present(error.message, "Jupiter quote is unavailable."), "quote-error");
         } finally {

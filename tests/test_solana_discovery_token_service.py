@@ -46,6 +46,21 @@ def test_returns_only_exact_qualified_token_and_validates_live_pair():
     assert len(result["chart"]) == 2
 
 
+def test_token_observation_reads_mint_and_freeze_authority_from_solana_rpc():
+    def get(url, **kwargs):
+        if "dexscreener" in url:
+            return Response({"pairs": []})
+        return Response({"data": {"attributes": {"ohlcv_list": []}}})
+    def post(url, **kwargs):
+        return Response({"result": {"value": {"data": {"parsed": {"info": {
+            "mintAuthority": None, "freezeAuthority": "AuthorityAddress123"
+        }}}}}})
+    result = load_solana_discovery_token(TOKEN, feed=FEED, request_get=get, request_post=post)
+    assert result["mint_authority_observation"] == "Revoked"
+    assert result["freeze_authority_observation"] == "Active"
+    assert result["metadata_observation"] == "Unavailable"
+
+
 def test_rejects_unknown_or_case_changed_token():
     assert load_solana_discovery_token("unknown", feed=FEED) is None
     assert load_solana_discovery_token(TOKEN.lower(), feed=FEED) is None

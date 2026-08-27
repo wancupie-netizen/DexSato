@@ -403,20 +403,27 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
     )
 
 
-# TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL
-def _coin_timeline_panel() -> str:
-    """Render an honest timeline shell until timestamped events are persisted."""
-    return (
-        '<section class="workspace-rail-card coin-timeline" data-coin-timeline>'
-        '<div class="workspace-rail-head"><h2>Coin Timeline</h2>'
-        '<small>Observed exact-pool events</small></div>'
-        '<div class="timeline-empty">'
-        '<i aria-hidden="true"></i>'
-        '<strong>Observation timeline starts here</strong>'
-        '<p>Timestamped changes will appear after DexSato observes them. '
-        'No earlier history is inferred.</p>'
-        '</div></section>'
+# TOKEN_OBSERVATION_V28_LEFT_RAIL
+def _token_observation_panel(detail: dict[str, Any]) -> str:
+    """Render verified facts only; unavailable evidence is never inferred."""
+    change, change_tone = _change_percent(detail.get("change_24h"))
+    rows = (
+        ("Mint authority", str(detail.get("mint_authority_observation") or "Unavailable"), ""),
+        ("Freeze authority", str(detail.get("freeze_authority_observation") or "Unavailable"), ""),
+        ("Metadata", str(detail.get("metadata_observation") or "Unavailable"), ""),
+        ("Sell route verified", "Unavailable", "sell-route"),
+        ("Liquidity", _usd(detail.get("liquidity_usd")), ""),
+        ("24h change", change, change_tone),
     )
+    rendered = []
+    for label, value, tone in rows:
+        attribute = ' data-sell-route-status' if tone == "sell-route" else ""
+        css_tone = "" if tone == "sell-route" else f" {escape(tone)}" if tone else ""
+        rendered.append(f'<div class="token-observation-row"><span>{escape(label)}</span><b class="token-observation-value{css_tone}"{attribute}>{escape(value)}</b></div>')
+    return ('<section class="workspace-rail-card token-observation-v28" data-token-observation>'
+            '<div class="workspace-rail-head"><h2>Token Observation</h2><small>Observed data only</small></div>'
+            f'<div class="token-observation-rows">{"".join(rendered)}</div>'
+            '<p class="token-observation-note">Route availability is not a safety guarantee.</p></section>')
 
 
 def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str:
@@ -488,7 +495,7 @@ def render_solana_discovery_token_page(
     token_overview_card = _token_overview_card(detail)
     candlestick_chart_panel = _candlestick_chart_panel(detail)
     transactions_table_panel = _transactions_table_panel(detail)
-    coin_timeline_panel = _coin_timeline_panel()
+    token_observation_panel = _token_observation_panel(detail)
     coin_list_panel = _coin_list_panel(detail, feed)
     symbol = escape(str(detail.get("symbol") or "Unknown"))
     trader_tf_strip = _trader_timeframe_strip(detail)
@@ -1343,10 +1350,12 @@ html[data-theme="intel"] .coin-list-search input{border-color:#303a45;background
 .jupiter-v27{gap:11px}.jupiter-v27>.eyebrow{margin:0 0 -7px;font-size:9px!important}.jupiter-v27 h3{line-height:1.15}.jupiter-v27 .badge{margin-top:-4px;padding:3px 6px;font-size:8px;opacity:.8}.wallet-bar-v27{padding:7px 8px;min-height:42px}.wallet-bar-v27 .wallet-state{font:650 12px/1.3 var(--ui)}.wallet-bar-v27 .wallet-state.connected{color:var(--green)}.wallet-bar-v27 .wallet-state.connected:before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(34,210,127,.08);vertical-align:1px}.wallet-bar-v27 .sandbox-button{padding:6px 8px;font-size:10px}.swap-pay-v27{text-align:center;padding:16px 13px}.swap-pay-v27 .swap-leg-head-v27{justify-content:center;flex-direction:column;gap:7px}.swap-pay-v27 .swap-amount-v27{text-align:center;margin-top:8px}.swap-pay-v27 .swap-leg-note-v27{text-align:center}.token-pill-v27{display:inline-flex;align-items:center;gap:5px}.solana-mark-v27{width:14px;height:12px;display:block;flex:0 0 auto}
 /* TOKEN_WORKSPACE_V272_QUOTE_FAILURE_STATE */
 .swap-input-error-v272{display:block;margin:8px auto 0;padding:7px 8px;border-radius:4px;background:rgba(255,95,120,.07);color:var(--red);font:650 10px/1.4 var(--ui);text-align:left}.swap-input-error-v272[hidden]{display:none}
+/* TOKEN_OBSERVATION_V28_LEFT_RAIL */
+.token-observation-v28{padding:17px}.token-observation-v28 .workspace-rail-head{padding:0 0 12px}.token-observation-rows{border-top:1px solid var(--line)}.token-observation-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}.token-observation-row span{color:var(--muted);font-size:11px}.token-observation-value{text-align:right;font:650 12px/1.35 var(--mono)}.token-observation-value.up,.token-observation-value.verified{color:var(--green)}.token-observation-value.down{color:var(--red)}.token-observation-note{margin:13px 0 0;padding:10px 11px;border-left:2px solid var(--amber);background:rgba(255,148,24,.055);color:var(--muted);font-size:10px;line-height:1.45}
 
 </style></head><body><main class="shell"><header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><strong>Solana Discovery</strong></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
 <div class="token-workspace-v26" data-token-workspace-v26>
-<aside class="workspace-rail-v26 workspace-left-v26" aria-label="Coin navigation and timeline">__COIN_TIMELINE_PANEL____COIN_LIST_PANEL__</aside>
+<aside class="workspace-rail-v26 workspace-left-v26" aria-label="Token observation and coin navigation">__TOKEN_OBSERVATION_PANEL____COIN_LIST_PANEL__</aside>
 <section class="workspace-main-v26" aria-label="Selected token market evidence">
 __TOKEN_OVERVIEW_CARD__
 <section class="hero"><div><span class="eyebrow">Qualified exact-token workspace</span><h1>__SYMBOL__ / __QUOTE__</h1><p>Review observed market activity, exact-pool identity and disclosed risk before taking any action.</p></div><div class="status"><span class="eyebrow">Market data</span><b>__STATUS__</b><small>__STATUS_LABEL__</small></div></section>
@@ -2582,7 +2591,7 @@ __CANDLESTICK_CHART_PANEL__
     html = html.replace("__TRADER_TF_STRIP__", trader_tf_strip)
     html = html.replace("__TOKEN_OVERVIEW_CARD__", token_overview_card)
     html = html.replace("__CANDLESTICK_CHART_PANEL__", candlestick_chart_panel + transactions_table_panel)
-    html = html.replace("__COIN_TIMELINE_PANEL__", coin_timeline_panel)
+    html = html.replace("__TOKEN_OBSERVATION_PANEL__", token_observation_panel)
     html = html.replace("__COIN_LIST_PANEL__", coin_list_panel)
     return html
 
