@@ -76,10 +76,13 @@ from application.system_health_dashboard import (
 )
 from application.production_security import (
     ApplicationBoundaryMiddleware,
+    ProductionLoggingMiddleware,
     SecurityHeadersMiddleware,
     allowed_hosts,
     application_host,
     application_port,
+    configure_production_logging,
+    production_mode,
     require_internal_access,
     safe_jupiter_error_detail,
     trusted_proxy_headers,
@@ -116,6 +119,8 @@ HOST = application_host()
 
 PORT = application_port()
 
+configure_production_logging()
+
 
 app = FastAPI(
     title=APP_TITLE,
@@ -127,6 +132,7 @@ app = FastAPI(
 app.add_middleware(ApplicationBoundaryMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
+app.add_middleware(ProductionLoggingMiddleware)
 
 app.mount(
     "/static",
@@ -715,6 +721,7 @@ def run() -> None:
         app,
         host=HOST,
         port=PORT,
+        access_log=not production_mode(),
     )
 
 

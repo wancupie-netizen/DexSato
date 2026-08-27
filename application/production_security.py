@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hmac
+import json
+import logging
 import os
 import secrets
 import threading
@@ -11,6 +13,121 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 
 from fastapi import HTTPException, Request
+
+
+_PRODUCTION_LOGGER = logging.getLogger("dexsato.production")
+_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+
+
+def production_log_level() -> str:
+    value = os.getenv("DEXSATO_LOG_LEVEL", "INFO").strip().upper()
+    if value not in _LOG_LEVELS:
+        raise RuntimeError("DEXSATO_LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR, or CRITICAL.")
+    if production_mode() and value == "DEBUG":
+        raise RuntimeError("DEBUG logging is not allowed in production.")
+    return value
+
+
+def configure_production_logging() -> None:
+    """Write bounded JSON application events to stdout without request contents."""
+    level = production_log_level()
+    if not any(getattr(handler, "_dexsato_handler", False) for handler in _PRODUCTION_LOGGER.handlers):
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        handler._dexsato_handler = True  # type: ignore[attr-defined]
+        _PRODUCTION_LOGGER.addHandler(handler)
+    _PRODUCTION_LOGGER.setLevel(getattr(logging, level))
+    _PRODUCTION_LOGGER.propagate = False
+
+
+def _request_id(scope: dict[str, object]) -> str:
+    state = scope.setdefault("state", {})
+    if not isinstance(state, dict):
+        state = {}
+        scope["state"] = state
+    current = state.get("dexsato_request_id")
+    if isinstance(current, str) and len(current) == 32:
+        return current
+    generated = secrets.token_hex(16)
+    state["dexsato_request_id"] = generated
+    return generated
+
+
+def _safe_route(path: str) -> str:
+    """Classify routes without logging token mints, query strings, or unknown paths."""
+    segments = [segment for segment in path.split("/") if segment]
+    if path in {"/", "/health", "/health/live", "/health/ready", "/discovery/solana"}:
+        return path
+    if len(segments) >= 4 and segments[:3] == ["api", "discovery", "solana"]:
+        suffix = "/" + "/".join(segments[4:]) if len(segments) > 4 else ""
+        return "/api/discovery/solana/:token" + suffix
+    if len(segments) == 3 and segments[:2] == ["discovery", "solana"]:
+        return "/discovery/solana/:token"
+    if path in {"/content-control/login", "/content-control/generate", "/telegram/send"}:
+        return path
+    if path.startswith("/static/"):
+        return "/static/:asset"
+    return "unclassified"
+
+
+class ProductionLoggingMiddleware:
+    """Emit one metadata-only JSON event per HTTP request and exception."""
+
+    def __init__(self, app: object) -> None:
+        self.app = app
+
+    @staticmethod
+    def _emit(level: int, payload: dict[str, object]) -> None:
+        _PRODUCTION_LOGGER.log(level, json.dumps(payload, separators=(",", ":"), sort_keys=True))
+
+    async def __call__(self, scope: dict[str, object], receive: object, send: object) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        started = time.monotonic()
+        request_id = _request_id(scope)
+        method = str(scope.get("method") or "GET").upper()
+        route = _safe_route(str(scope.get("path") or ""))
+        status = 500
+
+        async def logged_send(message: dict[str, object]) -> None:
+            nonlocal status
+            if message.get("type") == "http.response.start":
+                status = int(message.get("status") or 500)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, logged_send)
+        except Exception as error:
+            self._emit(
+                logging.ERROR,
+                {
+                    "duration_ms": round((time.monotonic() - started) * 1000, 2),
+                    "event": "http_exception",
+                    "exception_type": type(error).__name__,
+                    "method": method,
+                    "request_id": request_id,
+                    "route": route,
+                    "status": 500,
+                    "timestamp_unix_ms": int(time.time() * 1000),
+                },
+            )
+            raise
+
+        level = logging.ERROR if status >= 500 else logging.WARNING if status >= 400 else logging.INFO
+        self._emit(
+            level,
+            {
+                "duration_ms": round((time.monotonic() - started) * 1000, 2),
+                "event": "http_request_rejected" if status in {400, 401, 403, 404, 413, 429} else "http_request",
+                "method": method,
+                "request_id": request_id,
+                "route": route,
+                "status": status,
+                "timestamp_unix_ms": int(time.time() * 1000),
+            },
+        )
 
 
 def _positive_int(name: str, default: int, *, maximum: int) -> int:
@@ -238,7 +355,7 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
-        request_id = secrets.token_hex(16).encode("ascii")
+        request_id = _request_id(scope).encode("ascii")
 
         async def secure_send(message: dict[str, object]) -> None:
             if message.get("type") == "http.response.start":

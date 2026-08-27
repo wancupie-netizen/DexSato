@@ -1,15 +1,20 @@
 """Security-boundary regression tests."""
 
 import asyncio
+import json
+import logging
 from unittest.mock import patch
 
 from fastapi import HTTPException
 
 from application.production_security import (
     ApplicationBoundaryMiddleware,
+    ProductionLoggingMiddleware,
     SecurityHeadersMiddleware,
+    _PRODUCTION_LOGGER,
     allowed_hosts,
     application_host,
+    production_log_level,
     require_internal_access,
     safe_jupiter_error_detail,
     trusted_proxy_headers,
@@ -48,6 +53,17 @@ def test_production_rejects_missing_or_wildcard_allowed_hosts():
 def test_proxy_headers_are_not_trusted_by_default():
     with patch.dict("os.environ", {}, clear=True):
         assert trusted_proxy_headers() is False
+
+
+def test_debug_logging_is_rejected_in_production():
+    environment = {"DEXSATO_ENV": "production", "DEXSATO_LOG_LEVEL": "DEBUG"}
+    with patch.dict("os.environ", environment, clear=True):
+        try:
+            production_log_level()
+        except RuntimeError as error:
+            assert "DEBUG" in str(error)
+        else:
+            raise AssertionError("Expected production DEBUG logging to fail")
 
 
 def test_only_reviewed_actionable_jupiter_error_is_public():
@@ -172,6 +188,75 @@ def test_security_headers_are_attached_without_echoing_request_id():
     assert headers[b"referrer-policy"] == b"no-referrer"
     assert b"frame-ancestors 'none'" in headers[b"content-security-policy"]
     assert headers[b"x-request-id"] != b"attacker-controlled"
+
+
+def test_production_logging_uses_sanitized_route_and_excludes_request_contents():
+    token = "SensitiveMint111111111111111111111111111"
+    signed = "signed-transaction-secret"
+
+    async def downstream(scope, receive, send):
+        await receive()
+        await send({"type": "http.response.start", "status": 400, "headers": []})
+        await send({"type": "http.response.body", "body": b"rejected"})
+
+    middleware = ProductionLoggingMiddleware(downstream)
+    sent = []
+
+    async def receive():
+        return {"type": "http.request", "body": signed.encode(), "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": f"/api/discovery/solana/{token}/jupiter-execute",
+        "query_string": b"wallet=private-wallet-value",
+        "headers": [(b"authorization", b"Bearer private-api-key")],
+    }
+    with patch.object(_PRODUCTION_LOGGER, "log") as emit:
+        asyncio.run(middleware(scope, receive, send))
+
+    level, raw = emit.call_args.args
+    payload = json.loads(raw)
+    assert level == logging.WARNING
+    assert payload["route"] == "/api/discovery/solana/:token/jupiter-execute"
+    assert payload["event"] == "http_request_rejected"
+    assert payload["status"] == 400
+    assert isinstance(payload["timestamp_unix_ms"], int)
+    assert token not in raw
+    assert signed not in raw
+    assert "private-wallet-value" not in raw
+    assert "private-api-key" not in raw
+
+
+def test_production_exception_log_exposes_type_not_exception_message():
+    async def downstream(scope, receive, send):
+        raise RuntimeError("upstream-secret-and-wallet-value")
+
+    middleware = ProductionLoggingMiddleware(downstream)
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        return None
+
+    scope = {"type": "http", "method": "GET", "path": "/health/ready", "headers": []}
+    with patch.object(_PRODUCTION_LOGGER, "log") as emit:
+        try:
+            asyncio.run(middleware(scope, receive, send))
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("Expected downstream exception")
+
+    raw = emit.call_args.args[1]
+    payload = json.loads(raw)
+    assert payload["event"] == "http_exception"
+    assert payload["exception_type"] == "RuntimeError"
+    assert "upstream-secret-and-wallet-value" not in raw
 
 
 async def _run_many(operation, count):
