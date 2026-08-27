@@ -22,6 +22,8 @@ from app.main import (
     dashboard_api,
     founder_home,
     health_check,
+    health_liveness,
+    health_readiness,
     market_detail,
     solana_discovery,
     solana_discovery_jupiter_execute,
@@ -30,6 +32,7 @@ from app.main import (
     solana_discovery_token,
     system_status_api,
     telegram_send,
+    readiness_status,
 )
 
 
@@ -385,10 +388,7 @@ def test_should_reject_missing_snapshot(
 
         assert error.status_code == 503
 
-        assert (
-            "snapshot is not available"
-            in error.detail
-        )
+        assert error.detail == "Market snapshot is temporarily unavailable."
 
     else:
 
@@ -407,6 +407,37 @@ def test_should_return_healthy_status():
         "application": APP_TITLE,
         "version": APP_VERSION,
     }
+
+    assert health_liveness() == health_check()
+
+
+def test_readiness_reports_required_local_components(tmp_path):
+    from application import solana_discovery_feed_service as feed_service
+
+    (tmp_path / "state.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "status.json").write_text("{}", encoding="utf-8")
+    (tmp_path / feed_service.DISCOVERY_ARCHIVE_DB).write_bytes(b"sqlite")
+
+    with patch.object(feed_service, "DEFAULT_OUTPUT_DIR", tmp_path):
+        ready, checks = readiness_status()
+        response = health_readiness()
+
+    assert ready is True
+    assert checks == {"static": "ready", "collector": "ready", "archive": "ready"}
+    assert response.status_code == 200
+
+
+def test_readiness_returns_503_when_discovery_storage_is_missing(tmp_path):
+    from application import solana_discovery_feed_service as feed_service
+
+    with patch.object(feed_service, "DEFAULT_OUTPUT_DIR", tmp_path):
+        ready, checks = readiness_status()
+        response = health_readiness()
+
+    assert ready is False
+    assert checks["collector"] == "unavailable"
+    assert checks["archive"] == "unavailable"
+    assert response.status_code == 503
 
 
 def test_should_use_local_server_defaults():

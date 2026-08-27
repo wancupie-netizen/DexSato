@@ -41,6 +41,7 @@ from fastapi.responses import (
     JSONResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from application.content_control_service import (
     COOKIE_NAME,
@@ -74,9 +75,13 @@ from application.system_health_dashboard import (
 )
 from application.production_security import (
     ApplicationBoundaryMiddleware,
+    SecurityHeadersMiddleware,
+    allowed_hosts,
     application_host,
     application_port,
     require_internal_access,
+    safe_jupiter_error_detail,
+    trusted_proxy_headers,
 )
 
 from presentation.content_control_presenter import (
@@ -119,6 +124,8 @@ app = FastAPI(
 )
 
 app.add_middleware(ApplicationBoundaryMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
 
 app.mount(
     "/static",
@@ -165,8 +172,10 @@ def _content_session_valid(request: Request) -> bool:
 
 
 def _content_cookie_secure(request: Request) -> bool:
+    if request.url.scheme == "https":
+        return True
     forwarded = request.headers.get("x-forwarded-proto", "")
-    return request.url.scheme == "https" or forwarded.lower() == "https"
+    return trusted_proxy_headers() and forwarded.lower() == "https"
 
 
 @app.get(
@@ -189,9 +198,7 @@ def founder_home() -> str:
 
         raise HTTPException(
             status_code=503,
-            detail=str(
-                error,
-            ),
+            detail="Market snapshot is temporarily unavailable.",
         ) from error
 
     system_status = collect_system_dashboard_status()
@@ -340,7 +347,7 @@ async def solana_discovery_jupiter_order(
     except JupiterQuoteNotConfigured as error:
         raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
     except JupiterQuoteUnavailable as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(status_code=503, detail=safe_jupiter_error_detail(error)) from error
 
 
 @app.post("/api/discovery/solana/{token_address}/jupiter-execute")
@@ -387,7 +394,7 @@ def admin_system() -> str:
     try:
         snapshot = load_current_snapshot()
     except (FileNotFoundError, RuntimeError) as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(status_code=503, detail="Internal snapshot is temporarily unavailable.") from error
 
     return render_admin_system_page(
         snapshot,
@@ -404,7 +411,7 @@ def market_detail(token: str) -> str:
     try:
         snapshot = load_current_snapshot()
     except (FileNotFoundError, RuntimeError) as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(status_code=503, detail="Market snapshot is temporarily unavailable.") from error
 
     coins = snapshot.get("coins")
     if not isinstance(coins, list):
@@ -479,7 +486,7 @@ def content_control(request: Request) -> str:
     try:
         snapshot = load_current_snapshot()
     except (FileNotFoundError, RuntimeError) as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(status_code=503, detail="Content data is temporarily unavailable.") from error
 
     return render_content_control(
         snapshot,
@@ -540,7 +547,7 @@ async def content_control_generate(request: Request) -> dict[str, object]:
     try:
         snapshot = load_current_snapshot()
     except (FileNotFoundError, RuntimeError) as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(status_code=503, detail="Content data is temporarily unavailable.") from error
 
     coin = find_market(snapshot, payload.get("token"))
     if coin is None:
@@ -557,10 +564,10 @@ async def content_control_generate(request: Request) -> dict[str, object]:
     except requests.RequestException as error:
         raise HTTPException(
             status_code=502,
-            detail=f"AI writing request failed: {error}",
+            detail="AI writing service is temporarily unavailable.",
         ) from error
     except RuntimeError as error:
-        raise HTTPException(status_code=502, detail=str(error)) from error
+        raise HTTPException(status_code=502, detail="AI writing service is temporarily unavailable.") from error
 
     return result
 
@@ -585,9 +592,7 @@ def dashboard_api() -> dict[str, object]:
 
         raise HTTPException(
             status_code=503,
-            detail=str(
-                error,
-            ),
+            detail="Dashboard data is temporarily unavailable.",
         ) from error
 
 
@@ -631,19 +636,14 @@ def telegram_send() -> dict[str, object]:
 
         raise HTTPException(
             status_code=503,
-            detail=str(
-                error,
-            ),
+            detail="Telegram delivery is temporarily unavailable.",
         ) from error
 
     except requests.RequestException as error:
 
         raise HTTPException(
             status_code=502,
-            detail=(
-                "Telegram API request failed: "
-                f"{error}"
-            ),
+            detail="Telegram delivery is temporarily unavailable.",
         ) from error
 
 
@@ -660,6 +660,45 @@ def health_check() -> dict[str, str]:
         "application": APP_TITLE,
         "version": APP_VERSION,
     }
+
+
+@app.get("/health/live")
+def health_liveness() -> dict[str, str]:
+    """Confirm that the application process can serve requests."""
+    return health_check()
+
+
+def readiness_status() -> tuple[bool, dict[str, str]]:
+    """Check local resources required to serve the Discovery Terminal."""
+    from application.solana_discovery_feed_service import (
+        DEFAULT_OUTPUT_DIR,
+        DISCOVERY_ARCHIVE_DB,
+    )
+
+    project_root = Path(__file__).resolve().parents[1]
+    static_ready = (project_root / "static").is_dir()
+    discovery_dir = project_root / DEFAULT_OUTPUT_DIR
+    collector_ready = (
+        (discovery_dir / "state.json").is_file()
+        and (discovery_dir / "status.json").is_file()
+    )
+    archive_ready = (discovery_dir / DISCOVERY_ARCHIVE_DB).is_file()
+    checks = {
+        "static": "ready" if static_ready else "unavailable",
+        "collector": "ready" if collector_ready else "unavailable",
+        "archive": "ready" if archive_ready else "unavailable",
+    }
+    return all(value == "ready" for value in checks.values()), checks
+
+
+@app.get("/health/ready")
+def health_readiness() -> JSONResponse:
+    """Return deployment readiness without contacting external providers."""
+    ready, checks = readiness_status()
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not_ready", "checks": checks},
+    )
 
 
 def run() -> None:

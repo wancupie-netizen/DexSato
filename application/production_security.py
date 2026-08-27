@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import os
+import secrets
 import threading
 import time
 from collections import defaultdict, deque
@@ -42,6 +43,40 @@ def maximum_request_bytes() -> int:
 def internal_endpoints_enabled() -> bool:
     raw = os.getenv("DEXSATO_INTERNAL_ENDPOINTS_ENABLED", "false" if production_mode() else "true")
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def trusted_proxy_headers() -> bool:
+    raw = os.getenv("DEXSATO_TRUST_PROXY_HEADERS", "false")
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def allowed_hosts() -> list[str]:
+    raw = os.getenv("DEXSATO_ALLOWED_HOSTS", "").strip()
+    if not raw:
+        if production_mode():
+            raise RuntimeError("DEXSATO_ALLOWED_HOSTS is required in production.")
+        return ["127.0.0.1", "localhost", "testserver"]
+    hosts = [item.strip().lower() for item in raw.split(",") if item.strip()]
+    if not hosts or any("/" in host or "://" in host for host in hosts):
+        raise RuntimeError("DEXSATO_ALLOWED_HOSTS must contain comma-separated hostnames.")
+    if production_mode() and "*" in hosts:
+        raise RuntimeError("Wildcard trusted hosts are not allowed in production.")
+    return hosts
+
+
+_ACTIONABLE_JUPITER_ERRORS = frozenset(
+    {
+        "Insufficient SOL balance. Reduce the swap amount or add SOL to your connected wallet.",
+    }
+)
+
+
+def safe_jupiter_error_detail(error: BaseException) -> str:
+    """Expose only reviewed Jupiter messages required for a user correction."""
+    detail = str(error).strip()
+    if detail in _ACTIONABLE_JUPITER_ERRORS:
+        return detail
+    return "Jupiter swap is temporarily unavailable."
 
 
 def require_internal_access(request: Request) -> None:
@@ -176,3 +211,50 @@ class ApplicationBoundaryMiddleware:
 
 class _RequestBodyTooLarge(Exception):
     pass
+
+
+class SecurityHeadersMiddleware:
+    """Attach browser hardening headers to every HTTP response."""
+
+    _CSP = (
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self' https://api.jup.ag https://api.mainnet-beta.solana.com"
+    )
+
+    def __init__(self, app: object) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict[str, object], receive: object, send: object) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = secrets.token_hex(16).encode("ascii")
+
+        async def secure_send(message: dict[str, object]) -> None:
+            if message.get("type") == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend(
+                    [
+                        (b"content-security-policy", self._CSP.encode("ascii")),
+                        (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+                        (b"referrer-policy", b"no-referrer"),
+                        (b"x-content-type-options", b"nosniff"),
+                        (b"x-frame-options", b"DENY"),
+                        (b"x-request-id", request_id),
+                    ]
+                )
+                if production_mode():
+                    headers.append((b"strict-transport-security", b"max-age=31536000; includeSubDomains"))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, secure_send)
