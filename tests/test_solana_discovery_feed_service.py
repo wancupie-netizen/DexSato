@@ -95,7 +95,7 @@ def test_requalified_candidate_updates_without_duplicate_history_row(mock_qualif
         "price_usd": 1.0,
         "last_seen_at": "2026-08-22T11:50:00+00:00",
     }
-    updated = {**old, "price_usd": 1.5, "last_seen_at": "2026-08-22T11:57:00+00:00"}
+    updated = {**old, "price_usd": 1.5, "change_24h": -8.25, "last_seen_at": "2026-08-22T11:57:00+00:00"}
 
     _write_feed_files(tmp_path, {"a": old})
     mock_qualify.return_value = [old]
@@ -108,6 +108,7 @@ def test_requalified_candidate_updates_without_duplicate_history_row(mock_qualif
     assert len(result["candidates"]) == 1
     assert result["candidates"][0]["token_address"] == "token-a"
     assert result["candidates"][0]["price_usd"] == 1.5
+    assert result["candidates"][0]["change_24h"] == -8.25
 
 
 @patch("application.solana_discovery_feed_service.qualify_discovery_candidates")

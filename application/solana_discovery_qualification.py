@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+import math
 from threading import Lock
 from time import monotonic
 from typing import Any, Callable
@@ -31,6 +32,15 @@ def _number(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return result if result >= 0 else None
+
+
+# COIN_LIST_CHANGE_V282_SIGNED_24H_CHANGE
+def _signed_number(value: Any) -> float | None:
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
 
 
 def _same(value: Any, expected: Any) -> bool:
@@ -110,6 +120,7 @@ def qualify_candidate(
     liquidity = _number((pair.get("liquidity") or {}).get("usd"))
     volume = _number((pair.get("volume") or {}).get("h24"))
     price = _number(pair.get("priceUsd"))
+    change_24h = _signed_number((pair.get("priceChange") or {}).get("h24"))
     if liquidity is None or volume is None or price is None:
         return None
     if liquidity < MIN_LIQUIDITY_USD or volume < MIN_VOLUME_24H_USD:
@@ -122,6 +133,7 @@ def qualify_candidate(
         "quote_symbol": str(quote.get("symbol") or "Unknown"),
         "dex_id": str(pair.get("dexId") or "Unknown"),
         "price_usd": price,
+        "change_24h": change_24h,
         "liquidity_usd": liquidity,
         "volume_24h_usd": volume,
         "pair_age": _pair_age_label(pair.get("pairCreatedAt"), now),

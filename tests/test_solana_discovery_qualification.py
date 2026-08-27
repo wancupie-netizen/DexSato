@@ -5,7 +5,7 @@ from application.solana_discovery_qualification import qualify_candidate
 
 NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
 OBSERVED = {"token_address": "token-one", "pair_address": "pool-one", "symbol": "ONE", "name": "One", "last_seen_at": "2026-08-22T11:55:00+00:00"}
-PAIR = {"chainId": "solana", "pairAddress": "pool-one", "dexId": "raydium", "baseToken": {"address": "token-one", "symbol": "ONE", "name": "One"}, "quoteToken": {"symbol": "SOL"}, "priceUsd": "0.25", "liquidity": {"usd": 12000}, "volume": {"h24": 4500}, "pairCreatedAt": 1787396400000}
+PAIR = {"chainId": "solana", "pairAddress": "pool-one", "dexId": "raydium", "baseToken": {"address": "token-one", "symbol": "ONE", "name": "One"}, "quoteToken": {"symbol": "SOL"}, "priceUsd": "0.25", "priceChange": {"h24": "-12.75"}, "liquidity": {"usd": 12000}, "volume": {"h24": 4500}, "pairCreatedAt": 1787396400000}
 
 
 def test_qualifies_identity_matched_liquid_active_pool():
@@ -13,7 +13,18 @@ def test_qualifies_identity_matched_liquid_active_pool():
     assert result is not None
     assert result["liquidity_usd"] == 12000
     assert result["volume_24h_usd"] == 4500
+    assert result["change_24h"] == -12.75
     assert "not independently verified" in result["risk_label"]
+
+
+def test_24h_change_remains_unavailable_when_provider_value_is_invalid():
+    result = qualify_candidate(
+        OBSERVED,
+        {**PAIR, "priceChange": {"h24": "not-a-number"}},
+        now=NOW,
+    )
+    assert result is not None
+    assert result["change_24h"] is None
 
 
 def test_rejects_unexpected_token_identity():
