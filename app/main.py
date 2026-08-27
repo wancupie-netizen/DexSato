@@ -31,6 +31,7 @@ from pathlib import Path
 import requests
 
 from fastapi import (
+    Depends,
     FastAPI,
     HTTPException,
     Request,
@@ -71,6 +72,12 @@ from application.telegram_notifier import (
 from application.system_health_dashboard import (
     collect_system_dashboard_status,
 )
+from application.production_security import (
+    ApplicationBoundaryMiddleware,
+    application_host,
+    application_port,
+    require_internal_access,
+)
 
 from presentation.content_control_presenter import (
     render_content_control,
@@ -99,9 +106,9 @@ APP_TITLE = "DexSato V1"
 
 APP_VERSION = "1.0.0"
 
-HOST = "127.0.0.1"
+HOST = application_host()
 
-PORT = 8000
+PORT = application_port()
 
 
 app = FastAPI(
@@ -110,6 +117,8 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
+
+app.add_middleware(ApplicationBoundaryMiddleware)
 
 app.mount(
     "/static",
@@ -371,6 +380,7 @@ async def solana_discovery_jupiter_execute(
 @app.get(
     "/admin/system",
     response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_access)],
 )
 def admin_system() -> str:
     """Display the internal operations console without running a scan."""
@@ -459,6 +469,7 @@ def market_quote_api(token: str) -> dict[str, object]:
 @app.get(
     "/content-control",
     response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_access)],
 )
 def content_control(request: Request) -> str:
     """Display the private founder Content Control Center."""
@@ -477,7 +488,7 @@ def content_control(request: Request) -> str:
     )
 
 
-@app.post("/content-control/login")
+@app.post("/content-control/login", dependencies=[Depends(require_internal_access)])
 async def content_control_login(request: Request) -> JSONResponse:
     """Create a signed founder session after password verification."""
     if not content_control_configured():
@@ -505,7 +516,7 @@ async def content_control_login(request: Request) -> JSONResponse:
     return response
 
 
-@app.post("/content-control/logout")
+@app.post("/content-control/logout", dependencies=[Depends(require_internal_access)])
 def content_control_logout() -> JSONResponse:
     """Clear the founder Content Control Center session."""
     response = JSONResponse({"status": "ok"})
@@ -513,7 +524,7 @@ def content_control_logout() -> JSONResponse:
     return response
 
 
-@app.post("/content-control/generate")
+@app.post("/content-control/generate", dependencies=[Depends(require_internal_access)])
 async def content_control_generate(request: Request) -> dict[str, object]:
     """Generate one editable X draft from existing DexSato snapshot facts."""
     if not _content_session_valid(request):
@@ -556,6 +567,7 @@ async def content_control_generate(request: Request) -> dict[str, object]:
 
 @app.get(
     "/api/dashboard",
+    dependencies=[Depends(require_internal_access)],
 )
 def dashboard_api() -> dict[str, object]:
     """
@@ -581,6 +593,7 @@ def dashboard_api() -> dict[str, object]:
 
 @app.get(
     "/api/system-status",
+    dependencies=[Depends(require_internal_access)],
 )
 def system_status_api() -> dict[str, object]:
     """
@@ -592,6 +605,7 @@ def system_status_api() -> dict[str, object]:
 
 @app.post(
     "/telegram/send",
+    dependencies=[Depends(require_internal_access)],
 )
 def telegram_send() -> dict[str, object]:
     """
