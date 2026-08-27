@@ -64,8 +64,14 @@ def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     price = escape(_usd(candidate.get("price_usd")))
     liquidity = escape(_usd(candidate.get("liquidity_usd")))
     volume = escape(_usd(candidate.get("volume_24h_usd")))
+    try:
+        change_value = float(candidate.get("change_24h"))
+        change = f"{change_value:+.2f}%"
+        change_class = "up" if change_value >= 0 else "down"
+    except (TypeError, ValueError):
+        change, change_class = "Unavailable", ""
     age = escape(str(candidate.get("pair_age") or "Unavailable"))
-    why_now = escape(_why_now(candidate))
+    observation = "Currently qualified" if candidate.get("currently_qualified") is True else "Previously qualified"
     source = (
         f'<a class="inspect-link" href="/discovery/solana/{quote(address_raw, safe="")}">'
         'Open Analysis &rarr;</a>'
@@ -74,11 +80,11 @@ def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
         f'<article class="candidate-row candidate-row-v32" data-token-address="{address}">'
         f'<div class="token-cell compact-token"><span class="rank">{rank:02d}</span><div>'
         f'<strong>{symbol} / {quote_symbol}</strong><span>{name}</span><small>{dex} / exact pool</small></div></div>'
-        f'<div class="feed-value"><span>Price</span><strong>{price}</strong></div>'
+        f'<div class="feed-value"><span>Price / 24h</span><strong>{price}</strong><small class="{change_class}">{escape(change)}</small></div>'
         f'<div class="feed-value"><span>Liquidity</span><strong>{liquidity}</strong></div>'
         f'<div class="feed-value"><span>24h Vol</span><strong>{volume}</strong></div>'
         f'<div class="feed-value"><span>Age</span><strong>{age}</strong></div>'
-        f'<div class="why-now"><span>Why now</span><strong><i class="why-dot" aria-hidden="true"></i>{why_now}</strong></div>'
+        f'<div class="why-now"><span>Observation</span><strong><i class="why-dot" aria-hidden="true"></i>{observation}</strong></div>'
         f'<div class="feed-action">{source}</div></article>'
     )
 
@@ -101,17 +107,69 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     status_label = str(data.get("collector_status") or "Prototype state")
     candidates = data.get("candidates") if isinstance(data.get("candidates"), list) else []
     qualified = str(data.get("qualified_candidates")) if data.get("qualified_candidates") is not None else "—"
+    view = str(data.get("view") or "qualified")
+    page_number = int(data.get("page") or 1)
+    page_size = int(data.get("page_size") or 25)
+    page_count = int(data.get("page_count") or 1)
+    qualified_total = str(data.get("qualified_total", qualified))
+    recent_total = str(data.get("recent_total", "—"))
+    archive_total = str(data.get("archive_total", "—"))
+    search_query = str(data.get("search_query") or "")
+    search_counts = data.get("search_counts") if isinstance(data.get("search_counts"), dict) else {}
+    tab_counts = {
+        "qualified": str(search_counts.get("qualified", qualified_total)),
+        "recent": str(search_counts.get("recent", recent_total)),
+        "archive": str(search_counts.get("archive", archive_total)),
+    }
+    query_suffix = f'&q={quote(search_query)}' if search_query else ""
+    offset = (page_number - 1) * page_size
     candidate_rows = "".join(
         _candidate_row(item, rank)
-        for rank, item in enumerate((item for item in candidates if isinstance(item, dict)), start=1)
+        for rank, item in enumerate((item for item in candidates if isinstance(item, dict)), start=offset + 1)
     )
+    tab_labels = (("qualified", "Qualified Now", tab_counts["qualified"]), ("recent", "Recent Discoveries", tab_counts["recent"]), ("archive", "Full Archive", tab_counts["archive"]))
+    tabs = "".join(
+        f'<a class="feed-tab{" active" if key == view else ""}" href="/discovery/solana?view={key}&page=1{query_suffix}">{label}<b>{escape(count)}</b></a>'
+        for key, label, count in tab_labels
+    )
+    previous_link = f'/discovery/solana?view={quote(view)}&page={page_number - 1}{query_suffix}' if page_number > 1 else ""
+    next_link = f'/discovery/solana?view={quote(view)}&page={page_number + 1}{query_suffix}' if page_number < page_count else ""
+    pagination = (
+        '<nav class="pagination" aria-label="Discovery pages">'
+        + (f'<a href="{previous_link}">← Previous</a>' if previous_link else '<span>← Previous</span>')
+        + f'<strong>Page {page_number} of {page_count}</strong>'
+        + (f'<a href="{next_link}">Next →</a>' if next_link else '<span>Next →</span>')
+        + '</nav>'
+    )
+    dex_ids = data.get("observed_dex_ids") if isinstance(data.get("observed_dex_ids"), list) else []
+    dex_badges = "".join(f'<span>{escape(str(dex))}</span>' for dex in dex_ids) or '<em>None currently observed</em>'
+    txns = data.get("observed_txns_24h")
+    txns_label = f'{int(txns):,}' if isinstance(txns, (int, float)) else "Unavailable"
+    observed_volume_raw = data.get("observed_volume_24h_usd")
+    observed_volume = "$0.00" if observed_volume_raw == 0 else _usd(observed_volume_raw)
+    sort_label = {"qualified": "Last observed", "recent": "First qualified", "archive": "Last qualified"}.get(view, "Last qualified")
+    clear_search = f'<a class="clear-search" href="/discovery/solana?view={quote(view)}&page=1">Clear</a>' if search_query else ""
+    if search_query:
+        empty_heading = "No matching token found."
+        empty_copy = f'No {view} observation matches “{escape(search_query)}”. Try a symbol, token name, contract, pair address or DEX.'
+        empty_actions = f'<a class="primary-link" href="/discovery/solana?view={quote(view)}&page=1">Clear search</a>'
+    elif view == "qualified":
+        empty_heading = "No token currently meets all qualification requirements."
+        empty_copy = "The current scan found no token that passes every identity, liquidity, activity and freshness check. Previously qualified observations remain available."
+        empty_actions = ('<a class="primary-link" href="/discovery/solana?view=recent&page=1">View Recent Discoveries</a>'
+                         '<a class="secondary-link" href="/discovery/solana?view=archive&page=1">Open Full Archive</a>')
+    elif view == "recent":
+        empty_heading = "No new discovery was first qualified in the last 24 hours."
+        empty_copy = "Older observations remain available in the persistent archive."
+        empty_actions = '<a class="primary-link" href="/discovery/solana?view=archive&page=1">Open Full Archive</a>'
+    else:
+        empty_heading = "The discovery archive is empty."
+        empty_copy = "Records will appear after a token first passes every qualification requirement."
+        empty_actions = '<a class="primary-link" href="/">Back to Markets</a>'
     empty_state = (
         '<div class="empty-state"><div class="empty-icon" aria-hidden="true">◎</div><div>'
-        '<h3>Solana Discovery is preparing its first validated feed.</h3>'
-        '<p>DexSato is validating token identity, exact-pool liquidity, market activity and freshness '
-        'before showing candidates. No discovery tokens are available yet.</p>'
-        '<div class="empty-actions"><a class="primary-link" href="/">Back to Markets</a>'
-        '<a class="secondary-link" href="#qualification-rules">Review qualification rules</a></div></div></div>'
+        f'<h3>{empty_heading}</h3><p>{empty_copy}</p>'
+        f'<div class="empty-actions">{empty_actions}</div></div></div>'
     )
     candidate_feed = f'<div class="candidate-list">{candidate_rows}</div>' if candidate_rows else empty_state
     page = """<!doctype html>
@@ -857,23 +915,22 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     }
     @media(max-width:1180px){.workspace{grid-template-columns:1fr}.intel-rail{grid-template-columns:repeat(3,1fr)}.candidate-row{grid-template-columns:minmax(170px,.8fr) minmax(310px,1.25fr) minmax(240px,1fr)}.action-cell{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-end;border-top:1px solid var(--line);border-right:0;padding:10px 17px}.feed-tools{align-items:flex-end;flex-direction:column}}
     @media(max-width:820px){.shell{width:min(100% - 22px,1420px);padding-top:11px}.topbar{align-items:flex-start}.terminal-name span{display:none}.terminal-head{grid-template-columns:1fr;align-items:start;padding-top:22px}.terminal-head h1{font-size:29px}.status-cluster{width:100%}.status-pill{flex:1;min-width:0}.metrics{grid-template-columns:repeat(2,1fr)}.metric:nth-child(2){border-right:0}.metric:nth-child(-n+2){border-bottom:1px solid var(--line)}.workspace{display:block}.intel-rail{grid-template-columns:1fr;margin-top:12px}.feed-head{align-items:flex-start;flex-direction:column}.feed-tools{width:100%;align-items:stretch}.filters{overflow-x:auto;scrollbar-width:none}.search{width:100%}.candidate-row{grid-template-columns:1fr}.token-cell,.market-cell,.evidence-cell,.action-cell{border-right:0;border-bottom:1px solid var(--line)}.market-cell{grid-template-columns:repeat(2,1fr)}.market-cell>div{padding:5px 0}.action-cell{grid-column:auto;justify-content:flex-start;border-top:0;border-bottom:0}.empty-state{grid-template-columns:1fr}footer{flex-direction:column}}
+    .feed-tabs{display:flex;gap:6px;padding:12px 18px;border-bottom:1px solid var(--line);overflow:auto}.feed-tab{display:flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid var(--line2);border-radius:5px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:800;white-space:nowrap}.feed-tab b{color:var(--text);font-family:var(--font-mono)}.feed-tab.active{border-color:var(--blue);color:var(--text);background:var(--panel2)}.page-summary{color:var(--muted);font:11px var(--font-mono)}.pagination{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-top:1px solid var(--line)}.pagination a,.pagination span{min-width:86px;color:var(--blue);font-size:11px;text-decoration:none}.pagination span{color:var(--faint)}.pagination strong{font:11px var(--font-mono)}.network-mark{display:flex;align-items:center;gap:10px;margin-top:14px;padding:12px;border:1px solid var(--line)}.network-mark svg{width:30px;fill:var(--purple)}.network-mark strong,.network-mark small{display:block}.network-mark small{color:var(--muted)}.dex-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.dex-badges span{padding:5px 7px;border:1px solid var(--line2);border-radius:999px;color:var(--text);font:10px var(--font-mono)}.dex-badges em{color:var(--muted);font-size:11px}.coming-soon{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.coming-soon span{display:block;color:var(--amber);font:9px var(--font-mono);text-transform:uppercase}.coming-soon strong{display:block;margin-top:3px}.feed-value small{display:block;margin-top:4px;font:10px var(--font-mono)}.feed-value small.up{color:var(--green)}.feed-value small.down{color:var(--risk)}
     @media(max-width:480px){.shell{width:calc(100% - 16px)}.brand img{width:112px}.terminal-name strong{font-size:11px}.top-actions{margin-left:auto}.back-link{padding:7px 8px;font-size:10px}.theme-option{width:29px;height:29px}.terminal-head h1{font-size:25px}.terminal-head p{font-size:13px}.status-cluster{display:grid;grid-template-columns:1fr 1fr}.status-pill{padding:9px}.metric{padding:13px}.metric strong{font-size:19px}.feed-head{padding:15px}.filters button{font-size:9px}.token-cell,.market-cell,.evidence-cell,.action-cell{padding:14px}.market-cell{gap:7px}.candidate-row{border-left:2px solid var(--purple)}.action-cell{align-items:stretch;flex-direction:column}.inspect-link{text-align:center}.rail-card{padding:15px}.empty-state{margin:12px;padding:18px}.empty-actions{display:grid}.primary-link,.secondary-link{text-align:center}}
+    .terminal-search{display:flex;align-items:center;gap:7px}.terminal-search input{width:290px;padding:9px 11px;border:1px solid var(--line2);border-radius:5px;background:var(--panel2);color:var(--text);font-size:11px}.terminal-search button,.clear-search{padding:9px 11px;border:1px solid var(--blue);border-radius:5px;background:transparent;color:var(--blue);font-size:10px;font-weight:850;text-decoration:none;cursor:pointer}.sort-note{display:flex;justify-content:space-between;gap:12px;padding:9px 18px;border-bottom:1px solid var(--line);color:var(--muted);font:10px var(--font-mono)}
   </style>
 </head>
 <body><main class="shell">
   <header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><div class="terminal-name"><strong>Solana Discovery</strong><span>Market intelligence terminal</span></div></div><div class="top-actions"><a class="back-link" href="/">← Markets</a><div class="theme-switcher" role="group" aria-label="Discovery theme"><button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market intelligence theme" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button></div></div></header>
   <section class="terminal-head"><div><span class="eyebrow">Evidence-led Solana intelligence</span><h1>Solana Discovery Terminal</h1><p>Track emerging tokens through verified pool identity, observable liquidity and recent market activity. Discovery rank reflects activity, not safety.</p></div><div class="status-cluster"><div class="status-pill live"><span>Feed status</span><strong>__STATUS_HEADING__</strong><small>__STATUS_LABEL__</small></div><div class="status-pill"><span>Last update</span><strong>__UPDATED__</strong><small>Collector telemetry</small></div></div></section>
   <section class="metrics" aria-label="Discovery summary">
-  <div class="metric metric-observed"><span>Tokens observed</span><strong>__TOKENS__</strong><small>Collector universe</small><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span></div>
-  <div class="metric metric-resolved"><span>Pairs resolved</span><strong>__PAIRS__</strong><small>Identity mapping</small><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="18" cy="17" r="2.5"/><path d="M8.5 11l7-3M8.5 13l7 3"/></svg></span></div>
-  <div class="metric metric-qualified"><span>Qualified now</span><strong>__QUALIFIED__</strong><small>Exact-pool qualification</small><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.8-2.8 8.1-7 10-4.2-1.9-7-5.2-7-10V6l7-3z"/><path d="M8.5 12l2.2 2.2 4.8-5"/></svg></span></div>
-  <div class="metric metric-network"><span>Network</span><strong>SOL</strong><small>Experimental discovery</small><span class="metric-icon sol-icon" aria-hidden="true"><svg viewBox="0 0 30 24"><path d="M6 3h17l3 3H9z"/><path d="M9 10h17l-3 3H6z"/><path d="M6 17h17l3 3H9z"/></svg></span></div>
+  <div class="metric metric-observed"><span>Qualified Now</span><strong>__QUALIFIED_TOTAL__</strong><small>Current scan</small></div>
+  <div class="metric metric-resolved"><span>Recent Discoveries</span><strong>__RECENT_TOTAL__</strong><small>First qualified in 24h</small></div>
+  <div class="metric metric-qualified"><span>Full Archive</span><strong>__ARCHIVE_TOTAL__</strong><small>Never truncated</small></div>
+  <div class="metric metric-network"><span>Collector Freshness</span><strong>__UPDATED__</strong><small>Observed telemetry</small></div>
 </section>
-  <div class="workspace"><section class="feed-panel"><div class="feed-head"><div><span class="eyebrow">Observed market activity</span><h2>Discovery Feed</h2><p>Qualified candidates sorted from the bounded, freshest pool review.</p></div><div class="feed-tools"><input class="search" type="search" placeholder="Search token, symbol, or address" aria-label="Search Solana discovery" disabled><div class="filters" role="group" aria-label="Discovery filters"><button type="button" disabled>All</button><button type="button" disabled>New activity</button><button type="button" disabled>Volume</button><button type="button" disabled>Liquidity</button></div></div></div><div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Why Now</span><span></span></div>__CANDIDATE_FEED__</section>
-  <aside class="intel-rail"><section class="rail-card"><span class="rail-kicker">Discovery status</span><h3>Current qualification</h3><div class="status-detail"><div><span>Observed</span><strong>__TOKENS__</strong></div><div><span>Resolved pools</span><strong>__PAIRS__</strong></div><div><span>Qualified</span><strong>__QUALIFIED__</strong></div><div><span>Updated</span><strong>__UPDATED__</strong></div></div></section>
-  <section id="qualification-rules" class="rail-card"><span class="rail-kicker">Qualification rules</span><h3>A token must pass every check</h3><div class="rule-list"><div class="rule">Solana network identity</div><div class="rule">Exact token and pool match</div><div class="rule">Liquidity at least $5,000</div><div class="rule">24h volume at least $1,000</div><div class="rule">Fresh collector data</div></div></section>
-  <section class="rail-card risk-card"><span class="rail-kicker">Risk notice</span><h3>Pool verification is not token verification</h3><strong>Token security is not independently assessed.</strong><p>Contract controls, holder concentration and rug-pull risk may remain unknown. Inclusion is not an endorsement.</p></section>
-  <section class="rail-card jupiter-card"><span class="rail-kicker">Jupiter execution</span><h3>Planned, not active</h3><span class="jupiter-status">Read-only</span><p>No wallet connection, quote or trade capability is enabled. DexSato does not hold keys or funds.</p></section></aside></div>
+  <div class="workspace"><section class="feed-panel"><div class="feed-head"><div><span class="eyebrow">Observed market activity</span><h2>Discovery Feed</h2><p>Persistent, server-paginated observations. Historical inclusion does not mean current qualification.</p></div><form class="terminal-search" method="get" action="/discovery/solana"><input type="hidden" name="view" value="__VIEW__"><input type="hidden" name="page" value="1"><input type="search" name="q" value="__SEARCH_QUERY__" placeholder="Search token, symbol, contract or DEX" aria-label="Search the discovery archive"><button type="submit">Search</button>__CLEAR_SEARCH__</form></div><nav class="feed-tabs" aria-label="Discovery views">__TABS__</nav><div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div><div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>__CANDIDATE_FEED____PAGINATION__</section>
+  <aside class="intel-rail"><section class="rail-card"><span class="rail-kicker">Network activity</span><h3>Observed qualified pools</h3><div class="network-mark"><svg viewBox="0 0 30 24" aria-hidden="true"><path d="M6 3h17l3 3H9z"/><path d="M9 10h17l-3 3H6z"/><path d="M6 17h17l3 3H9z"/></svg><div><strong>Solana</strong><small>Active network</small></div></div><div class="status-detail"><div><span>Observed 24h Volume</span><strong>__OBSERVED_VOLUME__</strong></div><div><span>Observed 24H Txns</span><strong>__OBSERVED_TXNS__</strong></div></div><span class="rail-kicker">DEX / Swap observed</span><div class="dex-badges">__DEX_BADGES__</div><div class="coming-soon"><span>Coming soon</span><strong>Multiple chain</strong></div></section></aside></div>
   <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>__STATUS_MESSAGE__</span></footer>
 </main><script>
   const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){const value=theme==="plain"?"plain":theme==="intel"?"intel":"current";if(value==="current")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=value;themeOptions.forEach(button=>{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});try{localStorage.setItem("dexsato-theme",value);}catch(error){}}let saved="current";try{saved=localStorage.getItem("dexsato-theme")||"current";}catch(error){}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
@@ -887,4 +944,19 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         .replace("__UPDATED__", escape(updated))
         .replace("__STATUS_LABEL__", escape(status_label))
         .replace("__CANDIDATE_FEED__", candidate_feed)
+        .replace("__QUALIFIED_TOTAL__", escape(qualified_total))
+        .replace("__RECENT_TOTAL__", escape(recent_total))
+        .replace("__ARCHIVE_TOTAL__", escape(archive_total))
+        .replace("__PAGE__", str(page_number))
+        .replace("__PAGE_COUNT__", str(page_count))
+        .replace("__TABS__", tabs)
+        .replace("__PAGINATION__", pagination)
+        .replace("__OBSERVED_VOLUME__", escape(observed_volume))
+        .replace("__OBSERVED_TXNS__", escape(txns_label))
+        .replace("__DEX_BADGES__", dex_badges)
+        .replace("__VIEW__", escape(view, quote=True))
+        .replace("__SEARCH_QUERY__", escape(search_query, quote=True))
+        .replace("__CLEAR_SEARCH__", clear_search)
+        .replace("__VIEW_TOTAL__", str(data.get("view_total", len(candidates))))
+        .replace("__SORT_LABEL__", escape(sort_label))
     )

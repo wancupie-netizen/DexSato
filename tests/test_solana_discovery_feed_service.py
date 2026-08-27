@@ -222,3 +222,30 @@ def test_legacy_v36_json_history_is_migrated_without_deletion(mock_qualify, tmp_
     assert result["candidates"][0]["token_address"] == "legacy-token"
     assert result["candidates"][0]["currently_qualified"] is False
     assert (tmp_path / "discovery_feed_history.json").exists()
+
+
+@patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
+def test_terminal_searches_archive_before_pagination(mock_qualify, tmp_path):
+    qualified = [
+        {"token_address": "ber-mint", "pair_address": "ber-pair", "symbol": "BER", "name": "Ber Coin", "dex_id": "pumpswap"},
+        {"token_address": "other-mint", "pair_address": "other-pair", "symbol": "OTHER", "name": "Other Coin", "dex_id": "raydium"},
+    ]
+    _write_feed_files(tmp_path, {"seed": qualified[0]})
+    mock_qualify.return_value = qualified
+    result = load_solana_discovery_feed(tmp_path, now=NOW, view="archive", query="ber")
+    assert result["search_query"] == "ber"
+    assert result["view_total"] == 1
+    assert [item["token_address"] for item in result["candidates"]] == ["ber-mint"]
+
+
+@patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
+def test_terminal_recent_sort_uses_first_qualified_time(mock_qualify, tmp_path):
+    older = {"token_address": "older", "pair_address": "pair-old", "last_seen_at": "2026-08-22T11:59:00+00:00"}
+    newer = {"token_address": "newer", "pair_address": "pair-new", "last_seen_at": "2026-08-22T11:50:00+00:00"}
+    _write_feed_files(tmp_path, {"seed": older}, "2026-08-22T11:50:00+00:00")
+    mock_qualify.return_value = [older]
+    load_solana_discovery_feed(tmp_path, now=NOW)
+    _write_feed_files(tmp_path, {"seed": newer}, "2026-08-22T11:59:00+00:00")
+    mock_qualify.return_value = [newer]
+    result = load_solana_discovery_feed(tmp_path, now=NOW, view="recent")
+    assert [item["token_address"] for item in result["candidates"]] == ["newer", "older"]

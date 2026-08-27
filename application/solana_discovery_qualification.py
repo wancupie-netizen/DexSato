@@ -121,6 +121,10 @@ def qualify_candidate(
     volume = _number((pair.get("volume") or {}).get("h24"))
     price = _number(pair.get("priceUsd"))
     change_24h = _signed_number((pair.get("priceChange") or {}).get("h24"))
+    txns = pair.get("txns") if isinstance(pair.get("txns"), dict) else {}
+    h24_txns = txns.get("h24") if isinstance(txns.get("h24"), dict) else {}
+    buys_24h = _number(h24_txns.get("buys"))
+    sells_24h = _number(h24_txns.get("sells"))
     if liquidity is None or volume is None or price is None:
         return None
     if liquidity < MIN_LIQUIDITY_USD or volume < MIN_VOLUME_24H_USD:
@@ -136,6 +140,11 @@ def qualify_candidate(
         "change_24h": change_24h,
         "liquidity_usd": liquidity,
         "volume_24h_usd": volume,
+        "txns_24h": (
+            int(buys_24h + sells_24h)
+            if buys_24h is not None and sells_24h is not None
+            else None
+        ),
         "pair_age": _pair_age_label(pair.get("pairCreatedAt"), now),
         "pair_age_hours": _pair_age_hours(pair.get("pairCreatedAt"), now),
         "evidence": "Verified Solana pool with observable liquidity and 24h activity.",

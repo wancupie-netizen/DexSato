@@ -197,9 +197,11 @@ def founder_home() -> str:
     "/discovery/solana",
     response_class=HTMLResponse,
 )
-def solana_discovery() -> str:
+def solana_discovery(view: str = "qualified", page: int = 1, q: str = "") -> str:
     """Display the read-only Solana Discovery D1 prototype."""
-    return render_solana_discovery_page(load_solana_discovery_feed())
+    return render_solana_discovery_page(
+        load_solana_discovery_feed(view=view, page=page, page_size=25, query=q)
+    )
 
 
 @app.get(

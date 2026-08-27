@@ -5,7 +5,7 @@ from application.solana_discovery_qualification import qualify_candidate
 
 NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
 OBSERVED = {"token_address": "token-one", "pair_address": "pool-one", "symbol": "ONE", "name": "One", "last_seen_at": "2026-08-22T11:55:00+00:00"}
-PAIR = {"chainId": "solana", "pairAddress": "pool-one", "dexId": "raydium", "baseToken": {"address": "token-one", "symbol": "ONE", "name": "One"}, "quoteToken": {"symbol": "SOL"}, "priceUsd": "0.25", "priceChange": {"h24": "-12.75"}, "liquidity": {"usd": 12000}, "volume": {"h24": 4500}, "pairCreatedAt": 1787396400000}
+PAIR = {"chainId": "solana", "pairAddress": "pool-one", "dexId": "raydium", "baseToken": {"address": "token-one", "symbol": "ONE", "name": "One"}, "quoteToken": {"symbol": "SOL"}, "priceUsd": "0.25", "priceChange": {"h24": "-12.75"}, "liquidity": {"usd": 12000}, "volume": {"h24": 4500}, "txns": {"h24": {"buys": 125, "sells": 75}}, "pairCreatedAt": 1787396400000}
 
 
 def test_qualifies_identity_matched_liquid_active_pool():
@@ -14,6 +14,7 @@ def test_qualifies_identity_matched_liquid_active_pool():
     assert result["liquidity_usd"] == 12000
     assert result["volume_24h_usd"] == 4500
     assert result["change_24h"] == -12.75
+    assert result["txns_24h"] == 200
     assert "not independently verified" in result["risk_label"]
 
 

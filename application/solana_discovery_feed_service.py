@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +15,8 @@ DEFAULT_OUTPUT_DIR = Path("output/research/solana-discovery-phase0-seven-day")
 DISCOVERY_HISTORY_FILE = "discovery_feed_history.json"  # legacy v3.6 migration source
 DISCOVERY_ARCHIVE_DB = "discovery_archive.sqlite3"
 DISCOVERY_FEED_LIMIT = 100
+TERMINAL_PAGE_SIZE = 25
+TERMINAL_VIEWS = {"qualified", "recent", "archive"}
 
 
 def _read_object(path: Path) -> dict[str, Any]:
@@ -218,10 +220,151 @@ def _update_archive(
 
     return feed, archive_total
 
+
+def _archive_record(row: tuple[Any, ...]) -> dict[str, Any] | None:
+    payload_json, first_at, last_at, last_seen_at, current_flag = row
+    try:
+        item = json.loads(payload_json)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(item, dict):
+        return None
+    record = dict(item)
+    record["first_qualified_at"] = first_at
+    record["last_qualified_at"] = last_at
+    if last_seen_at:
+        record["last_seen_at"] = last_seen_at
+    record["currently_qualified"] = bool(current_flag)
+    return record
+
+
+def _terminal_archive_view(
+    directory: Path,
+    *,
+    view: str,
+    page: int,
+    page_size: int,
+    now: datetime,
+    query: str = "",
+) -> dict[str, Any]:
+    selected_view = view if view in TERMINAL_VIEWS else "qualified"
+    safe_size = min(100, max(1, _integer(page_size) or TERMINAL_PAGE_SIZE))
+    requested_page = max(1, _integer(page) or 1)
+    recent_cutoff = (now.astimezone(timezone.utc) - timedelta(hours=24)).isoformat()
+    search_query = str(query or "").strip()[:120]
+    clauses = {
+        "qualified": ("currently_qualified = 1", ()),
+        "recent": ("datetime(first_qualified_at) >= datetime(?)", (recent_cutoff,)),
+        "archive": ("1 = 1", ()),
+    }
+    where, parameters = clauses[selected_view]
+    search_sql = ""
+    search_parameters: tuple[Any, ...] = ()
+    if search_query:
+        escaped_query = search_query.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped_query}%"
+        search_sql = """ AND (
+            LOWER(token_address) LIKE ? ESCAPE '\\' OR
+            LOWER(pair_address) LIKE ? ESCAPE '\\' OR
+            LOWER(COALESCE(json_extract(payload_json, '$.symbol'), '')) LIKE ? ESCAPE '\\' OR
+            LOWER(COALESCE(json_extract(payload_json, '$.name'), '')) LIKE ? ESCAPE '\\' OR
+            LOWER(COALESCE(json_extract(payload_json, '$.dex_id'), '')) LIKE ? ESCAPE '\\'
+        )"""
+        search_parameters = (pattern,) * 5
+    orders = {
+        "qualified": "COALESCE(last_seen_at, '') DESC, last_qualified_at DESC, token_address ASC",
+        "recent": "first_qualified_at DESC, token_address ASC",
+        "archive": "last_qualified_at DESC, COALESCE(last_seen_at, '') DESC, token_address ASC",
+    }
+
+    with _archive_connection(directory) as connection:
+        qualified_total = int(connection.execute(
+            "SELECT COUNT(*) FROM discoveries WHERE currently_qualified = 1"
+        ).fetchone()[0])
+        recent_total = int(connection.execute(
+            "SELECT COUNT(*) FROM discoveries WHERE datetime(first_qualified_at) >= datetime(?)", (recent_cutoff,)
+        ).fetchone()[0])
+        archive_total = int(connection.execute("SELECT COUNT(*) FROM discoveries").fetchone()[0])
+        filtered_counts = {}
+        for key, (count_where, count_parameters) in clauses.items():
+            filtered_counts[key] = int(connection.execute(
+                f"SELECT COUNT(*) FROM discoveries WHERE {count_where}{search_sql}",
+                (*count_parameters, *search_parameters),
+            ).fetchone()[0])
+        view_total = filtered_counts[selected_view]
+        page_count = max(1, (view_total + safe_size - 1) // safe_size)
+        current_page = min(requested_page, page_count)
+        rows = connection.execute(
+            f"""
+            SELECT payload_json, first_qualified_at, last_qualified_at,
+                   last_seen_at, currently_qualified
+            FROM discoveries WHERE {where}{search_sql}
+            ORDER BY {orders[selected_view]}
+            LIMIT ? OFFSET ?
+            """,
+            (*parameters, *search_parameters, safe_size, (current_page - 1) * safe_size),
+        ).fetchall()
+        current_rows = connection.execute(
+            "SELECT payload_json FROM discoveries WHERE currently_qualified = 1"
+        ).fetchall()
+
+    candidates = [record for row in rows if (record := _archive_record(row)) is not None]
+    current_payloads: list[dict[str, Any]] = []
+    for (payload_json,) in current_rows:
+        try:
+            payload = json.loads(payload_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            current_payloads.append(payload)
+
+    def complete_sum(field: str) -> float | int | None:
+        if qualified_total == 0:
+            return 0
+        values: list[float] = []
+        for payload in current_payloads:
+            try:
+                value = float(payload.get(field))
+            except (TypeError, ValueError):
+                return None
+            if value < 0:
+                return None
+            values.append(value)
+        if not values:
+            return None
+        total = sum(values)
+        return int(total) if field == "txns_24h" else total
+
+    dex_ids = sorted({
+        str(payload.get("dex_id") or "").strip()
+        for payload in current_payloads
+        if str(payload.get("dex_id") or "").strip()
+    }, key=str.lower)
+    return {
+        "candidates": candidates,
+        "view": selected_view,
+        "page": current_page,
+        "page_size": safe_size,
+        "page_count": page_count,
+        "view_total": view_total,
+        "search_query": search_query,
+        "search_counts": filtered_counts,
+        "qualified_total": qualified_total,
+        "recent_total": recent_total,
+        "archive_total": archive_total,
+        "observed_volume_24h_usd": complete_sum("volume_24h_usd"),
+        "observed_txns_24h": complete_sum("txns_24h"),
+        "observed_dex_ids": dex_ids,
+    }
+
 def load_solana_discovery_feed(
     output_dir: Path | str = DEFAULT_OUTPUT_DIR,
     *,
     now: datetime | None = None,
+    view: str | None = None,
+    page: int = 1,
+    page_size: int = TERMINAL_PAGE_SIZE,
+    query: str = "",
 ) -> dict[str, Any]:
     """Return a conservative public read model without exposing raw candidates."""
     directory = Path(output_dir)
@@ -261,6 +404,12 @@ def load_solana_discovery_feed(
         qualified,
         qualified_at=qualified_at,
     )
+    terminal_data = (
+        _terminal_archive_view(
+            directory, view=view, page=page, page_size=page_size, now=current_time, query=query
+        )
+        if view is not None else {}
+    )
     return {
         "connected": True,
         "fresh": fresh,
@@ -269,7 +418,7 @@ def load_solana_discovery_feed(
         "pair_resolved": _integer(metrics.get("pair_resolved")),
         "pair_ready_percent": metrics.get("pair_ready_percent"),
         "qualified_candidates": len(qualified),
-        "candidates": archive_feed,
+        "candidates": terminal_data.get("candidates", archive_feed),
         "archive_total": archive_total,
         "feed_limit": DISCOVERY_FEED_LIMIT,
         "updated_label": updated_label,
@@ -281,4 +430,5 @@ def load_solana_discovery_feed(
             "required identity, liquidity, activity and freshness checks. Previously qualified "
             "discoveries remain in the persistent archive."
         ),
+        **terminal_data,
     }
