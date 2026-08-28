@@ -3,6 +3,7 @@ Tests for DexSato V1 FastAPI Application.
 """
 
 import asyncio
+import sqlite3
 import threading
 import requests
 from unittest.mock import AsyncMock, Mock, patch
@@ -459,16 +460,22 @@ def test_should_return_healthy_status():
 def test_readiness_reports_required_local_components(tmp_path):
     from application import solana_discovery_feed_service as feed_service
 
-    (tmp_path / "state.json").write_text("{}", encoding="utf-8")
-    (tmp_path / "status.json").write_text("{}", encoding="utf-8")
-    (tmp_path / feed_service.DISCOVERY_ARCHIVE_DB).write_bytes(b"sqlite")
+    (tmp_path / "state.json").write_text('{"candidates": {}}', encoding="utf-8")
+    (tmp_path / "status.json").write_text('{"metrics": {}}', encoding="utf-8")
+    with sqlite3.connect(tmp_path / feed_service.DISCOVERY_ARCHIVE_DB) as connection:
+        connection.execute("CREATE TABLE discoveries (token_address TEXT PRIMARY KEY)")
 
     with patch.object(feed_service, "DEFAULT_OUTPUT_DIR", tmp_path):
         ready, checks = readiness_status()
         response = health_readiness()
 
     assert ready is True
-    assert checks == {"static": "ready", "collector": "ready", "archive": "ready"}
+    assert checks == {
+        "static": "ready",
+        "collector": "ready",
+        "archive": "ready",
+        "configuration": "ready",
+    }
     assert response.status_code == 200
 
 
@@ -482,7 +489,23 @@ def test_readiness_returns_503_when_discovery_storage_is_missing(tmp_path):
     assert ready is False
     assert checks["collector"] == "unavailable"
     assert checks["archive"] == "unavailable"
+    assert checks["configuration"] == "ready"
     assert response.status_code == 503
+
+
+def test_readiness_rejects_corrupt_collector_and_archive_files(tmp_path):
+    from application import solana_discovery_feed_service as feed_service
+
+    (tmp_path / "state.json").write_text("not-json", encoding="utf-8")
+    (tmp_path / "status.json").write_text('{"metrics": {}}', encoding="utf-8")
+    (tmp_path / feed_service.DISCOVERY_ARCHIVE_DB).write_bytes(b"not-sqlite")
+
+    with patch.object(feed_service, "DEFAULT_OUTPUT_DIR", tmp_path):
+        ready, checks = readiness_status()
+
+    assert ready is False
+    assert checks["collector"] == "unavailable"
+    assert checks["archive"] == "unavailable"
 
 
 def test_should_use_local_server_defaults():

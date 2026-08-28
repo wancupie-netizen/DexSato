@@ -88,6 +88,12 @@ from application.production_security import (
     trusted_proxy_headers,
 )
 from application.discovery_storage import discovery_storage_dir, validate_production_runtime
+from application.production_readiness import (
+    collector_storage_ready,
+    discovery_archive_ready,
+    production_configuration_ready,
+    validate_production_configuration,
+)
 
 from presentation.content_control_presenter import (
     render_content_control,
@@ -123,6 +129,8 @@ PORT = application_port()
 configure_production_logging()
 
 validate_production_runtime()
+
+validate_production_configuration()
 
 
 app = FastAPI(
@@ -690,15 +698,14 @@ def readiness_status() -> tuple[bool, dict[str, str]]:
     project_root = Path(__file__).resolve().parents[1]
     static_ready = (project_root / "static").is_dir()
     discovery_dir = discovery_storage_dir(DEFAULT_OUTPUT_DIR)
-    collector_ready = (
-        (discovery_dir / "state.json").is_file()
-        and (discovery_dir / "status.json").is_file()
-    )
-    archive_ready = (discovery_dir / DISCOVERY_ARCHIVE_DB).is_file()
+    collector_ready = collector_storage_ready(discovery_dir)
+    archive_ready = discovery_archive_ready(discovery_dir, DISCOVERY_ARCHIVE_DB)
+    configuration_ready = production_configuration_ready()
     checks = {
         "static": "ready" if static_ready else "unavailable",
         "collector": "ready" if collector_ready else "unavailable",
         "archive": "ready" if archive_ready else "unavailable",
+        "configuration": "ready" if configuration_ready else "unavailable",
     }
     return all(value == "ready" for value in checks.values()), checks
 
