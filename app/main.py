@@ -87,6 +87,7 @@ from application.production_security import (
     safe_jupiter_error_detail,
     trusted_proxy_headers,
 )
+from application.discovery_storage import discovery_storage_dir, validate_production_runtime
 
 from presentation.content_control_presenter import (
     render_content_control,
@@ -120,6 +121,8 @@ HOST = application_host()
 PORT = application_port()
 
 configure_production_logging()
+
+validate_production_runtime()
 
 
 app = FastAPI(
@@ -686,7 +689,7 @@ def readiness_status() -> tuple[bool, dict[str, str]]:
 
     project_root = Path(__file__).resolve().parents[1]
     static_ready = (project_root / "static").is_dir()
-    discovery_dir = project_root / DEFAULT_OUTPUT_DIR
+    discovery_dir = discovery_storage_dir(DEFAULT_OUTPUT_DIR)
     collector_ready = (
         (discovery_dir / "state.json").is_file()
         and (discovery_dir / "status.json").is_file()

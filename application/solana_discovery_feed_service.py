@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from application.solana_discovery_qualification import qualify_discovery_candidates
+from application.discovery_storage import discovery_storage_dir
 
 
 DEFAULT_OUTPUT_DIR = Path("output/research/solana-discovery-phase0-seven-day")
@@ -271,13 +272,13 @@ def _archive_record(row: tuple[Any, ...]) -> dict[str, Any] | None:
 
 def load_solana_discovery_record(
     token_address: str,
-    output_dir: Path | str = DEFAULT_OUTPUT_DIR,
+    output_dir: Path | str | None = None,
 ) -> dict[str, Any] | None:
     """Load one persistent observation by exact mint without front-page limits."""
     token = str(token_address or "").strip()
     if not token or len(token) > 80:
         return None
-    directory = Path(output_dir)
+    directory = Path(output_dir) if output_dir is not None else discovery_storage_dir(DEFAULT_OUTPUT_DIR)
     if not (directory / DISCOVERY_ARCHIVE_DB).exists():
         return None
     with _archive_connection(directory) as connection:
@@ -412,7 +413,7 @@ def _terminal_archive_view(
     }
 
 def load_solana_discovery_feed(
-    output_dir: Path | str = DEFAULT_OUTPUT_DIR,
+    output_dir: Path | str | None = None,
     *,
     now: datetime | None = None,
     view: str | None = None,
@@ -421,7 +422,7 @@ def load_solana_discovery_feed(
     query: str = "",
 ) -> dict[str, Any]:
     """Return a conservative public read model without exposing raw candidates."""
-    directory = Path(output_dir)
+    directory = Path(output_dir) if output_dir is not None else discovery_storage_dir(DEFAULT_OUTPUT_DIR)
     current_time = now or datetime.now(timezone.utc)
     disconnected = {
         "connected": False,

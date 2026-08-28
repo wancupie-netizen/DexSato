@@ -29,6 +29,14 @@ def test_fails_closed_when_output_is_missing(tmp_path):
     assert result["tokens_observed"] is None
 
 
+def test_default_feed_uses_configured_persistent_storage(tmp_path):
+    _write_feed_files(tmp_path, {})
+    with patch.dict("os.environ", {"DEXSATO_DISCOVERY_STORAGE_DIR": str(tmp_path)}, clear=True):
+        result = load_solana_discovery_feed(now=NOW)
+    assert result["connected"] is True
+    assert (tmp_path / "discovery_archive.sqlite3").is_file()
+
+
 def test_fails_closed_for_unexpected_candidate_schema(tmp_path):
     (tmp_path / "state.json").write_text('{"candidates": []}', encoding="utf-8")
     (tmp_path / "status.json").write_text('{"metrics": {}}', encoding="utf-8")
