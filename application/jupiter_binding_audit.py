@@ -12,6 +12,7 @@ from application.jupiter_pool_validation import (
     PANCAKE, JUPITER, TOKEN, WSOL, BindingRejected, require, pancake_call,
     validate_pancake_snapshot, minimum_arithmetic, make_probe, probe_result,
 )
+from application.jupiter_typed_pool_binding import audit_typed_calls, validate_route_links
 
 
 def audit(args):
@@ -46,8 +47,20 @@ def audit(args):
     require(len(groups) == 1, 'ROUTE_CPI_GROUP_REQUIRED')
     inner = groups[0]['instructions']
     roles = route['accounts']; known = {a['address'] for a in resolved['accounts']}
+    def fetch_typed(addresses, minimum_slot):
+        return _rpc(endpoint, 'getMultipleAccounts', [addresses, {
+            'encoding': 'base64', 'commitment': 'finalized', 'minContextSlot': minimum_slot}])
+    typed, covered = audit_typed_calls(inner, known, roles['programAuthority']['address'],
+                                      summary['simulation_slot'], fetch_typed)
+    try:
+        typed_links = validate_route_links(typed, roles['programSourceTokenAccount']['address'],
+                                          roles['programDestinationTokenAccount']['address'])
+    except BindingRejected as exc:
+        typed_links = {'status': 'TYPED_ROUTE_LINKS_NOT_MATCHED', 'reason': str(exc), 'execution_ready': False}
     matches = []; unsupported = set()
-    for ix in inner:
+    for ordinal, ix in enumerate(inner):
+        if ordinal in covered:
+            continue
         program = ix.get('programId')
         if program not in (PANCAKE, JUPITER, TOKEN):
             unsupported.add(program if isinstance(program, str) and program in known else 'UNRESOLVED_PROGRAM')
@@ -75,8 +88,12 @@ def audit(args):
             'negative_probe': {**probe_summary, 'mutation': mutation},
             'baseline_simulation': summary, 'referral_observation': obs.public_fields(),
             'pancake_bindings': matches, 'unsupported_pool_programs': sorted(unsupported),
+            'typed_pool_bindings': typed,
+            'typed_pool_binding_count': sum('binding' in item for item in typed),
+            'typed_route_links': typed_links,
             'all_pool_bindings_verified': False,
-            'blockers': ['OTHER_POOL_FAMILIES_REQUIRE_TYPED_BINDING' if unsupported else 'FULL_CPI_SEMANTICS_NOT_PROVEN',
+            'blockers': (['TYPED_ROUTE_LINKS_REQUIRE_REVIEW'] if typed_links['status'] != 'TYPED_ROUTE_LINKS_MATCHED' else []) +
+                        ['OTHER_POOL_FAMILIES_REQUIRE_TYPED_BINDING' if unsupported else 'FULL_CPI_SEMANTICS_NOT_PROVEN',
                          'PANCAKE_LAYOUT_IS_COMPATIBILITY_EVIDENCE_NOT_DEPLOYED_SOURCE_PROOF',
                          'MINIMUM_PROBE_IS_NOT_EXACT_BOUNDARY_OR_BYTECODE_PROOF',
                          'NO_ONCHAIN_FEE_RECEIPT'],
