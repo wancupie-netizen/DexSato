@@ -1,8 +1,8 @@
 """Read-only Ultra referral verification; never signs, creates or submits.
 
 Layout/seeds: TeamRaccoons/referral commit 6500f64ff004e78faa15d66446e175ede625260d,
-program/programs/referral/src/lib.rs and initialize_referral_token_account.rs.
-SPL token authority is the PROJECT, not the partner or referral account.
+packages/sdk/src/referral.ts and program/programs/referral/src/instructions/claim_v2.rs.
+Ultra V2 uses canonical ATAs with the named referral account as SPL authority.
 RPC observations are trusted-provider evidence, not cryptographic state proofs.
 """
 from __future__ import annotations
@@ -20,6 +20,7 @@ from application.jupiter_fee_policy import WSOL_MINT, USDC_MINT, valid_public_ke
 REFERRAL_PROGRAM = "REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3"
 ULTRA_PROJECT = "DkiqsTrw1u1bYFumumC7sCG2S8K25qc2vemJFHyW2wJc"
 TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+ASSOCIATED_TOKEN_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 MAINNET_GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
 MAX_RPC_BYTES = 131072
 
@@ -40,13 +41,17 @@ def _pubkey(value):
         raise ReferralVerificationError("INVALID_PUBLIC_ADDRESS") from None
 
 
-def _pda(seeds):
-    program = _pubkey(REFERRAL_PROGRAM)
+def _pda(seeds, program_id=REFERRAL_PROGRAM):
+    program = _pubkey(program_id)
     return str(type(program).find_program_address(seeds, program)[0])
 
 
 def referral_token_address(referral, mint):
-    return _pda([b"referral_ata", bytes(_pubkey(referral)), bytes(_pubkey(mint))])
+    if mint not in (WSOL_MINT, USDC_MINT):
+        raise ReferralVerificationError("UNSUPPORTED_FEE_MINT")
+    # Both supported mints use Tokenkeg; referral PDAs may be off-curve.
+    return _pda([bytes(_pubkey(referral)), bytes(_pubkey(TOKEN_PROGRAM)),
+                 bytes(_pubkey(mint))], ASSOCIATED_TOKEN_PROGRAM)
 
 
 def _data(account, owner, minimum):
@@ -94,7 +99,8 @@ class ReferralObservation:
                 "partner": self.partner, "project": ULTRA_PROJECT,
                 "partner_share_bps": self.partner_share_bps, "slot": self.slot,
                 "checked_at": self.checked_at, "commitment": "finalized",
-                "token_accounts": dict(self.token_accounts), "fee_receipt_verified": False}
+                "token_accounts": dict(self.token_accounts), "fee_receipt_verified": False,
+                "token_account_model": "ULTRA_V2_ATA", "token_authority": self.referral_account}
 
 
 def validate_snapshot(referral, partner, mints, result):
@@ -131,14 +137,16 @@ def validate_snapshot(referral, partner, mints, result):
         name, _ = _string(record, 75)
         if len(name.encode()) > 32 or _pda([b"referral", bytes(_pubkey(ULTRA_PROJECT)), name.encode()]) != referral:
             raise ReferralVerificationError("REFERRAL_PDA_MISMATCH")
-    elif record[74] != 0:
+    elif record[74] == 0:
+        raise ReferralVerificationError("ULTRA_V2_REQUIRES_NAMED_REFERRAL")
+    else:
         raise ReferralVerificationError("INVALID_REFERRAL_NAME_OPTION")
     tokens = []
     for mint, account in zip(mints, accounts[2:]):
         if account is None:
             raise ReferralVerificationError("MISSING_REFERRAL_TOKEN_ACCOUNT_" + ("WSOL" if mint == WSOL_MINT else "USDC"))
         raw = _data(account, TOKEN_PROGRAM, 165)
-        if len(raw) != 165 or raw[:32] != bytes(_pubkey(mint)) or raw[32:64] != bytes(_pubkey(ULTRA_PROJECT)):
+        if len(raw) != 165 or raw[:32] != bytes(_pubkey(mint)) or raw[32:64] != bytes(_pubkey(referral)):
             raise ReferralVerificationError("TOKEN_MINT_OR_AUTHORITY_MISMATCH")
         if raw[108] != 1:
             raise ReferralVerificationError("TOKEN_ACCOUNT_NOT_INITIALIZED")

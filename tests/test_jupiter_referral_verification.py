@@ -32,11 +32,11 @@ def anchor(name):
 
 def fixtures():
     project = anchor("Project") + bytes([7])*32 + bytes([8])*32 + (5).to_bytes(4, "little") + b"Ultra" + (8000).to_bytes(2, "little")
-    referral = anchor("ReferralAccount") + raw_key(PARTNER) + raw_key(v.ULTRA_PROJECT) + (8000).to_bytes(2, "little") + b"\0"
+    referral = anchor("ReferralAccount") + raw_key(PARTNER) + raw_key(v.ULTRA_PROJECT) + (8000).to_bytes(2, "little") + b"\1" + (7).to_bytes(4, "little") + b"DexSato"
     tokens = []
     for mint in (WSOL_MINT, USDC_MINT):
         raw = bytearray(165)
-        raw[:32], raw[32:64], raw[108] = raw_key(mint), raw_key(v.ULTRA_PROJECT), 1
+        raw[:32], raw[32:64], raw[108] = raw_key(mint), raw_key(REFERRAL), 1
         if mint == WSOL_MINT:
             raw[109:113] = (1).to_bytes(4, "little")
             raw[113:121] = (2039280).to_bytes(8, "little")
@@ -48,7 +48,13 @@ class ReferralVerificationTests(unittest.TestCase):
     def setUp(self):
         # Isolate byte-layout tests from SDK math; separate SDK test below.
         self.key = patch.object(v, "_pubkey", side_effect=raw_key)
-        self.pda = patch.object(v, "_pda", side_effect=lambda seeds: v.ULTRA_PROJECT if seeds[0] == b"project" else REFERRAL)
+        def fake_pda(seeds, program_id=v.REFERRAL_PROGRAM):
+            if program_id == v.ASSOCIATED_TOKEN_PROGRAM:
+                # Distinct synthetic addresses; real PDA math tested below.
+                self.assertEqual(seeds[:2], [raw_key(REFERRAL), raw_key(v.TOKEN_PROGRAM)])
+                return WSOL_MINT if seeds[2] == raw_key(WSOL_MINT) else USDC_MINT
+            return v.ULTRA_PROJECT if seeds[0] == b"project" else REFERRAL
+        self.pda = patch.object(v, "_pda", side_effect=fake_pda)
         self.key.start(); self.pda_mock = self.pda.start()
         self.addCleanup(self.key.stop); self.addCleanup(self.pda.stop)
 
@@ -61,6 +67,8 @@ class ReferralVerificationTests(unittest.TestCase):
         self.assertEqual(report["partner_share_bps"], 8000)
         self.assertFalse(report["fee_receipt_verified"])
         self.assertEqual(report["slot"], 123456)
+        self.assertEqual(report["token_account_model"], "ULTRA_V2_ATA")
+        self.assertEqual(report["token_authority"], REFERRAL)
 
     def test_rejects_identity_layout_share_and_token_mutations(self):
         # Offset tests directly exercise the official Borsh/SPL layouts.
@@ -98,10 +106,37 @@ class ReferralVerificationTests(unittest.TestCase):
 
     def test_named_referral_uses_project_name_seed(self):
         data = fixtures()
-        raw = base64.b64decode(data["value"][1]["data"][0])[:-1]
+        raw = base64.b64decode(data["value"][1]["data"][0])[:74]
         data["value"][1] = account(raw + b"\1" + (7).to_bytes(4, "little") + b"DexSato")
         self.validate(data)
         self.pda_mock.assert_any_call([b"referral", raw_key(v.ULTRA_PROJECT), b"DexSato"])
+
+    def test_unnamed_referral_rejected_by_v2_claim_contract(self):
+        data = fixtures()
+        raw = base64.b64decode(data["value"][1]["data"][0])[:74]
+        data["value"][1] = account(raw + b"\0")
+        with self.assertRaisesRegex(v.ReferralVerificationError, "ULTRA_V2_REQUIRES_NAMED_REFERRAL"):
+            self.validate(data)
+
+    def test_project_and_partner_authority_are_not_v2_referral_authority(self):
+        for authority in (v.ULTRA_PROJECT, PARTNER):
+            for index in (2, 3):
+                with self.subTest(authority=authority, index=index):
+                    data = fixtures()
+                    raw = bytearray(base64.b64decode(data["value"][index]["data"][0]))
+                    raw[32:64] = raw_key(authority)
+                    data["value"][index] = account(raw, v.TOKEN_PROGRAM)
+                    with self.assertRaisesRegex(v.ReferralVerificationError, "TOKEN_MINT_OR_AUTHORITY_MISMATCH"):
+                        self.validate(data)
+
+    def test_missing_v2_account_does_not_fallback_to_v1(self):
+        data = fixtures()
+        data["value"][2] = None
+        with patch.object(v, "_rpc", side_effect=[v.MAINNET_GENESIS, data]) as rpc:
+            with self.assertRaisesRegex(v.ReferralVerificationError, "MISSING_REFERRAL_TOKEN_ACCOUNT_WSOL"):
+                v.verify_referral_accounts(REFERRAL, PARTNER, rpc_url="https://rpc.example")
+        self.assertEqual(rpc.call_count, 2)
+        self.assertEqual(rpc.call_args.args[2][0], [v.ULTRA_PROJECT, REFERRAL, WSOL_MINT, USDC_MINT])
 
     def test_rpc_read_only_mainnet_finalized_and_no_secret_output(self):
         def response(result):
@@ -113,6 +148,7 @@ class ReferralVerificationTests(unittest.TestCase):
         calls = post.call_args_list
         self.assertEqual([c.kwargs["json"]["method"] for c in calls], ["getGenesisHash", "getMultipleAccounts"])
         self.assertEqual(calls[1].kwargs["json"]["params"][1]["commitment"], "finalized")
+        self.assertEqual(calls[1].kwargs["json"]["params"][0], [v.ULTRA_PROJECT, REFERRAL, WSOL_MINT, USDC_MINT])
         self.assertFalse(calls[0].kwargs["allow_redirects"])
         self.assertNotIn("secret", json.dumps(report.public_fields()))
         bad = Mock(side_effect=RuntimeError("https://rpc.example/?key=secret"))
@@ -141,12 +177,14 @@ class ReferralVerificationTests(unittest.TestCase):
 
 
 class ReferralSDKTests(unittest.TestCase):
-    def test_solders_derives_off_curve_token_pdas_with_exact_seeds(self):
+    def test_solders_derives_canonical_v2_atas_not_legacy_v1_pdas(self):
         from solders.pubkey import Pubkey
         for mint in (WSOL_MINT, USDC_MINT):
             address = v.referral_token_address(REFERRAL, mint)
-            expected, bump = Pubkey.find_program_address([b"referral_ata", bytes(Pubkey.from_string(REFERRAL)), bytes(Pubkey.from_string(mint))], Pubkey.from_string(v.REFERRAL_PROGRAM))
+            expected, bump = Pubkey.find_program_address([bytes(Pubkey.from_string(REFERRAL)), bytes(Pubkey.from_string(v.TOKEN_PROGRAM)), bytes(Pubkey.from_string(mint))], Pubkey.from_string(v.ASSOCIATED_TOKEN_PROGRAM))
+            legacy, _ = Pubkey.find_program_address([b"referral_ata", bytes(Pubkey.from_string(REFERRAL)), bytes(Pubkey.from_string(mint))], Pubkey.from_string(v.REFERRAL_PROGRAM))
             self.assertEqual(address, str(expected))
+            self.assertNotEqual(address, str(legacy))
             self.assertFalse(expected.is_on_curve())
             self.assertGreaterEqual(bump, 0)
 

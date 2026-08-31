@@ -27,10 +27,12 @@ Account verification alone does not prove that a given swap paid the fee.
 - Verify referral program ownership and Anchor account discriminators.
 - Verify the fixed Ultra project and its project/base PDA relationship.
 - Compare referral partner with the full public address configured by the owner.
-- Check named referral PDA when a name exists; unnamed accounts are supported.
+- Require a named referral PDA for the Ultra V2 claim contract (corrected in D.1).
 - Require the reviewed 8000-bps partner share (80% partner / 20% Jupiter).
-- Derive each referral_ata PDA and validate the SPL account's token program,
-  mint, project authority, initialized state, delegate, close authority and native flag.
+- Derive each canonical Ultra V2 ATA and validate the SPL account's token program,
+  mint, referral-account authority, initialized state, delegate, close authority and native flag.
+  The original D verifier incorrectly used V1 referral_ata/project authority;
+  install PHASE03D1_ULTRA_V2_ATA_HOTFIX.md before relying on its account checks.
 - Current automated SOL-input quote verification requires WSOL. The operator
   CLI checks BOTH WSOL and USDC, including when the fee flag is false.
 - HTTPS RPC only, redirects disabled, bounded response size and connection/read
@@ -122,9 +124,9 @@ the commands above. No live mainnet result is implied by mock test success.
 - https://developers.jup.ag/docs/api-reference/swap/order
 - https://github.com/TeamRaccoons/referral/tree/6500f64ff004e78faa15d66446e175ede625260d
   - program/programs/referral/src/lib.rs: Borsh layouts and seed constants.
-  - instructions/initialize_referral_token_account.rs: token PDA and project authority.
+  - packages/sdk/src/referral.ts: getReferralTokenAccountPubKeyV2 and initializeReferralTokenAccountV2.
   - instructions/initialize_referral_account_with_name.rs: named referral PDA.
-  - instructions/claim.rs: partner/project claim split.
+  - instructions/claim_v2.rs: canonical ATA, named referral authority and claim split.
 - https://pypi.org/project/solders/0.29.0/
 - https://namespaces.chainagnostic.org/solana/caip2
 
