@@ -74,8 +74,8 @@ def test_renders_controlled_non_custodial_jupiter_swap_and_discloses_risk():
     assert 'data-swap-risk-ack' in html
     assert 'data-execute-swap disabled' in html
     assert 'data-token-symbol="TEST"' in html
-    assert 'src="/static/js/dexsato_solana_discovery_swap.js" defer' in html
-    assert "Integrator fee: <strong>0 bps</strong>" in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=phase03d" defer' in html
+    assert "Fees are shown in the quote and order review before wallet approval." in html
     assert "Pool verification is not token verification" in html
     assert "never holds your funds" in html
     assert "You approve every transaction in your wallet" in html

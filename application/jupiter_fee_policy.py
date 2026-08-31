@@ -115,13 +115,15 @@ def get_fee_policy() -> FeePolicy:
 def require_fee_execution_ready(policy: FeePolicy) -> None:
     """Phase 03-C safety gate; NOT an environment-toggle bypass.
 
-Remove this gate only with the reviewed Phase 03-D UI and on-chain validation.
+Phase 03-D adds account verification and disclosure, but does not activate fees.
+Remove this gate only after owner approval, a verified live account report and
+reviewed transaction-level fee destination/amount checks for controlled testing.
 Matching provider echoes alone cannot prove referral-token-account ownership
 or distinguish every default-fee fallback (including a coincidental 50 bps).
 """
     if policy.enabled:
         raise FeePolicyConfigurationError(
-            "Fee-enabled execution awaits fee disclosure and on-chain referral validation."
+            "Fee-enabled execution awaits reviewed activation and transaction fee validation."
         )
 
 

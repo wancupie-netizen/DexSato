@@ -33,6 +33,7 @@ from application.jupiter_quote_service import (
     _valid_solana_address,
     _fee_policy,
     _fee_evidence,
+    _fee_disclosure,
 )
 from application.jupiter_fee_policy import FeeEvidence, FeePolicyConfigurationError, require_fee_execution_ready
 from application.solana_discovery_feed_service import load_solana_discovery_record
@@ -405,6 +406,7 @@ def prepare_jupiter_swap(
     if provider_error is not None:
         raise JupiterQuoteUnavailable(provider_error)
     fee_evidence = _fee_evidence(fee_policy, payload, output_mint)
+    fee_disclosure = _fee_disclosure(fee_evidence, payload, lamports)
     if str(payload.get("inputMint") or "") != WRAPPED_SOL_MINT:
         raise JupiterSwapRejected("Jupiter swap input mint did not match SOL.")
     if str(payload.get("outputMint") or "") != output_mint:
@@ -469,6 +471,7 @@ def prepare_jupiter_swap(
         "slippage_bps": int(_number(payload.get("slippageBps")) or 0),
         "jupiter_fee_bps": int(_number(payload.get("feeBps")) or platform_fee["fee_bps"]),
         **fee_evidence.public_fields(),
+        "fee_disclosure": fee_disclosure,
         "expires_at": expires_at.isoformat(),
         "last_valid_block_height": last_height_text,
         "policy": "Only the connected self-custody wallet can approve and sign this transaction.",

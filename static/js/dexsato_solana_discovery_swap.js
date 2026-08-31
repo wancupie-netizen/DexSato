@@ -24,6 +24,8 @@
     let walletAddress = "";
     let currentQuote = null;
     let pendingSignedOrder = null;
+    let pendingUnsignedOrder = null;
+    let quoteRevision = 0;
     let confirmationOpen = false;
     let busy = false;
     let web3Promise = null;
@@ -60,14 +62,19 @@
         swapButton.disabled = busy || !walletAddress || !currentQuote
             || !acknowledgement.checked
             || !sameAmount(currentQuote.input_amount_sol, amount.value)
-            || currentWalletAddress() !== walletAddress;
+            || currentWalletAddress() !== walletAddress
+            || currentQuote.fee_disclosure.execution_ready !== true;
+        amount.disabled = busy;
+        acknowledgement.disabled = busy;
     }
 
     function clearPreparedState() {
         pendingSignedOrder = null;
+        pendingUnsignedOrder = null;
     }
 
     function clearConfirmation() {
+        pendingUnsignedOrder = null;
         confirmationOpen = false;
         confirmationSummary.hidden = true;
         confirmationSummary.replaceChildren();
@@ -81,6 +88,7 @@
     }
 
     function clearQuote() {
+        quoteRevision += 1;
         currentQuote = null;
         clearPreparedState();
         clearConfirmation();
@@ -163,6 +171,49 @@
             : "Unavailable";
     }
 
+    function validFeeDisclosure(payload) {
+        const fee = payload.fee_disclosure;
+        if (!fee || fee.version !== 1 || typeof fee.policy_id !== "string"
+            || !/^[a-f0-9]{64}$/.test(fee.policy_id)
+            || fee.policy_id !== payload.dexsato_fee_policy_id
+            || !Number.isInteger(fee.integrator_fee_bps)
+            || fee.integrator_fee_bps !== payload.dexsato_integrator_fee_bps
+            || typeof fee.integrator_fee_amount_ui !== "string"
+            || !/^\d+(\.\d+)?$/.test(fee.integrator_fee_amount_ui)
+            || fee.integrator_fee_percent !== (fee.integrator_fee_bps / 100).toFixed(2)) return false;
+        if (fee.integrator_fee_bps === 0) {
+            return fee.amount_kind === "ZERO" && Number(fee.integrator_fee_amount_ui) === 0
+                && fee.execution_ready === true && !payload.dexsato_referral_account;
+        }
+        return fee.integrator_fee_bps >= 50 && fee.integrator_fee_bps <= 255
+            && fee.amount_kind === "ESTIMATE" && fee.integrator_fee_symbol === "WSOL"
+            && fee.referral_verification === "RPC_ACCOUNT_VERIFIED"
+            && typeof payload.dexsato_referral_account === "string"
+            && payload.dexsato_referral_account.length >= 32
+            && fee.execution_ready === false; // Phase 03-D: preview only, not activation.
+    }
+
+    function sameFeePolicy(first, second) {
+        return validFeeDisclosure(first) && validFeeDisclosure(second)
+            && first.dexsato_fee_policy_id === second.dexsato_fee_policy_id
+            && first.dexsato_referral_account === second.dexsato_referral_account
+            && first.dexsato_fee_mint === second.dexsato_fee_mint;
+    }
+
+    function renderFeeDisclosure(container, payload, className) {
+        const fee = payload.fee_disclosure;
+        const label = fee.integrator_fee_bps === 0 ? "DexSato fee" : "Estimated integrator fee";
+        addSummaryRow(container, label, fee.integrator_fee_percent + "% · "
+            + fee.integrator_fee_amount_ui + " " + fee.integrator_fee_symbol, className);
+        if (fee.integrator_fee_bps > 0) {
+            addSummaryRow(container, "Jupiter share (included)", fee.jupiter_share_percent + "% of fee", className);
+            addSummaryRow(container, "Fee activation", "Pending · quote preview only", className);
+        }
+        const note = document.createElement("p");
+        note.textContent = fee.note + " " + fee.network_fee_note;
+        container.appendChild(note);
+    }
+
     function renderQuote(payload) {
         quoteResult.className = "quote-result quote-result-v27 visible";
         quoteResult.replaceChildren();
@@ -184,6 +235,7 @@
                 + present(payload.output_decimals_source, "verified mint"));
         addSummaryRow(summary, "Price impact", impactText(payload));
         addSummaryRow(summary, "Slippage", slippageText(payload));
+        renderFeeDisclosure(summary, payload);
         addSummaryRow(summary, "Estimated network fee", "Shown by wallet");
         addSummaryRow(summary, "Route", present(payload.router, "Jupiter"));
         quoteResult.append(header, summary);
@@ -207,6 +259,7 @@
                 + present(payload.output_decimals_source, "verified mint"), "confirmation-row-v27");
         addSummaryRow(list, "Price impact", impactText(payload), "confirmation-row-v27");
         addSummaryRow(list, "Slippage", slippageText(payload), "confirmation-row-v27");
+        renderFeeDisclosure(list, payload, "confirmation-row-v27");
         addSummaryRow(list, "Network fee", "Confirmed by wallet", "confirmation-row-v27");
         confirmationSummary.append(heading, note, list);
         confirmationSummary.hidden = false;
@@ -358,7 +411,9 @@
     });
 
     quoteButton.addEventListener("click", async function () {
+        if (busy) return;
         clearQuote();
+        const revision = quoteRevision;
         quoteButton.disabled = true;
         quoteButton.textContent = "Fetching quote…";
         setResult(quoteResult, "Requesting an indicative Jupiter quote…");
@@ -367,7 +422,9 @@
                 apiBase + "/jupiter-quote?amount_sol=" + encodeURIComponent(amount.value),
                 {headers: {accept: "application/json"}}
             );
-            if (payload.output_mint !== tokenAddress || payload.dexsato_integrator_fee_bps !== 0) {
+            if (revision !== quoteRevision) return;
+            if (payload.output_mint !== tokenAddress || !sameAmount(payload.input_amount_sol, amount.value)
+                || !validFeeDisclosure(payload)) {
                 throw new Error("The returned quote did not match the approved DexSato policy.");
             }
             currentQuote = payload;
@@ -377,6 +434,7 @@
                 sellRouteStatus.classList.add("verified");
             }
         } catch (error) {
+            if (revision !== quoteRevision) return;
             setResult(quoteResult, present(error.message, "Jupiter quote is unavailable."), "quote-error");
         } finally {
             quoteButton.disabled = false;
@@ -407,26 +465,46 @@
             }
             setResult(swapResult, "Preparing secure Solana transaction support…");
             const solanaWeb3 = await loadSolanaWeb3();
+            if (!currentQuote || !acknowledgement.checked) {
+                throw new Error("The trade changed. Request a new quote and review it again.");
+            }
             if (currentWalletAddress() !== walletAddress) {
                 throw new Error("The connected wallet changed. Connect it again before swapping.");
             }
             setResult(swapResult, "Preparing an unsigned Jupiter mainnet transaction…");
-            const order = await requestJson(apiBase + "/jupiter-order", {
-                method: "POST",
-                headers: {"content-type": "application/json", accept: "application/json"},
-                body: JSON.stringify({
-                    amount_sol: amount.value,
-                    wallet_address: walletAddress,
-                    risk_acknowledged: acknowledgement.checked
-                })
-            });
+            const revision = quoteRevision;
+            let order = pendingUnsignedOrder;
+            if (!order) {
+                order = await requestJson(apiBase + "/jupiter-order", {
+                    method: "POST",
+                    headers: {"content-type": "application/json", accept: "application/json"},
+                    body: JSON.stringify({
+                        amount_sol: amount.value,
+                        wallet_address: walletAddress,
+                        risk_acknowledged: acknowledgement.checked
+                    })
+                });
+                if (revision !== quoteRevision || !currentQuote || !acknowledgement.checked) {
+                    throw new Error("The trade changed. Request a new quote and review it again.");
+                }
+            }
             if (order.wallet_address !== walletAddress || order.output_mint !== tokenAddress
                 || !sameAmount(order.input_amount_sol, amount.value)
-                || order.dexsato_integrator_fee_bps !== 0) {
+                || !sameFeePolicy(currentQuote, order) || order.fee_disclosure.execution_ready !== true) {
                 throw new Error("The prepared order did not match the reviewed token, wallet, or amount.");
             }
-            if (Date.parse(order.expires_at) <= Date.now()) {
+            if (!Number.isFinite(Date.parse(order.expires_at)) || Date.parse(order.expires_at) <= Date.now()) {
+                pendingUnsignedOrder = null;
                 throw new Error("The Jupiter order expired before wallet approval.");
+            }
+            if (!pendingUnsignedOrder) {
+                pendingUnsignedOrder = order;
+                renderConfirmation(order);
+                setResult(swapResult, "Updated order ready. Review the amounts and fee above, then confirm in wallet.");
+                return; // Actual order must be reviewed in a separate click before signing.
+            }
+            if (currentWalletAddress() !== walletAddress) {
+                throw new Error("The connected wallet changed before signing. Reconnect and review again.");
             }
             const unsigned = solanaWeb3.VersionedTransaction.deserialize(
                 transactionBytes(order.unsigned_transaction)

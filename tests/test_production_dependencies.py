@@ -8,6 +8,7 @@ EXPECTED = {
     "supabase": "2.31.0",
     "python-dotenv": "1.2.2",
     "requests": "2.34.2",
+    "solders": "0.29.0",
     "fastapi": "0.139.0",
     "uvicorn": "0.51.0",
 }

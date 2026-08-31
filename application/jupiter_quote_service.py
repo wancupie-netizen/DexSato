@@ -19,6 +19,8 @@ from application.solana_discovery_feed_service import load_solana_discovery_reco
 from application.jupiter_fee_policy import (
     FeePolicyConfigurationError, FeePolicyRejected, get_fee_policy, validate_fee_response,
 )
+from application.jupiter_fee_disclosure import build_fee_disclosure
+from application.jupiter_referral_verification import ReferralVerificationError
 
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
@@ -52,6 +54,13 @@ def _fee_evidence(policy, payload, output_mint):
         )
     except FeePolicyRejected as error:
         raise JupiterQuoteUnavailable("Jupiter referral fee could not be verified.") from error
+
+
+def _fee_disclosure(evidence, payload, lamports):
+    try:
+        return build_fee_disclosure(evidence, payload, lamports)
+    except (ReferralVerificationError, FeePolicyRejected) as error:
+        raise JupiterQuoteUnavailable("Jupiter referral account verification is unavailable.") from error
 
 
 def _valid_solana_address(value: str) -> bool:
@@ -204,6 +213,7 @@ def fetch_jupiter_quote(
     if not isinstance(payload, dict) or payload.get("error"):
         raise JupiterQuoteUnavailable("Jupiter did not return a usable quote.")
     fee_evidence = _fee_evidence(fee_policy, payload, output_mint)
+    fee_disclosure = _fee_disclosure(fee_evidence, payload, lamports)
     if payload.get("transaction") not in (None, ""):
         raise JupiterQuoteUnavailable("Quote-only policy rejected transaction material.")
     if str(payload.get("inputMint") or WRAPPED_SOL_MINT) != WRAPPED_SOL_MINT:
@@ -250,6 +260,7 @@ def fetch_jupiter_quote(
         "jupiter_fee_bps": int(_number(payload.get("feeBps")) or platform_fee["fee_bps"]),
         "jupiter_platform_fee": platform_fee,
         **fee_evidence.public_fields(),
+        "fee_disclosure": fee_disclosure,
         "as_of": datetime.now(timezone.utc).isoformat(),
         "policy": "Read-only quote; no transaction was requested, signed or submitted.",
     }

@@ -116,7 +116,17 @@ class FeePolicyTests(unittest.TestCase):
 
 
 class FeeServiceTests(unittest.TestCase):
+    def _mock_referral(self):
+        # Provider-flow tests do not contact mainnet; verifier has separate fixtures.
+        from application.jupiter_referral_verification import ReferralObservation
+        replacement = patch("application.jupiter_fee_disclosure.verify_referral_accounts",
+            return_value=ReferralObservation(REFERRAL, USDC_MINT, 8000, 123,
+                "2026-08-31T00:00:00+00:00", ((WSOL_MINT, REFERRAL),)))
+        replacement.start()
+        self.addCleanup(replacement.stop)
+
     def setUp(self):
+        self._mock_referral()
         from application import jupiter_quote_service as quote
         from application import jupiter_swap_service as swap
         self.quote, self.swap = quote, swap
