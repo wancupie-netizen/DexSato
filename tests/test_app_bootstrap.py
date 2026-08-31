@@ -380,6 +380,34 @@ def test_should_reject_unsupported_sensitive_swap_request_fields(mock_prepare):
     mock_prepare.assert_not_called()
 
 
+@patch("application.jupiter_swap_service.prepare_jupiter_swap")
+@patch("application.jupiter_swap_service.execute_jupiter_swap")
+def test_client_fee_overrides_are_rejected_before_services(mock_execute, mock_prepare):
+    for field in ("referralAccount", "referralFee", "feeBps", "feeAccount",
+                  "platformFeeBps", "dexsato_integrator_fee_bps", "fee_enabled"):
+        for endpoint, body in (
+            (solana_discovery_jupiter_order, {
+                "amount_sol": "0.1", "wallet_address": "11111111111111111111111111111111",
+                "risk_acknowledged": True,
+            }),
+            (solana_discovery_jupiter_execute, {
+                "request_id": "order-1", "wallet_address": "11111111111111111111111111111111",
+                "signed_transaction": "c2lnbmVk",
+            }),
+        ):
+            request = Mock()
+            request.json = AsyncMock(return_value={**body, field: "client-value"})
+            try:
+                asyncio.run(endpoint("22222222222222222222222222222222", request))
+            except HTTPException as error:
+                assert error.status_code == 400
+                assert "Unsupported" in error.detail
+            else:
+                raise AssertionError("Client fee override must be rejected")
+    mock_prepare.assert_not_called()
+    mock_execute.assert_not_called()
+
+
 @patch(
     "app.main.send_telegram_alert"
 )

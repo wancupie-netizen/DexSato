@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from application.production_security import internal_endpoints_enabled, production_mode
+from application.jupiter_fee_policy import FeePolicyConfigurationError, get_fee_policy, read_fee_policy
 
 
 _PLACEHOLDER_PREFIXES = ("your-", "replace-with-", "changeme")
@@ -29,6 +30,9 @@ def _https_url(name: str, default: str = "") -> None:
 
 def validate_production_configuration() -> None:
     """Reject missing core provider configuration without returning secret values."""
+    # Validate even in development; malformed enable flags must not disable fees silently.
+    if read_fee_policy() != get_fee_policy():
+        raise FeePolicyConfigurationError("Jupiter fee configuration changed; restart the server.")
     if not production_mode():
         return
     _required_secret("JUPITER_API_KEY")

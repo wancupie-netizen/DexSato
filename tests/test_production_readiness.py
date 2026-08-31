@@ -37,6 +37,36 @@ def test_development_does_not_require_production_provider_keys():
         assert production_configuration_ready() is True
 
 
+def test_fee_configuration_rejects_invalid_enabled_policy():
+    from application.jupiter_fee_policy import get_fee_policy
+    get_fee_policy.cache_clear()
+    try:
+        with patch.dict("os.environ", _production_environment(
+            DEXSATO_JUPITER_FEE_ENABLED="true",
+            DEXSATO_JUPITER_REFERRAL_ACCOUNT="invalid",
+            DEXSATO_JUPITER_REFERRAL_FEE_BPS="50",
+        ), clear=True):
+            assert production_configuration_ready() is False
+    finally:
+        get_fee_policy.cache_clear()
+
+
+def test_fee_configuration_drift_requires_restart():
+    from application.jupiter_fee_policy import get_fee_policy
+    get_fee_policy.cache_clear()
+    try:
+        with patch.dict("os.environ", _production_environment(
+            DEXSATO_JUPITER_FEE_ENABLED="true",
+            DEXSATO_JUPITER_REFERRAL_ACCOUNT="5q9Rk7oLhpxyoUstjKqbJxV3xnAi7Zucqsuw6NCzzNQQ",
+            DEXSATO_JUPITER_REFERRAL_FEE_BPS="50",
+        ), clear=True):
+            assert production_configuration_ready() is True
+            with patch.dict("os.environ", {"DEXSATO_JUPITER_REFERRAL_FEE_BPS": "60"}):
+                assert production_configuration_ready() is False
+    finally:
+        get_fee_policy.cache_clear()
+
+
 def test_production_requires_core_server_side_provider_keys():
     _expect_configuration_error(
         _production_environment(JUPITER_API_KEY=""),

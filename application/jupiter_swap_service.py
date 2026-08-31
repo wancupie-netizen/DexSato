@@ -31,7 +31,10 @@ from application.jupiter_quote_service import (
     _number,
     _platform_fee,
     _valid_solana_address,
+    _fee_policy,
+    _fee_evidence,
 )
+from application.jupiter_fee_policy import FeeEvidence, FeePolicyConfigurationError, require_fee_execution_ready
 from application.solana_discovery_feed_service import load_solana_discovery_record
 
 
@@ -68,6 +71,7 @@ class _PendingOrder:
     message_digest: bytes
     wallet_signature_index: int
     last_valid_block_height: str | None
+    fee_evidence: FeeEvidence
     signed_digest: bytes | None = None
     executing: bool = False
     completed: bool = False
@@ -372,6 +376,12 @@ def prepare_jupiter_swap(
     amount, lamports = _amount_lamports(amount_sol)
     resolved_key = _api_key(api_key)
 
+    fee_policy = _fee_policy()
+    try:
+        require_fee_execution_ready(fee_policy)
+    except FeePolicyConfigurationError as error:
+        raise JupiterQuoteNotConfigured("Fee-enabled swap execution is not activated.") from error
+
     with _pending_lock:
         _prune_orders(now(), wallet)
 
@@ -379,7 +389,8 @@ def prepare_jupiter_swap(
         response = request_get(
             JUPITER_ORDER_URL,
             params={"inputMint": WRAPPED_SOL_MINT, "outputMint": output_mint,
-                    "amount": str(lamports), "taker": wallet},
+                    "amount": str(lamports), "taker": wallet,
+                    **fee_policy.request_parameters()},
             headers={"x-api-key": resolved_key, "accept": "application/json"},
             timeout=12,
         )
@@ -393,6 +404,7 @@ def prepare_jupiter_swap(
     provider_error = _order_error_message(payload)
     if provider_error is not None:
         raise JupiterQuoteUnavailable(provider_error)
+    fee_evidence = _fee_evidence(fee_policy, payload, output_mint)
     if str(payload.get("inputMint") or "") != WRAPPED_SOL_MINT:
         raise JupiterSwapRejected("Jupiter swap input mint did not match SOL.")
     if str(payload.get("outputMint") or "") != output_mint:
@@ -430,6 +442,7 @@ def prepare_jupiter_swap(
         message_digest=hashlib.sha256(message).digest(),
         wallet_signature_index=wallet_index,
         last_valid_block_height=last_height_text,
+        fee_evidence=fee_evidence,
     )
     with _pending_lock:
         _prune_orders(current, wallet)
@@ -455,7 +468,7 @@ def prepare_jupiter_swap(
                             else _number(payload.get("priceImpactPct")),
         "slippage_bps": int(_number(payload.get("slippageBps")) or 0),
         "jupiter_fee_bps": int(_number(payload.get("feeBps")) or platform_fee["fee_bps"]),
-        "dexsato_integrator_fee_bps": 0,
+        **fee_evidence.public_fields(),
         "expires_at": expires_at.isoformat(),
         "last_valid_block_height": last_height_text,
         "policy": "Only the connected self-custody wallet can approve and sign this transaction.",
@@ -491,6 +504,8 @@ def execute_jupiter_swap(
             raise JupiterSwapExpired("The Jupiter swap order is unavailable or has expired.")
         if pending.token_address != token or pending.wallet_address != wallet:
             raise JupiterSwapRejected("Swap request does not match the approved token and wallet.")
+        if pending.fee_evidence.policy != _fee_policy():
+            raise JupiterSwapRejected("Swap request fee policy changed. Request a new quote and order.")
         if not hmac.compare_digest(hashlib.sha256(message).digest(), pending.message_digest):
             raise JupiterSwapRejected("Signed transaction changed the approved Jupiter message.")
         index = pending.wallet_signature_index
@@ -551,7 +566,7 @@ def execute_jupiter_swap(
                                     or payload.get("totalInputAmount") or "") or None,
             "output_amount_raw": str(payload.get("outputAmountResult")
                                      or payload.get("totalOutputAmount") or "") or None,
-            "dexsato_integrator_fee_bps": 0,
+            **pending.fee_evidence.execution_fields(),
         }
 
     with _pending_lock:
@@ -562,6 +577,6 @@ def execute_jupiter_swap(
         "request_id": order_id,
         "error": str(payload.get("error") or "Jupiter could not settle this transaction.")[:240],
         "code": payload.get("code") if isinstance(payload.get("code"), int) else None,
-        "dexsato_integrator_fee_bps": 0,
+        **pending.fee_evidence.execution_fields(),
     }
 

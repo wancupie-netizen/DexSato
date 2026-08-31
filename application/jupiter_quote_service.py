@@ -16,6 +16,9 @@ from typing import Any, Callable
 import requests
 
 from application.solana_discovery_feed_service import load_solana_discovery_record
+from application.jupiter_fee_policy import (
+    FeePolicyConfigurationError, FeePolicyRejected, get_fee_policy, validate_fee_response,
+)
 
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
@@ -33,6 +36,22 @@ class JupiterQuoteUnavailable(RuntimeError):
 
 class JupiterQuoteNotConfigured(JupiterQuoteUnavailable):
     """Raised when the server has no Jupiter API key."""
+
+
+def _fee_policy():
+    try:
+        return get_fee_policy()
+    except FeePolicyConfigurationError as error:
+        raise JupiterQuoteNotConfigured("Jupiter fee policy is not configured correctly.") from error
+
+
+def _fee_evidence(policy, payload, output_mint):
+    try:
+        return validate_fee_response(
+            policy, payload, input_mint=WRAPPED_SOL_MINT, output_mint=output_mint,
+        )
+    except FeePolicyRejected as error:
+        raise JupiterQuoteUnavailable("Jupiter referral fee could not be verified.") from error
 
 
 def _valid_solana_address(value: str) -> bool:
@@ -163,6 +182,8 @@ def fetch_jupiter_quote(
     if not resolved_key:
         raise JupiterQuoteNotConfigured("Jupiter quote sandbox is not configured.")
 
+    fee_policy = _fee_policy()
+
     try:
         response = request_get(
             JUPITER_ORDER_URL,
@@ -170,6 +191,7 @@ def fetch_jupiter_quote(
                 "inputMint": WRAPPED_SOL_MINT,
                 "outputMint": output_mint,
                 "amount": str(lamports),
+                **fee_policy.request_parameters(),
             },
             headers={"x-api-key": resolved_key, "accept": "application/json"},
             timeout=12,
@@ -181,6 +203,7 @@ def fetch_jupiter_quote(
 
     if not isinstance(payload, dict) or payload.get("error"):
         raise JupiterQuoteUnavailable("Jupiter did not return a usable quote.")
+    fee_evidence = _fee_evidence(fee_policy, payload, output_mint)
     if payload.get("transaction") not in (None, ""):
         raise JupiterQuoteUnavailable("Quote-only policy rejected transaction material.")
     if str(payload.get("inputMint") or WRAPPED_SOL_MINT) != WRAPPED_SOL_MINT:
@@ -226,8 +249,7 @@ def fetch_jupiter_quote(
         "slippage_bps": int(_number(payload.get("slippageBps")) or 0),
         "jupiter_fee_bps": int(_number(payload.get("feeBps")) or platform_fee["fee_bps"]),
         "jupiter_platform_fee": platform_fee,
-        "dexsato_integrator_fee_bps": 0,
-        "dexsato_integrator_fee_status": "NOT_CONFIGURED",
+        **fee_evidence.public_fields(),
         "as_of": datetime.now(timezone.utc).isoformat(),
         "policy": "Read-only quote; no transaction was requested, signed or submitted.",
     }
