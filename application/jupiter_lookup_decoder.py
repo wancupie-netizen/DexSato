@@ -22,12 +22,37 @@ V2_ROLES = ["programAuthority", "userTransferAuthority", "sourceTokenAccount",
     "programSourceTokenAccount", "programDestinationTokenAccount", "destinationTokenAccount",
     "sourceMint", "destinationMint", "sourceTokenProgram", "destinationTokenProgram",
     "eventAuthority", "program"]
+ROUTE_V2_ROLES = ["userTransferAuthority", "userSourceTokenAccount",
+    "userDestinationTokenAccount", "sourceMint", "destinationMint",
+    "sourceTokenProgram", "destinationTokenProgram", "unverifiedFixedAccount",
+    "eventAuthority", "program"]
 
 
 def decode_v2(data):
-    if not isinstance(data, bytes) or not 8 <= len(data) <= 4096 or data[:8].hex() != "d19853937cfed8e9":
+    if not isinstance(data, bytes) or not 8 <= len(data) <= 4096 or data[:8].hex() not in {
+            "d19853937cfed8e9", "bb64facc31c4af14"}:
         raise DecodeRejected("INVALID_V2_DISCRIMINATOR_OR_SIZE")
+    route_v2 = data[:8].hex() == "bb64facc31c4af14"
     r = Reader(data[8:])
+    if route_v2:
+        args = {name: r.integer(size) for name, size in [
+            ("inAmount", 8), ("quotedOutAmount", 8), ("slippageBps", 2),
+            ("platformFeeBps", 2), ("positiveSlippageBps", 2)]}
+        count = r.integer(4)
+        if not 1 <= count <= 64:
+            raise DecodeRejected("ROUTE_PLAN_LIMIT")
+        tail = data[8 + r.offset:]
+        if not tail or len(tail) > 4062:
+            raise DecodeRejected("INVALID_ROUTE_V2_TAIL")
+        if not args["inAmount"] or not args["quotedOutAmount"] or any(args[k] > 10000 for k in
+                ("slippageBps", "platformFeeBps", "positiveSlippageBps")):
+            raise DecodeRejected("INVALID_V2_AMOUNTS_OR_BPS")
+        args.update(routePlan=None, routePlanCount=count,
+                    routePlanTailSha256=hashlib.sha256(tail).hexdigest())
+        return {"name": "routeV2", "args": args, "account_roles": ROUTE_V2_ROLES,
+                "idl_source": "Anchor discriminator plus bounded fixed header; identity roles 0-6 and 9 cross-checked against current Jupiter V6 schema mirrors",
+                "schema_authority": "SECONDARY_SCHEMA_HEADER_ONLY",
+                "route_plan_decoded": False, "fee_account_role_verified": False}
     args = {name: r.integer(size) for name, size in [
         ("id", 1), ("inAmount", 8), ("quotedOutAmount", 8),
         ("slippageBps", 2), ("platformFeeBps", 2), ("positiveSlippageBps", 2)]}

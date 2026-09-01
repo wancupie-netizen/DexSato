@@ -64,17 +64,20 @@ Never compare a stale indicative quote with a fresh prepared order here.
     routes = [item for item in instructions if item.get("program") == JUPITER]
     require(len(routes) == 1, "AMBIGUOUS_OR_MISSING_JUPITER_ROUTE")
     route = routes[0]
-    require(route.get("name") == "sharedAccountsRouteV2", "UNSUPPORTED_ROUTE_VARIANT")
+    require(route.get("name") in {"sharedAccountsRouteV2", "routeV2"},
+            "UNSUPPORTED_ROUTE_VARIANT")
     encoded = route.get("data_hex")
-    require(type(encoded) is str and 74 <= len(encoded) <= 8192 and
+    require(type(encoded) is str and 70 <= len(encoded) <= 8192 and
             len(encoded) % 2 == 0 and re.fullmatch(r"[0-9a-fA-F]+", encoded) is not None,
             "INVALID_V2_HEADER_BYTES")
     data = bytes.fromhex(encoded)
-    require(data[:8].hex() == DISCRIMINATOR, "UNSUPPORTED_DISCRIMINATOR")
-    # Fixed offsets for pinned sharedAccountsRouteV2 HEADER ONLY.
-    parsed = {"inAmount": int.from_bytes(data[9:17], "little"),
-              "quotedOutAmount": int.from_bytes(data[17:25], "little"),
-              "slippageBps": int.from_bytes(data[25:27], "little")}
+    expected_discriminator = (DISCRIMINATOR if route["name"] == "sharedAccountsRouteV2"
+                              else "bb64facc31c4af14")
+    require(data[:8].hex() == expected_discriminator, "UNSUPPORTED_DISCRIMINATOR")
+    offset = 9 if route["name"] == "sharedAccountsRouteV2" else 8
+    parsed = {"inAmount": int.from_bytes(data[offset:offset + 8], "little"),
+              "quotedOutAmount": int.from_bytes(data[offset + 8:offset + 16], "little"),
+              "slippageBps": int.from_bytes(data[offset + 16:offset + 18], "little")}
     args = route.get("args")
     require(type(args) is dict, "MISSING_DECODED_ARGS")
     require(all(type(args.get(key)) is int and args[key] == value

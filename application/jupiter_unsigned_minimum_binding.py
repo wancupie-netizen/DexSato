@@ -49,12 +49,18 @@ def audit_unsigned_minimum(encoded, order, expected_message_sha256, resolved=Non
     require(len(routes) == 1, "AMBIGUOUS_OR_MISSING_JUPITER_ROUTE")
     index, instruction = routes[0]
     data = bytes(instruction.data)
-    require(len(data) >= 37, "TRUNCATED_V2_HEADER")
-    require(len(instruction.accounts) >= 12, "MISSING_V2_ACCOUNT_ROLES")
-    args = {"inAmount": int.from_bytes(data[9:17], "little"),
-            "quotedOutAmount": int.from_bytes(data[17:25], "little"),
-            "slippageBps": int.from_bytes(data[25:27], "little")}
-    route = {"index": index, "program": JUPITER, "name": "sharedAccountsRouteV2",
+    require(len(data) >= 35, "TRUNCATED_V2_HEADER")
+    discriminator = data[:8].hex()
+    variants = {"d19853937cfed8e9": ("sharedAccountsRouteV2", 12),
+                "bb64facc31c4af14": ("routeV2", 10)}
+    require(discriminator in variants, "UNSUPPORTED_JUPITER_DISCRIMINATOR")
+    route_name, minimum_roles = variants[discriminator]
+    require(len(instruction.accounts) >= minimum_roles, "MISSING_V2_ACCOUNT_ROLES")
+    offset = 9 if route_name == "sharedAccountsRouteV2" else 8
+    args = {"inAmount": int.from_bytes(data[offset:offset + 8], "little"),
+            "quotedOutAmount": int.from_bytes(data[offset + 8:offset + 16], "little"),
+            "slippageBps": int.from_bytes(data[offset + 16:offset + 18], "little")}
+    route = {"index": index, "program": JUPITER, "name": route_name,
              "data_hex": data.hex(), "args": args}
     byte_report = {"message_sha256": message_hash, "instructions": [route]}
     result = audit_minimum_contract(order, byte_report, expected_message_sha256)
@@ -70,7 +76,7 @@ def audit_unsigned_minimum(encoded, order, expected_message_sha256, resolved=Non
         message_hash_status="RECOMPUTED_FROM_CANONICAL_UNSIGNED_MESSAGE",
         transaction_sha256=hashlib.sha256(raw).hexdigest(),
         instruction_index=index,
-        instruction_sha256=hashlib.sha256(data).hexdigest(),
+        instruction_sha256=hashlib.sha256(data).hexdigest(), route_variant=route_name,
         minimum_header_bytes_bound=True,
         supplied_report_bytes_matched=resolved is not None,
         lookup_state_verified=False,

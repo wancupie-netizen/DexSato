@@ -94,7 +94,7 @@ def token_account(accounts, key, mint, wallet):
 
 
 def audit_order_identity(encoded, order, expected, snapshot, expected_message_sha256,
-                         expected_snapshot_slot):
+                         expected_snapshot_slot, precreated_token_accounts=None):
     """Expected identity MUST come from operator intent, not untrusted report.
 
     expected: wallet/input_mint/output_mint/source_token_account/destination_token_account.
@@ -116,6 +116,12 @@ def audit_order_identity(encoded, order, expected, snapshot, expected_message_sh
     accounts = snapshot.get("accounts")
     require(type(accounts) is dict and len(accounts) <= 16, "INVALID_ACCOUNT_SNAPSHOT")
     result = audit_unsigned_minimum(encoded, order, expected_message_sha256)
+    allowed_missing = set() if precreated_token_accounts is None else set(precreated_token_accounts)
+    require(allowed_missing.issubset({identity["source_token_account"],
+                                      identity["destination_token_account"]}),
+            "INVALID_PRECREATED_TOKEN_ACCOUNT_SET")
+    require(all(accounts.get(key) is None for key in allowed_missing),
+            "PRECREATED_ACCOUNT_ALREADY_EXISTS")
     for field, name in (("taker", "wallet"), ("inputMint", "input_mint"), ("outputMint", "output_mint")):
         require(order.get(field) == identity[name], "ORDER_IDENTITY_MISMATCH")
     tx = VersionedTransaction.from_bytes(base64.b64decode(encoded, validate=True))
@@ -124,15 +130,25 @@ def audit_order_identity(encoded, order, expected, snapshot, expected_message_sh
     instruction = tx.message.instructions[result["instruction_index"]]
     require(all(index < len(metas) for index in instruction.accounts), "ACCOUNT_INDEX_OUT_OF_RANGE")
     roles = [metas[index] for index in instruction.accounts]
-    require(roles[1] == (identity["wallet"], True, True), "TRANSFER_AUTHORITY_MISMATCH")
-    require(roles[2][0] == identity["source_token_account"] and roles[2][2]
-            and not roles[2][1], "SOURCE_TOKEN_ACCOUNT_MISMATCH")
-    require(roles[5][0] == identity["destination_token_account"] and roles[5][2]
-            and not roles[5][1], "DESTINATION_TOKEN_ACCOUNT_MISMATCH")
-    require(roles[6][0] == identity["input_mint"] and roles[7][0] == identity["output_mint"],
+    indexes = ({"authority": 1, "source": 2, "destination": 5, "input_mint": 6,
+                "output_mint": 7, "input_program": 8, "output_program": 9, "program": 11}
+               if result["route_variant"] == "sharedAccountsRouteV2" else
+               {"authority": 0, "source": 1, "destination": 2, "input_mint": 3,
+                "output_mint": 4, "input_program": 5, "output_program": 6, "program": 9})
+    require(roles[indexes["authority"]] == (identity["wallet"], True, True),
+            "TRANSFER_AUTHORITY_MISMATCH")
+    require(roles[indexes["source"]][0] == identity["source_token_account"]
+            and roles[indexes["source"]][2] and not roles[indexes["source"]][1],
+            "SOURCE_TOKEN_ACCOUNT_MISMATCH")
+    require(roles[indexes["destination"]][0] == identity["destination_token_account"]
+            and roles[indexes["destination"]][2] and not roles[indexes["destination"]][1],
+            "DESTINATION_TOKEN_ACCOUNT_MISMATCH")
+    require(roles[indexes["input_mint"]][0] == identity["input_mint"]
+            and roles[indexes["output_mint"]][0] == identity["output_mint"],
             "INSTRUCTION_MINT_MISMATCH")
-    require(roles[8][0] == TOKEN and roles[9][0] == TOKEN, "TOKEN_PROGRAM_UNSUPPORTED")
-    require(roles[11][0] == str(tx.message.account_keys[instruction.program_id_index]),
+    require(roles[indexes["input_program"]][0] == TOKEN
+            and roles[indexes["output_program"]][0] == TOKEN, "TOKEN_PROGRAM_UNSUPPORTED")
+    require(roles[indexes["program"]][0] == str(tx.message.account_keys[instruction.program_id_index]),
             "JUPITER_PROGRAM_ROLE_MISMATCH")
     hashes = dict(lookup_hashes)
     for side in ("input", "output"):
@@ -144,7 +160,11 @@ def audit_order_identity(encoded, order, expected, snapshot, expected_message_sh
         hashes[mint] = hashlib.sha256(raw).hexdigest()
     for account_name, mint_name in (("source_token_account", "input_mint"),
                                      ("destination_token_account", "output_mint")):
-        hashes[identity[account_name]] = token_account(accounts, identity[account_name], identity[mint_name], identity["wallet"])
+        key = identity[account_name]
+        if key in allowed_missing:
+            hashes[key] = "IN_TRANSACTION_CANONICAL_ATA"
+        else:
+            hashes[key] = token_account(accounts, key, identity[mint_name], identity["wallet"])
     result.update(status="PREPARED_ORDER_IDENTITY_REVIEW_REQUIRED",
                   identity_snapshot_consistent=True,
                   expected_identity=identity,
@@ -153,6 +173,7 @@ def audit_order_identity(encoded, order, expected, snapshot, expected_message_sh
                   snapshot_authenticity_verified=False,
                   snapshot_freshness_verified=False,
                   lookup_bytes_resolved=True,
+                  precreated_token_accounts=sorted(allowed_missing),
                   reasons=[r for r in result["reasons"] if r != "WALLET_MINT_ROUTE_FEE_AND_LOOKUP_BINDING_NOT_VERIFIED"]
                           + ["SUPPLIED_SNAPSHOT_NOT_AUTHENTICATED", "FULL_ROUTE_AND_CPI_EFFECTS_UNVERIFIED"])
     return result

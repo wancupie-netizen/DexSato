@@ -70,7 +70,7 @@ class Reader:
 def decode_route(data):
     if not isinstance(data, bytes) or not 8 <= len(data) <= 4096:
         raise DecodeRejected("INVALID_INSTRUCTION_SIZE")
-    if data[:8] == bytes.fromhex("d19853937cfed8e9"):
+    if data[:8].hex() in {"d19853937cfed8e9", "bb64facc31c4af14"}:
         from application.jupiter_lookup_decoder import decode_v2
         return decode_v2(data)
     idl = schema()
