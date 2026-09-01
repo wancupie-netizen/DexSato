@@ -24,8 +24,11 @@ def transaction(signed=False):
 def evidence():
     quote = dict(inputMint=WSOL_MINT, outputMint=USDC_MINT, inAmount="1000000",
                  outAmount="150000", otherAmountThreshold="140000",
-                 referralAccount=REFERRAL, feeBps=50, feeMint=WSOL_MINT)
-    return quote, dict(quote, taker=WALLET, transaction=transaction())
+                 referralAccount=REFERRAL, feeBps=50, feeMint=WSOL_MINT,
+                 platformFee={"feeBps":50,"feeMint":WSOL_MINT})
+    order = dict(quote, taker=WALLET, transaction=transaction())
+    order["platformFee"]={"feeBps":50,"feeMint":WSOL_MINT}
+    return quote, order
 
 
 def env():
@@ -79,6 +82,17 @@ class UnsignedCaptureTests(unittest.TestCase):
         q,o=pair();q["transaction"]=transaction()
         with patch.object(c,"get_order",side_effect=[q,o]) as get,self.assertRaises(c.CaptureRejected): self.run_capture()
         self.assertEqual(get.call_count,1)
+
+    def test_quote_and_order_may_omit_amount_but_any_amount_must_be_exact(self):
+        q,o=pair()
+        with patch.object(c,"get_order",side_effect=[q,o]): self.run_capture()
+        cases=[("quote",None),("quote",{"feeBps":51,"feeMint":WSOL_MINT}),
+               ("order",{"amount":"4999","feeBps":50,"feeMint":WSOL_MINT}),
+               ("order",{"amount":"5000","feeBps":51,"feeMint":WSOL_MINT})]
+        for target,platform in cases:
+            q,o=pair();(q if target=="quote" else o)["platformFee"]=platform
+            with self.subTest(target=target,platform=platform),patch.object(c,"get_order",side_effect=[q,o]),self.assertRaisesRegex(c.CaptureRejected,"PLATFORM_FEE_EVIDENCE_MISMATCH"):
+                self.run_capture()
 
     def test_bounded_http_fixed_endpoint_and_sanitized_fields(self):
         response=Mock(status_code=200)

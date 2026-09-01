@@ -21,7 +21,8 @@ MAX_BYTES = 65536
 FIELDS = {"inputMint", "outputMint", "inAmount", "outAmount", "otherAmountThreshold",
           "swapMode", "slippageBps", "referralAccount", "feeMint", "feeBps", "router",
           "transaction", "taker", "gasless", "signatureFeePayer", "signatureFeeLamports",
-          "prioritizationFeeLamports", "rentFeeLamports", "lastValidBlockHeight"}
+          "prioritizationFeeLamports", "rentFeeLamports", "lastValidBlockHeight",
+          "platformFee"}
 
 
 class CaptureRejected(ValueError):
@@ -93,6 +94,18 @@ def capture(wallet, input_raw, fee_bps, slippage_bps, *, environment=None, reque
         if type(payload.get("slippageBps")) is not int or payload["slippageBps"] != slippage_bps:
             raise CaptureRejected("PROVIDER_SLIPPAGE_MISMATCH")
         validate_fee_response(policy, payload, input_mint=WSOL_MINT, output_mint=USDC_MINT)
+        platform = payload.get("platformFee")
+        if not isinstance(platform, dict) or platform.get("feeBps") != policy.fee_bps:
+            raise CaptureRejected("PLATFORM_FEE_EVIDENCE_MISMATCH")
+        platform_amount = platform.get("amount")
+        if platform_amount is not None:
+            try:
+                valid_amount = (amount(platform_amount)
+                    == amount(input_raw) * policy.fee_bps // 10000)
+            except Exception:
+                valid_amount = False
+            if not valid_amount:
+                raise CaptureRejected("PLATFORM_FEE_EVIDENCE_MISMATCH")
     validate(quote)
     if quote.get("transaction") not in (None, ""):
         raise CaptureRejected("QUOTE_CONTAINS_TRANSACTION")
