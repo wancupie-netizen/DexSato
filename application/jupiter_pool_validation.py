@@ -171,18 +171,123 @@ def make_probe(encoded, route_index):
                      'changed_fields': ['quotedOutAmount', 'slippageBps'], 'execution_ready': False}
 
 
+def probe_diagnostics(value, route_index):
+    """Allowlisted structured diagnostics only; never persist provider prose.
+
+    Missing/unrecognized information remains explicit. Diagnostic fields do not
+    participate in authorization or make an inconclusive probe pass.
+    """
+    err = value.get('err')
+    error = {'kind': 'NONE' if err is None else 'UNRECOGNIZED'}
+    enums = {'InvalidArgument', 'InvalidInstructionData', 'InvalidAccountData',
+             'AccountDataTooSmall', 'InsufficientFunds', 'IncorrectProgramId',
+             'MissingRequiredSignature', 'ComputationalBudgetExceeded',
+             'ProgramFailedToComplete', 'ProgramFailedToCompile',
+             'InvalidError', 'ArithmeticOverflow', 'InvalidSeeds'}
+    if isinstance(err, dict) and set(err) == {'InstructionError'}:
+        entry = err['InstructionError']
+        if isinstance(entry, list) and len(entry) == 2 and type(entry[0]) is int and 0 <= entry[0] <= 255:
+            error = {'kind': 'INSTRUCTION_ERROR', 'instruction_index': entry[0],
+                     'at_expected_route': entry[0] == route_index, 'detail': 'UNRECOGNIZED'}
+            detail = entry[1]
+            if isinstance(detail, dict) and set(detail) == {'Custom'} and type(detail['Custom']) is int and 0 <= detail['Custom'] < 2**32:
+                error.update(detail='CUSTOM', custom_code=detail['Custom'])
+            elif isinstance(detail, str) and detail in enums:
+                error['detail'] = detail
+    elif isinstance(err, str) and err in {'BlockhashNotFound', 'AccountNotFound', 'InsufficientFundsForFee', 'InvalidAccountForFee', 'AlreadyProcessed'}:
+        error = {'kind': 'TRANSACTION_ERROR', 'detail': err}
+    logs = value.get('logs')
+    require(logs is None or (isinstance(logs, list) and len(logs) <= 4096
+            and all(isinstance(x, str) and len(x) <= 8192 for x in logs)), 'PROBE_LOGS')
+    events = []; omitted = 0; limit = 128
+    for index, line in enumerate(logs or []):
+        event = None
+        m = re.fullmatch(r'Program ([1-9A-HJ-NP-Za-km-z]{32,44}) (invoke \[([0-9]{1,2})\]|success|failed: custom program error: (0x[0-9a-fA-F]{1,8})|failed: (.+))', line)
+        if m:
+            try:
+                key(m[1])
+            except BindingRejected:
+                m = None
+        if m:
+            event = {'line_index': index, 'program_id': m[1],
+                     'event': 'INVOKE' if m[3] else 'SUCCESS' if m[2] == 'success' else 'FAILED'}
+            if m[3]: event['stack_height'] = int(m[3])
+            if m[4]: event['custom_code'] = int(m[4], 16)
+            if m[5]: event['detail'] = {'Computational budget exceeded': 'COMPUTE_EXCEEDED', 'Program failed to complete': 'PROGRAM_FAILED_TO_COMPLETE'}.get(m[5], 'REDACTED_UNRECOGNIZED_DETAIL')
+        elif line.startswith('Program log: AnchorError'):
+            number = re.search(r'Error Number: ([0-9]{1,10})\.', line)
+            label = re.search(r'Error Code: (SlippageToleranceExceeded|InsufficientFunds|InvalidTokenAccount|InvalidCalculation)\.', line)
+            if number and int(number[1]) < 2**32 or label:
+                event = {'line_index': index, 'event': 'ANCHOR_ERROR'}
+                if number and int(number[1]) < 2**32: event['error_number'] = int(number[1])
+                if label: event['error_code'] = label[1]
+        if event is not None and len(events) < limit:
+            events.append(event)
+        else:
+            omitted += 1
+    return {'error': error, 'logs_available': logs is not None,
+            'log_line_count': len(logs or []), 'filtered_events': events,
+            'omitted_line_count': omitted, 'event_limit_reached': len(events) == limit,
+            'raw_logs_saved': False, 'execution_ready': False}
+
+
+def jupiter_rejection_trace(logs, route_index):
+    """Recognize a complete runtime invocation stack, not an Anchor prose line."""
+    stack = []; top_index = -1; rejected = False
+    if not logs or type(route_index) is not int or not 0 <= route_index < 64:
+        return False
+    for line in logs:
+        if 'log truncated' in line.lower():
+            return False
+        invoke = re.fullmatch(r'Program ([1-9A-HJ-NP-Za-km-z]{32,44}) invoke \[([1-9][0-9]?)\]', line)
+        finish = re.fullmatch(r'Program ([1-9A-HJ-NP-Za-km-z]{32,44}) (success|failed: (.+))', line)
+        if invoke or finish:
+            m = invoke or finish
+            try:
+                key(m[1])
+            except BindingRejected:
+                return False
+            if rejected:
+                return False
+            if invoke:
+                if int(invoke[2]) != len(stack)+1:
+                    return False
+                if not stack:
+                    top_index += 1
+                stack.append(invoke[1])
+            else:
+                if not stack or stack[-1] != finish[1]:
+                    return False
+                if finish[2] != 'success':
+                    if (len(stack) != 1 or finish[1] != JUPITER or top_index != route_index
+                            or finish[3] != 'custom program error: 0x1771'):
+                        return False
+                    rejected = True
+                stack.pop()
+        elif line.startswith('Program ') and not line.startswith(('Program log:', 'Program data:', 'Program return:')):
+            # Compute consumption is harmless; malformed lifecycle is not.
+            if any(word in line for word in ('invoke', 'success', 'failed:')):
+                return False
+    return rejected and not stack and top_index == route_index
+
+
 def probe_result(result, route_index, minimum_slot):
     require(isinstance(result, dict) and isinstance(result.get('context'), dict)
             and isinstance(result.get('value'), dict), 'PROBE_RESPONSE')
     slot = result['context'].get('slot')
     require(type(slot) is int and slot >= minimum_slot, 'PROBE_SLOT')
-    v = result['value']; logs = v.get('logs')
-    require(isinstance(logs, list) and len(logs) <= 4096 and all(isinstance(x, str) and len(x) <= 8192 for x in logs), 'PROBE_LOGS')
-    failed = [m.group(1) for line in logs if (m := re.match(r'^Program (\w+) failed:', line))]
-    matched = (v.get('err') == {'InstructionError': [route_index, {'Custom': 6001}]}
-               and failed == [JUPITER]
-               and any('Error Code: SlippageToleranceExceeded.' in x for x in logs))
+    v = result['value']
+    diagnostics = probe_diagnostics(v, route_index)
+    logs = v.get('logs') or []
+    error = diagnostics['error']
+    matched = (error.get('kind') == 'INSTRUCTION_ERROR'
+               and error.get('instruction_index') == route_index
+               and error.get('custom_code') == 6001
+               and jupiter_rejection_trace(logs, route_index))
     return {'status': 'NEGATIVE_MINIMUM_PROBE_OBSERVED' if matched else 'MINIMUM_PROBE_INCONCLUSIVE',
             'probe_slot': slot, 'jupiter_slippage_rejection_observed': matched,
+            'diagnostics': diagnostics,
+            'classification_basis': 'PROGRAM_INDEX_CODE_AND_COMPLETE_RUNTIME_TRACE',
+            'error_mapping_source': 'https://developers.jup.ag/docs/swap/v1/common-errors',
             'enforcement_verified': False, 'execution_ready': False,
             'note': 'Different-slot unsigned probe; not bytecode proof, exact rounding proof or execution approval.'}

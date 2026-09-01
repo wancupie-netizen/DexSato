@@ -17,6 +17,10 @@ def account(raw, owner):
     return {'data': [base64.b64encode(raw).decode(), 'base64'], 'owner': owner, 'executable': False}
 
 
+def route_prefix():
+    return ['Program '+d.TOKEN+' '+event for _ in range(6) for event in ('invoke [1]', 'success')] + ['Program '+d.JUPITER+' invoke [1]']
+
+
 def fixture():
     config, observation, pool, v0, v1 = map(pub, range(2, 7))
     a = [pub(10), config, pool, pub(11), pub(12), v0, v1, observation, d.TOKEN, pub(13)]
@@ -89,7 +93,7 @@ class BindingTests(unittest.TestCase):
                     {'outAmount':'102841','slippageBps':slip,'otherAmountThreshold':threshold},op)
 
     def probe(self):
-        return {'context':{'slot':100},'value':{'err':{'InstructionError':[6,{'Custom':6001}]},'logs':[
+        return {'context':{'slot':100},'value':{'err':{'InstructionError':[6,{'Custom':6001}]},'logs':route_prefix()+[
             'Program log: AnchorError occurred. Error Code: SlippageToleranceExceeded.',
             'Program '+d.JUPITER+' failed: custom program error: 0x1771']}}
 
@@ -114,6 +118,118 @@ class BindingTests(unittest.TestCase):
         pool='8VXj6uz61v8yAu7m9pVEYNYjJwjK7WfFbRCs3YyXY6Bb'
         config='GcJVsj5MxokA4eRMUkB4cJHuZ6o9Y8MooXBViN5F1mYW'
         self.assertEqual(d.pda([b'pool',d.key(config),d.key(d.WSOL),d.key(d.USDC)],d.PANCAKE),pool)
+
+
+class ProbeDiagnosticTests(unittest.TestCase):
+    def result(self, err=None, logs=None):
+        return d.probe_result({'context': {'slot': 100}, 'value': {'err': err, 'logs': logs}}, 6, 99)
+
+    def test_custom_failure_is_retained_without_matching_pass(self):
+        r=self.result({'InstructionError':[6,{'Custom':6024}]}, ['Program '+d.JUPITER+' failed: custom program error: 0x1788'])
+        self.assertEqual(r['diagnostics']['error']['custom_code'],6024)
+        self.assertEqual(r['diagnostics']['filtered_events'][0]['program_id'],d.JUPITER)
+        self.assertFalse(r['jupiter_slippage_rejection_observed'])
+
+    def test_missing_logs_returns_inconclusive_diagnostic(self):
+        r=self.result({'InstructionError':[6,{'Custom':6001}]})
+        self.assertFalse(r['diagnostics']['logs_available'])
+        self.assertEqual(r['status'],'MINIMUM_PROBE_INCONCLUSIVE')
+
+    def test_provider_prose_and_secrets_never_copied(self):
+        secret='https://rpc.invalid/?api-key=TEST_SECRET_123'
+        r=self.result({'unexpected':secret}, ['Program log: '+secret,'Program data: '+secret,
+            'Program '+d.JUPITER+' failed: '+secret,
+            'Program log: AnchorError '+secret+' Error Code: SlippageToleranceExceeded. Error Number: 6001.'])
+        text=json.dumps(r)
+        self.assertNotIn(secret,text);self.assertNotIn('TEST_SECRET_123',text)
+        self.assertEqual(r['diagnostics']['error']['kind'],'UNRECOGNIZED')
+        self.assertEqual(r['diagnostics']['filtered_events'][1]['error_number'],6001)
+
+    def test_downstream_and_parent_failures_preserved(self):
+        r=self.result({'InstructionError':[6,{'Custom':6001}]},[
+            'Program '+d.PANCAKE+' invoke [2]',
+            'Program '+d.PANCAKE+' failed: custom program error: 0x1771',
+            'Program '+d.JUPITER+' failed: custom program error: 0x1771'])
+        self.assertEqual(len(r['diagnostics']['filtered_events']),3)
+        self.assertFalse(r['jupiter_slippage_rejection_observed'])
+
+    def test_safe_builtin_and_transaction_error(self):
+        r=self.result({'InstructionError':[2,'ComputationalBudgetExceeded']},[])
+        self.assertEqual(r['diagnostics']['error']['instruction_index'],2)
+        self.assertFalse(r['diagnostics']['error']['at_expected_route'])
+        self.assertEqual(self.result('BlockhashNotFound',[])['diagnostics']['error']['detail'],'BlockhashNotFound')
+
+    def test_diagnostic_bounds(self):
+        logs=['Program '+d.JUPITER+' success']*200
+        r=self.result(None,logs)['diagnostics']
+        self.assertEqual(len(r['filtered_events']),128);self.assertEqual(r['omitted_line_count'],72)
+        for logs in [['x'*8193],['x']*4097,[123]]:
+            with self.assertRaises(d.BindingRejected):self.result(None,logs)
+
+    def test_invalid_numeric_error_details_redacted(self):
+        for detail in [{'Custom':True},{'Custom':-1},{'Custom':2**32}]:
+            r=self.result({'InstructionError':[6,detail]},[])
+            self.assertNotIn('custom_code',r['diagnostics']['error'])
+
+    def test_anchor_text_with_complete_trace_still_matches(self):
+        r=self.result({'InstructionError':[6,{'Custom':6001}]},route_prefix()+[
+            'Program log: AnchorError occurred. Error Code: SlippageToleranceExceeded. Error Number: 6001.',
+            'Program '+d.JUPITER+' failed: custom program error: 0x1771'])
+        self.assertTrue(r['jupiter_slippage_rejection_observed'])
+        self.assertFalse(r['execution_ready']);self.assertFalse(r['enforcement_verified'])
+
+
+class ProbeClassificationTests(unittest.TestCase):
+    def logs(self):
+        return route_prefix()+[
+            'Program '+d.PANCAKE+' invoke [2]', 'Program '+d.PANCAKE+' success',
+            'Program '+d.JUPITER+' invoke [2]', 'Program '+d.JUPITER+' success',
+            'Program '+d.JUPITER+' failed: custom program error: 0x1771']
+
+    def classify(self, logs, error=None):
+        return d.probe_result({'context':{'slot':100},'value':{'logs':logs,
+            'err':error if error is not None else {'InstructionError':[6,{'Custom':6001}]}}},6,99)
+
+    def test_numeric_jupiter_failure_without_anchor_text(self):
+        r=self.classify(self.logs())
+        self.assertEqual(r['status'],'NEGATIVE_MINIMUM_PROBE_OBSERVED')
+        self.assertFalse(r['execution_ready']);self.assertFalse(r['enforcement_verified'])
+
+    def test_same_code_from_downstream_not_accepted(self):
+        logs=route_prefix()+['Program '+d.PANCAKE+' invoke [2]',
+            'Program '+d.PANCAKE+' failed: custom program error: 0x1771',
+            'Program '+d.JUPITER+' failed: custom program error: 0x1771']
+        self.assertFalse(self.classify(logs)['jupiter_slippage_rejection_observed'])
+
+    def test_missing_and_truncated_lifecycle(self):
+        logs=self.logs()
+        for bad in [logs[1:],logs[:-1],logs[:13]+logs[14:],logs+['Log truncated'],logs+['Program '+d.TOKEN+' invoke [1]']]:
+            with self.subTest(bad=bad):self.assertFalse(self.classify(bad)['jupiter_slippage_rejection_observed'])
+
+    def test_error_index_code_and_boolean_mismatch(self):
+        for err in [{'InstructionError':[5,{'Custom':6001}]},{'InstructionError':[6,{'Custom':6024}]},
+                    {'InstructionError':[True,{'Custom':6001}]},{'InstructionError':[6,{'Custom':True}]}]:
+            self.assertFalse(self.classify(self.logs(),err)['jupiter_slippage_rejection_observed'])
+
+    def test_wrong_program_or_runtime_code(self):
+        for tail in ['Program '+d.PANCAKE+' failed: custom program error: 0x1771',
+                     'Program '+d.JUPITER+' failed: custom program error: 0x1772']:
+            self.assertFalse(self.classify(self.logs()[:-1]+[tail])['jupiter_slippage_rejection_observed'])
+
+    def test_spoofed_prose_not_runtime_failure(self):
+        logs=route_prefix()+['Program log: Program '+d.JUPITER+' failed: custom program error: 0x1771',
+            'Program log: Error Code: SlippageToleranceExceeded.', 'Program '+d.JUPITER+' success']
+        self.assertFalse(self.classify(logs)['jupiter_slippage_rejection_observed'])
+
+    def test_malformed_depth_and_wrong_success_order(self):
+        for line in ['Program '+d.PANCAKE+' invoke [3]', 'Program '+d.TOKEN+' success']:
+            logs=self.logs();logs[13]=line
+            self.assertFalse(self.classify(logs)['jupiter_slippage_rejection_observed'])
+
+    def test_anchor_line_alone_no_longer_sufficient(self):
+        r=self.classify(['Program log: Error Code: SlippageToleranceExceeded.',
+            'Program '+d.JUPITER+' failed: custom program error: 0x1771'])
+        self.assertFalse(r['jupiter_slippage_rejection_observed'])
 
 
 class ProbeByteTests(unittest.TestCase):
