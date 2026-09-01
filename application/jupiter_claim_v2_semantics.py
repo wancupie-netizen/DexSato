@@ -78,7 +78,9 @@ def expected_accounts(identity):
     require(project == ULTRA_PROJECT, "ULTRA_PROJECT_MISMATCH")
     require(token_program == TOKEN_PROGRAM, "TOKEN_2022_NOT_REVIEWED")
     require(mint in (WSOL_MINT, USDC_MINT), "UNSUPPORTED_CLAIM_MINT")
-    require(len({payer, project, admin, referral, partner, mint}) == 6,
+    # The permissionless payer may also be the partner that receives the claim.
+    # State, authority and mint roles must still remain distinct.
+    require(len({project, admin, referral, partner, mint}) == 5,
             "IDENTITY_ALIAS_NOT_ALLOWED")
     addresses = {
         "payer": payer,
@@ -109,6 +111,7 @@ def audit_claim_v2_instruction(evidence, identity):
     expected = expected_accounts(identity)
     normalized = []
     signer_roles = []
+    signer_addresses = []
     for index, ((role, address), item) in enumerate(zip(expected, accounts)):
         require(type(item) is dict and set(item) == {"role", "address", "signer", "writable"},
                 "INVALID_ACCOUNT_META")
@@ -118,10 +121,14 @@ def audit_claim_v2_instruction(evidence, identity):
                 "INVALID_ACCOUNT_META_FLAGS")
         if item["signer"]:
             signer_roles.append(role)
+            signer_addresses.append(item["address"])
         if role in WRITABLE_ROLES:
             require(item["writable"], "REQUIRED_WRITABLE_ACCOUNT_MISSING")
         normalized.append({"index": index, **item})
-    require(signer_roles == ["payer"], "UNEXPECTED_CLAIM_SIGNER_SET")
+    # When payer == partner, Solana's shared account meta correctly makes both
+    # semantic roles appear signed. No distinct signer address is permitted.
+    require("payer" in signer_roles and set(signer_addresses) == {dict(expected)["payer"]},
+            "UNEXPECTED_CLAIM_SIGNER_SET")
     require(identity.get("referral_share_bps") == 8000,
             "REFERRAL_SHARE_REQUIRES_REVIEW")
     return {
@@ -148,4 +155,3 @@ def audit_claim_v2_instruction(evidence, identity):
         "execution_ready": False,
         "fee_receipt_verified": False,
     }
-

@@ -17,8 +17,8 @@ ADMIN = "D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf"
 
 
 def identity():
-    # The test payer differs from partner because the audit rejects role aliasing.
-    return {"payer": "C2hCWLU2uF1zbx6goM1gyc4vQhBCbUG77qe1B9hj1TFz",
+    # Permissionless claim payer may be the partner wallet.
+    return {"payer": PARTNER,
             "project": ULTRA_PROJECT, "admin": ADMIN,
             "referral_account": REFERRAL, "partner": PARTNER,
             "mint": WSOL_MINT, "token_program": TOKEN_PROGRAM,
@@ -28,7 +28,7 @@ def identity():
 def evidence():
     metas=[]
     for role,address in expected_accounts(identity()):
-        metas.append({"role":role,"address":address,"signer":role=="payer",
+        metas.append({"role":role,"address":address,"signer":address==identity()["payer"],
                       "writable":role in {"payer","projectAdminTokenAccount",
                                            "referralTokenAccount","partnerTokenAccount"}})
     return {"program":"REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3",
@@ -58,6 +58,7 @@ def test_ultra_v2_referral_and_destination_atas_are_distinct():
     assert accounts["referralTokenAccount"]=="3vDQ2eA5mAu1Wf5podZ7rFRnamuMKC9prhaTkf8PvyUv"
     assert len({accounts["referralTokenAccount"],accounts["partnerTokenAccount"],
                 accounts["projectAdminTokenAccount"]})==3
+    assert accounts["payer"]==accounts["partner"]
 
 
 @pytest.mark.parametrize("index",range(12))
@@ -75,7 +76,7 @@ def test_order_count_program_discriminator_and_signer_set_fail_closed():
     bad=evidence();bad["accounts"].pop();cases.append((bad,"CLAIM_V2_ACCOUNT_COUNT_MISMATCH"))
     bad=evidence();bad["program"]=ADMIN;cases.append((bad,"REFERRAL_PROGRAM_MISMATCH"))
     bad=evidence();bad["discriminator"]="00"*8;cases.append((bad,"CLAIM_V2_DISCRIMINATOR_MISMATCH"))
-    bad=evidence();bad["accounts"][6]["signer"]=True;cases.append((bad,"UNEXPECTED_CLAIM_SIGNER_SET"))
+    bad=evidence();bad["accounts"][2]["signer"]=True;cases.append((bad,"UNEXPECTED_CLAIM_SIGNER_SET"))
     for payload,code in cases:
         with pytest.raises(ClaimV2AuditRejected,match=code):
             audit_claim_v2_instruction(payload,identity())
