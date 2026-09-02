@@ -21,13 +21,15 @@ SOURCE_COMMIT = "6500f64ff004e78faa15d66446e175ede625260d"
 SOURCE_REPOSITORY = "https://github.com/TeamRaccoons/referral"
 SDK_SOURCE = "packages/sdk/src/referral.ts"
 PROGRAM_SOURCE = "program/programs/referral/src/instructions/claim_v2.rs"
+PINNED_SDK_VERSION = "0.3.0"
+ACCOUNT_ORDER_AUTHORITY = "PINNED_SDK_COMPILED_IDL"
 SYSTEM_PROGRAM = "11111111111111111111111111111111"
 CLAIM_V2_DISCRIMINATOR = hashlib.sha256(b"global:claim_v2").digest()[:8].hex()
 
 ACCOUNT_ROLES = (
     "payer", "project", "admin", "projectAdminTokenAccount",
     "referralAccount", "referralTokenAccount", "partner",
-    "partnerTokenAccount", "mint", "tokenProgram", "systemProgram",
+    "partnerTokenAccount", "mint", "systemProgram", "tokenProgram",
     "associatedTokenProgram",
 )
 WRITABLE_ROLES = frozenset({
@@ -66,7 +68,7 @@ def _ata(owner, mint, token_program=TOKEN_PROGRAM):
 
 
 def expected_accounts(identity):
-    """Return the exact accountsStrict role/address contract from the pinned SDK."""
+    """Return the compiled IDL account order from pinned referral SDK 0.3.0."""
     require(type(identity) is dict and len(identity) <= 8, "INVALID_IDENTITY_CONTRACT")
     payer = _address(identity.get("payer"))
     project = _address(identity.get("project"))
@@ -137,6 +139,8 @@ def audit_claim_v2_instruction(evidence, identity):
         "source_repository": SOURCE_REPOSITORY,
         "source_commit": SOURCE_COMMIT,
         "sdk_source": SDK_SOURCE,
+        "pinned_sdk_version": PINNED_SDK_VERSION,
+        "account_order_authority": ACCOUNT_ORDER_AUTHORITY,
         "program_source": PROGRAM_SOURCE,
         "program": REFERRAL_PROGRAM,
         "discriminator": CLAIM_V2_DISCRIMINATOR,

@@ -4,7 +4,8 @@ import hashlib
 import pytest
 
 from application.jupiter_claim_v2_semantics import (
-    ACCOUNT_ROLES, CLAIM_V2_DISCRIMINATOR, ClaimV2AuditRejected,
+    ACCOUNT_ORDER_AUTHORITY, ACCOUNT_ROLES, CLAIM_V2_DISCRIMINATOR,
+    PINNED_SDK_VERSION, ClaimV2AuditRejected,
     audit_claim_v2_instruction, expected_accounts,
 )
 from application.jupiter_fee_policy import WSOL_MINT
@@ -40,6 +41,9 @@ def test_claim_v2_contract_is_pinned_and_always_non_executable():
     assert report["status"]=="CLAIM_V2_SOURCE_ACCOUNT_REVIEW_REQUIRED"
     assert report["source_commit"]=="6500f64ff004e78faa15d66446e175ede625260d"
     assert report["account_count"]==12
+    assert PINNED_SDK_VERSION=="0.3.0"
+    assert report["account_order_authority"]==ACCOUNT_ORDER_AUTHORITY
+    assert ACCOUNT_ROLES[9:]==("systemProgram","tokenProgram","associatedTokenProgram")
     assert [x["role"] for x in report["account_roles"]]==list(ACCOUNT_ROLES)
     assert report["source_semantics_verified"] is True
     assert report["deployed_program_binary_verified"] is False
@@ -80,6 +84,16 @@ def test_order_count_program_discriminator_and_signer_set_fail_closed():
     for payload,code in cases:
         with pytest.raises(ClaimV2AuditRejected,match=code):
             audit_claim_v2_instruction(payload,identity())
+
+
+def test_obsolete_source_literal_tail_order_is_rejected():
+    """Object-literal order must not override the pinned compiled IDL order."""
+    bad=evidence()
+    bad["accounts"][9],bad["accounts"][10]=bad["accounts"][10],bad["accounts"][9]
+    bad["accounts"][9]["role"]="tokenProgram"
+    bad["accounts"][10]["role"]="systemProgram"
+    with pytest.raises(ClaimV2AuditRejected,match="CLAIM_V2_ACCOUNT_ORDER_MISMATCH"):
+        audit_claim_v2_instruction(bad,identity())
 
 
 @pytest.mark.parametrize("role",["payer","projectAdminTokenAccount","referralTokenAccount","partnerTokenAccount"])
