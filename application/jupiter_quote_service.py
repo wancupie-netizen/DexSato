@@ -56,9 +56,9 @@ def _fee_evidence(policy, payload, output_mint):
         raise JupiterQuoteUnavailable("Jupiter referral fee could not be verified.") from error
 
 
-def _fee_disclosure(evidence, payload, lamports):
+def _fee_disclosure(evidence, payload, lamports, output_mint=None):
     try:
-        return build_fee_disclosure(evidence, payload, lamports)
+        return build_fee_disclosure(evidence, payload, lamports, output_mint)
     except (ReferralVerificationError, FeePolicyRejected) as error:
         raise JupiterQuoteUnavailable("Jupiter referral account verification is unavailable.") from error
 
@@ -213,7 +213,7 @@ def fetch_jupiter_quote(
     if not isinstance(payload, dict) or payload.get("error"):
         raise JupiterQuoteUnavailable("Jupiter did not return a usable quote.")
     fee_evidence = _fee_evidence(fee_policy, payload, output_mint)
-    fee_disclosure = _fee_disclosure(fee_evidence, payload, lamports)
+    fee_disclosure = _fee_disclosure(fee_evidence, payload, lamports, output_mint)
     if payload.get("transaction") not in (None, ""):
         raise JupiterQuoteUnavailable("Quote-only policy rejected transaction material.")
     if str(payload.get("inputMint") or WRAPPED_SOL_MINT) != WRAPPED_SOL_MINT:

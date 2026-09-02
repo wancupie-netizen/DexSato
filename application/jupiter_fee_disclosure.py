@@ -6,7 +6,7 @@ from application.jupiter_referral_verification import verify_referral_accounts
 from application.jupiter_fee_policy import FeePolicyRejected, WSOL_MINT
 
 
-def build_fee_disclosure(evidence, payload, input_lamports):
+def build_fee_disclosure(evidence, payload, input_lamports, output_mint=None):
     policy = evidence.policy
     base = {"version": 1, "policy_id": policy.fingerprint,
             "integrator_fee_bps": policy.fee_bps,
@@ -25,9 +25,26 @@ def build_fee_disclosure(evidence, payload, input_lamports):
     observation = verify_referral_accounts(policy.referral_account,
         os.getenv("DEXSATO_JUPITER_REFERRAL_PARTNER", "").strip(), mints=(WSOL_MINT,))
     estimate = Decimal(input_lamports) * Decimal(policy.fee_bps) / Decimal(10000 * 10**9)
-    return {**base, "integrator_fee_amount_ui": format(estimate, "f"),
+    one_shot_ready = False
+    if os.getenv("DEXSATO_JUPITER_ONE_SHOT_MODE", "false").strip().lower() == "true":
+        try:
+            from application.jupiter_one_shot_swap_gate import (
+                INPUT_LAMPORTS, TAP_MINT, WALLET, require_armed,
+            )
+            path = os.getenv("DEXSATO_JUPITER_ONE_SHOT_GATE_PATH", "").strip()
+            gate = require_armed(path, TAP_MINT, WALLET, input_lamports, policy)
+            one_shot_ready = (gate.get("output_mint") == TAP_MINT
+                              and output_mint == TAP_MINT
+                              and input_lamports == INPUT_LAMPORTS)
+        except Exception:
+            one_shot_ready = False
+    return {**base, "execution_ready": one_shot_ready,
+            "activation_scope": "ONE_SHOT_TAP" if one_shot_ready else "PREVIEW_ONLY",
+            "integrator_fee_amount_ui": format(estimate, "f"),
             "integrator_fee_symbol": "WSOL", "referral_verification": "RPC_ACCOUNT_VERIFIED",
             "referral_checked_at": observation.checked_at, "referral_slot": observation.slot,
             "jupiter_share_percent": format(Decimal(10000 - observation.partner_share_bps) / 100, ".2f"),
             "note": "Estimated integrator fee includes Jupiter's share; not an additional charge. "
-                    "Final debit and output depend on the transaction. Fee execution is not activated."}
+                    "Final debit and output depend on the transaction. "
+                    + ("One-shot TAP execution gate is armed." if one_shot_ready
+                       else "Fee execution is not activated.")}

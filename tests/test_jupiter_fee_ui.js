@@ -19,6 +19,16 @@ function fixture(bps = 0) {
             note:'Estimate only. No fee receipt verified.', network_fee_note:'Network fees separate.'}};
 }
 
+function armedTapFixture() {
+    const value=fixture(50);
+    value.output_mint='ADcF26nFGKMuRZ7va5361H2PCHCDRi2FmeJBkX3Spump';
+    value.input_amount_sol='0.001';
+    value.input_amount_lamports='1000000';
+    value.fee_disclosure.execution_ready=true;
+    value.fee_disclosure.activation_scope='ONE_SHOT_TAP';
+    return value;
+}
+
 function boot(payload = fixture()) {
     class Element {
         constructor() {this.children=[];this.events={};this.value='0.1';this.checked=false;this.disabled=false;
@@ -32,6 +42,8 @@ function boot(payload = fixture()) {
     const elements = new Map();
     const el = selector => {if(!elements.has(selector))elements.set(selector,new Element());return elements.get(selector);};
     el('[data-jupiter-sandbox]').querySelector=el;
+    el('[data-jupiter-sandbox]').dataset.tokenAddress=payload.output_mint;
+    el('[data-quote-amount]').value=payload.input_amount_sol;
     const document={querySelector:el,querySelectorAll:()=>[],createElement:()=>new Element(),head:new Element()};
     let signed=0, prepared=0;
     const wallet={publicKey:'WALLET', connect:async()=>({publicKey:'WALLET'}),on(){},
@@ -83,6 +95,15 @@ test('fee-enabled preview cannot prepare or sign',async()=>{
     await b.click('[data-connect-wallet]');await b.click('[data-get-quote]');
     b.el('[data-swap-risk-ack]').checked=true;b.el('[data-swap-risk-ack]').events.change();
     assert.equal(b.el('[data-execute-swap]').disabled,true);
+    assert.deepEqual(b.counts(),{signed:0,prepared:0});
+});
+
+test('armed one-shot TAP fee preview can advance to transaction review',async()=>{
+    const b=boot(armedTapFixture());
+    await b.click('[data-connect-wallet]');await b.click('[data-get-quote]');
+    b.el('[data-swap-risk-ack]').checked=true;b.el('[data-swap-risk-ack]').events.change();
+    assert.equal(b.el('[data-execute-swap]').disabled,false);
+    await b.click('[data-execute-swap]');
     assert.deepEqual(b.counts(),{signed:0,prepared:0});
 });
 

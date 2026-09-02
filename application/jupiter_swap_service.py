@@ -36,6 +36,10 @@ from application.jupiter_quote_service import (
     _fee_disclosure,
 )
 from application.jupiter_fee_policy import FeeEvidence, FeePolicyConfigurationError, require_fee_execution_ready
+from application.jupiter_one_shot_swap_gate import (
+    GateRejected,bind as bind_one_shot,consume as consume_one_shot,
+    record as record_one_shot,require_armed as require_one_shot_armed,
+)
 from application.solana_discovery_feed_service import load_solana_discovery_record
 
 
@@ -73,6 +77,7 @@ class _PendingOrder:
     wallet_signature_index: int
     last_valid_block_height: str | None
     fee_evidence: FeeEvidence
+    one_shot_gate_path: str | None = None
     signed_digest: bytes | None = None
     executing: bool = False
     completed: bool = False
@@ -378,10 +383,18 @@ def prepare_jupiter_swap(
     resolved_key = _api_key(api_key)
 
     fee_policy = _fee_policy()
+    gate_path=None;gate=None
     try:
-        require_fee_execution_ready(fee_policy)
-    except FeePolicyConfigurationError as error:
-        raise JupiterQuoteNotConfigured("Fee-enabled swap execution is not activated.") from error
+        one_shot_mode=os.getenv("DEXSATO_JUPITER_ONE_SHOT_MODE","false").strip().lower()
+        if one_shot_mode not in {"true","false"}:
+            raise GateRejected("INVALID_ONE_SHOT_MODE")
+        if fee_policy.enabled and one_shot_mode=="true":
+            gate_path=os.getenv("DEXSATO_JUPITER_ONE_SHOT_GATE_PATH","").strip()
+            if not gate_path:raise GateRejected("ONE_SHOT_GATE_PATH_REQUIRED")
+            gate=require_one_shot_armed(gate_path,output_mint,wallet,lamports,fee_policy,now())
+        else:require_fee_execution_ready(fee_policy)
+    except (FeePolicyConfigurationError,GateRejected) as error:
+        raise JupiterQuoteNotConfigured("Fee-enabled swap execution is not activated for this exact one-shot order.") from error
 
     with _pending_lock:
         _prune_orders(now(), wallet)
@@ -406,7 +419,7 @@ def prepare_jupiter_swap(
     if provider_error is not None:
         raise JupiterQuoteUnavailable(provider_error)
     fee_evidence = _fee_evidence(fee_policy, payload, output_mint)
-    fee_disclosure = _fee_disclosure(fee_evidence, payload, lamports)
+    fee_disclosure = _fee_disclosure(fee_evidence, payload, lamports, output_mint)
     if str(payload.get("inputMint") or "") != WRAPPED_SOL_MINT:
         raise JupiterSwapRejected("Jupiter swap input mint did not match SOL.")
     if str(payload.get("outputMint") or "") != output_mint:
@@ -445,7 +458,13 @@ def prepare_jupiter_swap(
         wallet_signature_index=wallet_index,
         last_valid_block_height=last_height_text,
         fee_evidence=fee_evidence,
+        one_shot_gate_path=gate_path,
     )
+    if gate is not None:
+        try:bind_one_shot(gate_path,gate,request_id,message,
+                          str(payload.get("otherAmountThreshold") or ""))
+        except GateRejected as error:
+            raise JupiterSwapRejected("The one-shot approval changed before order binding.") from error
     with _pending_lock:
         _prune_orders(current, wallet)
         if request_id in _pending_orders:
@@ -525,6 +544,12 @@ def execute_jupiter_swap(
         pending.signed_digest = signed_digest
         pending.executing = True
 
+    if pending.one_shot_gate_path:
+        try:consume_one_shot(pending.one_shot_gate_path,order_id,message,signed_digest.hex())
+        except GateRejected as error:
+            with _pending_lock:pending.executing=False
+            raise JupiterSwapRejected("The one-shot approval is unavailable or does not match this transaction.") from error
+
     body: dict[str, str] = {
         "signedTransaction": signed_transaction,
         "requestId": order_id,
@@ -560,6 +585,7 @@ def execute_jupiter_swap(
         with _pending_lock:
             pending.executing = False
             pending.completed = True
+        if pending.one_shot_gate_path:record_one_shot(pending.one_shot_gate_path,"Success",signature)
         return {
             "status": "SWAP_CONFIRMED",
             "request_id": order_id,
@@ -575,6 +601,9 @@ def execute_jupiter_swap(
     with _pending_lock:
         pending.executing = False
         pending.completed = True
+    if pending.one_shot_gate_path:
+        record_one_shot(pending.one_shot_gate_path,"Failed",
+                        error=payload.get("error"),code=payload.get("code"))
     return {
         "status": "SWAP_FAILED",
         "request_id": order_id,
