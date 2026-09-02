@@ -186,6 +186,55 @@ def bind_wallet_approval(path, gate_id, signed_transaction_sha256, *, current=No
     return gate
 
 
+def reserve_submission(path, gate_id, signed_transaction_sha256, *, current=None):
+    """Consume the single submission attempt before any provider call."""
+    gate = read_gate(path)
+    current = current or utc_now()
+    require(gate.get("status") == "WALLET_APPROVAL_BOUND",
+            "CLAIM_WALLET_APPROVAL_REQUIRED")
+    require(gate.get("gate_id") == gate_id, "CLAIM_GATE_ID_MISMATCH")
+    require(current <= _stamp(gate.get("expires_at", "")), "CLAIM_GATE_EXPIRED")
+    require(gate.get("signed_transaction_sha256") == signed_transaction_sha256,
+            "CLAIM_GATE_SIGNED_TRANSACTION_MISMATCH")
+    require(gate.get("wallet_signature_verified") is True
+            and gate.get("wallet_review_count") == 1
+            and gate.get("submission_attempt_count") == 0
+            and gate.get("claim_submitted") is False,
+            "CLAIM_GATE_ALREADY_USED")
+    require(gate.get("submission_permitted") is True
+            and gate.get("live_claim_approved") is True,
+            "LIVE_CLAIM_APPROVAL_REQUIRED")
+    gate.update(status="SUBMISSION_PENDING", submission_attempt_count=1,
+        submission_reserved_at=current.isoformat(), submission_permitted=False,
+        claim_submitted=False,
+        claim_execution_ready=False, execution_ready=False)
+    write_gate(path, gate)
+    return gate
+
+
+def record_submission_result(path, gate_id, *, signature=None, failure_reason=None):
+    gate = read_gate(path)
+    require(gate.get("status") == "SUBMISSION_PENDING"
+            and gate.get("gate_id") == gate_id
+            and gate.get("submission_attempt_count") == 1,
+            "CLAIM_SUBMISSION_NOT_PENDING")
+    if signature is not None:
+        require(type(signature) is str and 64 <= len(signature) <= 96,
+                "INVALID_CLAIM_SIGNATURE")
+        gate.update(status="FINALIZATION_PENDING", signature=signature,
+            claim_submitted=True, provider_status="Success")
+    else:
+        require(failure_reason in {"RPC_UNAVAILABLE", "RPC_HTTP_ERROR",
+            "RPC_REJECTED", "INVALID_RPC_RESPONSE"}, "INVALID_FAILURE_REASON")
+        gate.update(status="FAILED", provider_status="Failed",
+            failure_reason=failure_reason, claim_submitted=False)
+    gate.update(submission_permitted=False, live_claim_approved=False,
+        claim_execution_ready=False, execution_ready=False,
+        fee_receipt_verified=False)
+    write_gate(path, gate)
+    return gate
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--closure", required=True)
