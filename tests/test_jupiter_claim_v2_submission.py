@@ -34,7 +34,9 @@ def bound_gate(tmp_path, *, approved=False):
     bind_wallet_approval(path, "g" * 32, DIGEST, current=NOW)
     if approved:
         gate = read_gate(path)
-        gate.update(submission_permitted=True, live_claim_approved=True)
+        gate.update(status="LIVE_CLAIM_APPROVED", submission_permitted=True,
+            live_claim_approved=True, approval_id="a"*32, approval_count=1,
+            approval_expires_at="2026-09-02T12:01:30+00:00")
         write_gate(path, gate)
     return path
 
@@ -70,7 +72,7 @@ def test_disabled_unsafe_or_weak_configuration_fails_before_attempt(
         tmp_path, changes, confirmation, code):
     path = bound_gate(tmp_path, approved=True)
     with pytest.raises(ClaimV2GateRejected, match=code):
-        submit_claim(path, ENCODED, confirmation, environment=env(**changes),
+        submit_claim(path, ENCODED, confirmation, "a"*32, environment=env(**changes),
                      post=lambda *a, **k: None, current=NOW)
     assert read_gate(path)["submission_attempt_count"] == 0
 
@@ -81,7 +83,7 @@ def test_approved_mock_submission_consumes_exactly_one_attempt(tmp_path):
     def post(url, **kwargs):
         calls.append((url, kwargs))
         return Response({"jsonrpc": "2.0", "id": 1, "result": "s" * 88})
-    report = submit_claim(path, ENCODED, CONFIRMATION, environment=env(),
+    report = submit_claim(path, ENCODED, CONFIRMATION, "a"*32, environment=env(),
                           post=post, current=NOW)
     assert report["status"] == "CLAIM_V2_FINALIZATION_PENDING"
     assert report["execution_ready"] is False
@@ -91,7 +93,7 @@ def test_approved_mock_submission_consumes_exactly_one_attempt(tmp_path):
     assert stored["submission_attempt_count"] == 1
     assert stored["status"] == "FINALIZATION_PENDING"
     with pytest.raises(ClaimV2GateRejected, match="CLAIM_WALLET_APPROVAL_REQUIRED"):
-        submit_claim(path, ENCODED, CONFIRMATION, environment=env(), post=post,
+        submit_claim(path, ENCODED, CONFIRMATION, "a"*32, environment=env(), post=post,
                      current=NOW)
     assert len(calls) == 1
 
@@ -99,7 +101,7 @@ def test_approved_mock_submission_consumes_exactly_one_attempt(tmp_path):
 def test_rpc_failure_is_safe_and_non_retryable(tmp_path):
     path = bound_gate(tmp_path, approved=True)
     with pytest.raises(ClaimV2GateRejected, match="RPC_REJECTED"):
-        submit_claim(path, ENCODED, CONFIRMATION, environment=env(),
+        submit_claim(path, ENCODED, CONFIRMATION, "a"*32, environment=env(),
             post=lambda *a, **k: Response({"jsonrpc":"2.0","id":1,
                                            "error":{"message":"secret"}}),
             current=NOW)

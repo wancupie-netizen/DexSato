@@ -26,7 +26,7 @@ def _signed(value):
     require(1<=len(raw)<=MAX_BYTES,"INVALID_SIGNED_TRANSACTION")
     return raw
 
-def submit_claim(path,signed_transaction,confirmation,*,environment=None,post=None,current=None):
+def submit_claim(path,signed_transaction,confirmation,approval_id=None,*,environment=None,post=None,current=None):
     env=os.environ if environment is None else environment
     require(env.get(FLAG,"false").strip().lower()=="true",
             "CLAIM_SUBMISSION_FEATURE_DISABLED")
@@ -36,7 +36,7 @@ def submit_claim(path,signed_transaction,confirmation,*,environment=None,post=No
     raw=_signed(signed_transaction);digest=hashlib.sha256(raw).hexdigest()
     endpoint=_endpoint(env.get("SOLANA_RPC_URL",""))
     gate=read_gate(path)
-    reserve_submission(path,gate.get("gate_id"),digest,current=current)
+    reserve_submission(path,gate.get("gate_id"),digest,approval_id,current=current)
     payload={"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":[
         signed_transaction,{"encoding":"base64","skipPreflight":False,
         "preflightCommitment":"confirmed","maxRetries":0}]}

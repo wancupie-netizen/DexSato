@@ -111,6 +111,7 @@ def arm_claim_gate(path, closure, confirmation, *, environment=None, current=Non
         "expires_at": (current.astimezone(timezone.utc)
                        + timedelta(seconds=GATE_TTL_SECONDS)).isoformat(),
         "wallet_review_count": 0,
+        "approval_count": 0,
         "submission_attempt_count": 0,
         "signed_transaction_sha256": None,
         "wallet_signature_verified": False,
@@ -147,6 +148,7 @@ def require_armed_claim_gate(path, closure, *, current=None):
             "CLAIM_GATE_CLOSURE_BINDING_MISMATCH")
     require(gate.get("wallet_review_count") == 0
             and gate.get("submission_attempt_count") == 0
+            and gate.get("approval_count", 0) == 0
             and gate.get("signed_transaction_sha256") is None
             and gate.get("submission_permitted") is False
             and gate.get("claim_submitted") is False
@@ -178,6 +180,7 @@ def bind_wallet_approval(path, gate_id, signed_transaction_sha256, *, current=No
     gate.update(status="WALLET_APPROVAL_BOUND",
         signed_transaction_sha256=signed_transaction_sha256,
         wallet_review_count=1, wallet_approved_at=current.isoformat(),
+        approval_count=0,
         wallet_signature_verified=True, submission_permitted=False,
         claim_submitted=False, live_claim_approved=False,
         claim_execution_ready=False, execution_ready=False,
@@ -186,11 +189,12 @@ def bind_wallet_approval(path, gate_id, signed_transaction_sha256, *, current=No
     return gate
 
 
-def reserve_submission(path, gate_id, signed_transaction_sha256, *, current=None):
+def reserve_submission(path, gate_id, signed_transaction_sha256,
+                       approval_id=None, *, current=None):
     """Consume the single submission attempt before any provider call."""
     gate = read_gate(path)
     current = current or utc_now()
-    require(gate.get("status") == "WALLET_APPROVAL_BOUND",
+    require(gate.get("status") in ("WALLET_APPROVAL_BOUND", "LIVE_CLAIM_APPROVED"),
             "CLAIM_WALLET_APPROVAL_REQUIRED")
     require(gate.get("gate_id") == gate_id, "CLAIM_GATE_ID_MISMATCH")
     require(current <= _stamp(gate.get("expires_at", "")), "CLAIM_GATE_EXPIRED")
@@ -204,9 +208,14 @@ def reserve_submission(path, gate_id, signed_transaction_sha256, *, current=None
     require(gate.get("submission_permitted") is True
             and gate.get("live_claim_approved") is True,
             "LIVE_CLAIM_APPROVAL_REQUIRED")
+    require(type(approval_id) is str and approval_id == gate.get("approval_id"),
+            "CLAIM_LIVE_APPROVAL_ID_MISMATCH")
+    require(gate.get("approval_count") == 1
+            and current <= _stamp(gate.get("approval_expires_at", "")),
+            "CLAIM_LIVE_APPROVAL_EXPIRED_OR_INVALID")
     gate.update(status="SUBMISSION_PENDING", submission_attempt_count=1,
         submission_reserved_at=current.isoformat(), submission_permitted=False,
-        claim_submitted=False,
+        claim_submitted=False, approval_consumed_at=current.isoformat(),
         claim_execution_ready=False, execution_ready=False)
     write_gate(path, gate)
     return gate
