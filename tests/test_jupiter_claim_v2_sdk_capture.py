@@ -35,14 +35,14 @@ def lock(tmp_path,*,sdk_version="0.3.0",web3_version="1.98.4",integrity=True):
     return path
 
 
-def audit_payload():
+def audit_payload(web3_range="<=0.0.0-pr-29130 || 0.0.4 - 1.99.0-beta.0"):
     specs={
       "@coral-xyz/anchor":("moderate",False,"*",["@coral-xyz/borsh","@solana/web3.js"]),
       "@coral-xyz/borsh":("moderate",False,"*",["@solana/web3.js"]),
       "@jup-ag/referral-sdk":("high",True,"*",["@coral-xyz/anchor","@solana/spl-token","@solana/web3.js"]),
       "@solana/buffer-layout-utils":("high",False,"*",["@solana/web3.js","bigint-buffer"]),
       "@solana/spl-token":("high",False,"*",["@solana/buffer-layout-utils","@solana/web3.js"]),
-      "@solana/web3.js":("moderate",True,"<=0.0.0-pr-29130 || 0.0.4 - 1.98.4",["jayson"]),
+      "@solana/web3.js":("moderate",True,web3_range,["jayson"]),
       "bigint-buffer":("high",False,"*",[{"source":1103747}]),
       "jayson":("moderate",False,">=2.0.6",["uuid"]),
       "uuid":("moderate",False,"<11.1.1",[{"source":1119441}])}
@@ -61,7 +61,8 @@ def prepare_gate(tmp_path,monkeypatch):
     attestation={"attestation_version":1,"reviewed_at":"2026-09-01",
       "accepted_scope":"ONE_SHOT_READ_ONLY_UNSIGNED_CLAIM_V2_CAPTURE_ONLY",
       "package_lock_sha256":lock_hash,"advisory_profile_sha256":sdk.KNOWN_PROFILE_SHA256,
-      "reviewed_audit_sha256":"a"*64,"reviewed_dependency_tree_sha256":"b"*64,
+      "reviewed_audit_sha256":sdk.REVIEWED_AUDIT_SHA256,
+      "reviewed_dependency_tree_sha256":sdk.REVIEWED_DEPENDENCY_TREE_SHA256,
       "root_advisories":[{"source":1103747,"ghsa":"GHSA-3gc7-fjrx-p6mg"},
                            {"source":1119441,"ghsa":"GHSA-w5hq-g745-h8pq"}],
       "production_runtime_approved":False,"live_claim_approved":False,
@@ -168,6 +169,24 @@ def test_new_advisory_severity_or_registry_failure_blocks_capture(monkeypatch,tm
             environment={"PATH":"x"},runner=runner)
 
 
+def test_previous_advisory_range_and_unreviewed_evidence_hashes_fail_closed(
+        monkeypatch,tmp_path):
+    audit_runner=prepare_gate(tmp_path,monkeypatch)
+    lock_report=sdk.audit_dependency_lock(tmp_path/"package-lock.json")
+    old=audit_payload("<=0.0.0-pr-29130 || 0.0.4 - 1.98.4")
+    runner=lambda *a,**k:SimpleNamespace(returncode=1,
+        stdout=json.dumps(old),stderr="")
+    with pytest.raises(ClaimV2AuditRejected,
+                       match="DEPENDENCY_ADVISORY_DRIFT_REQUIRES_REVIEW"):
+        sdk.audit_advisory_gate(tmp_path,lock_report,
+            environment={"PATH":"x"},runner=runner)
+    attestation=json.loads((tmp_path/sdk.ATTESTATION_FILE).read_text(encoding="utf-8"))
+    attestation["reviewed_audit_sha256"]="0"*64
+    (tmp_path/sdk.ATTESTATION_FILE).write_text(json.dumps(attestation),encoding="utf-8")
+    with pytest.raises(ClaimV2AuditRejected,
+                       match="DEPENDENCY_ATTESTATION_OR_LOCK_MISMATCH"):
+        sdk.audit_advisory_gate(tmp_path,lock_report,
+            environment={"PATH":"x"},runner=audit_runner)
 def test_node_builder_has_no_keypair_signing_or_submission_api():
     source=(Path(sdk.__file__).resolve().parents[1]/"tools"/"claim_v2_capture"/
             "build_unsigned_claim_v2.mjs").read_text(encoding="utf-8")

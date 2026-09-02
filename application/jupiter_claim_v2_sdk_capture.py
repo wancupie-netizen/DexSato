@@ -21,7 +21,9 @@ MAX_LOCK_BYTES=1_048_576
 MAX_STDOUT_BYTES=8192
 TOOL_DIR=Path(__file__).resolve().parents[1]/"tools"/"claim_v2_capture"
 ATTESTATION_FILE="dependency_advisory_attestation.json"
-KNOWN_PROFILE_SHA256="a3c66ca604d7a4ad9cc70209198c02a87a5203c731d5bf61f7eebd2644e11ef6"
+KNOWN_PROFILE_SHA256="f948fc71f79aed1ac0b699a073fe76c5a1c574389fe55b9c5b52f29e1c47bcd1"
+REVIEWED_AUDIT_SHA256="d9469e8bd2dc8686a0c0b75f6bb4cc39978b7dc8a3cc0a07947cca2926686cee"
+REVIEWED_DEPENDENCY_TREE_SHA256="de268ab351a5fa34af654b0edd7ef69b26f46636547b142b24652044f1ef6e64"
 LOCK_SHA256="f174f8bdaa2ea9096060e3714a39a4b486fafb082ec4ae1e7fa484af9b6908f4"
 
 
@@ -120,7 +122,9 @@ def audit_advisory_gate(tool_dir,lock,*,environment,runner=None):
     require(attestation["attestation_version"]==1
             and attestation["accepted_scope"]=="ONE_SHOT_READ_ONLY_UNSIGNED_CLAIM_V2_CAPTURE_ONLY"
             and attestation["package_lock_sha256"]==LOCK_SHA256==lock["package_lock_sha256"]
-            and attestation["advisory_profile_sha256"]==KNOWN_PROFILE_SHA256,
+            and attestation["advisory_profile_sha256"]==KNOWN_PROFILE_SHA256
+            and attestation["reviewed_audit_sha256"]==REVIEWED_AUDIT_SHA256
+            and attestation["reviewed_dependency_tree_sha256"]==REVIEWED_DEPENDENCY_TREE_SHA256,
             "DEPENDENCY_ATTESTATION_OR_LOCK_MISMATCH")
     require(attestation["production_runtime_approved"] is False
             and attestation["live_claim_approved"] is False
