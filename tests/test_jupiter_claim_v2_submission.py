@@ -36,6 +36,7 @@ def bound_gate(tmp_path, *, approved=False):
         gate = read_gate(path)
         gate.update(status="LIVE_CLAIM_APPROVED", submission_permitted=True,
             live_claim_approved=True, approval_id="a"*32, approval_count=1,
+            approved_signed_transaction_sha256=DIGEST,
             approval_expires_at="2026-09-02T12:01:30+00:00")
         write_gate(path, gate)
     return path

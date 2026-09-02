@@ -210,6 +210,9 @@ def reserve_submission(path, gate_id, signed_transaction_sha256,
             "LIVE_CLAIM_APPROVAL_REQUIRED")
     require(type(approval_id) is str and approval_id == gate.get("approval_id"),
             "CLAIM_LIVE_APPROVAL_ID_MISMATCH")
+    require(gate.get("approved_signed_transaction_sha256") ==
+            signed_transaction_sha256,
+            "CLAIM_APPROVED_TRANSACTION_HASH_MISMATCH")
     require(gate.get("approval_count") == 1
             and current <= _stamp(gate.get("approval_expires_at", "")),
             "CLAIM_LIVE_APPROVAL_EXPIRED_OR_INVALID")
