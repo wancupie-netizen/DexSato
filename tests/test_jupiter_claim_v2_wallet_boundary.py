@@ -134,3 +134,16 @@ def test_real_decoder_rejects_unsupported_input_type():
     with pytest.raises(ClaimV2GateRejected,
                        match="INVALID_TRANSACTION_ENCODING"):
         boundary._raw_transaction(bytearray(b"signed"))
+
+
+def test_versioned_message_encoder_preserves_wire_prefix():
+    framed = boundary._versioned_message_bytes(
+        object(), encoder=lambda _: b"\x80version-zero-message",
+    )
+    assert framed == b"\x80version-zero-message"
+
+
+def test_versioned_message_encoder_rejects_empty_output():
+    with pytest.raises(ClaimV2GateRejected,
+                       match="INVALID_VERSIONED_MESSAGE_SIZE"):
+        boundary._versioned_message_bytes(object(), encoder=lambda _: b"")

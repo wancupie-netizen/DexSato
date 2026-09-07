@@ -31,13 +31,29 @@ def _raw_transaction(value):
     return raw
 
 
+def _versioned_message_bytes(message, *, encoder=None):
+    """Preserve the Solana version prefix used by transaction wire framing."""
+    if encoder is None:
+        from solders.message import to_bytes_versioned
+        encoder = to_bytes_versioned
+    try:
+        raw = bytes(encoder(message))
+        require(0 < len(raw) <= MAX_TRANSACTION_BYTES,
+                "INVALID_VERSIONED_MESSAGE_SIZE")
+        return raw
+    except ClaimV2GateRejected:
+        raise
+    except Exception:
+        raise ClaimV2GateRejected("INVALID_VERSIONED_MESSAGE") from None
+
+
 def decode_transaction(value):
     try:
         raw = _raw_transaction(value)
         from solders.signature import Signature
         from solders.transaction import VersionedTransaction
         transaction = VersionedTransaction.from_bytes(raw)
-        message = bytes(transaction.message)
+        message = _versioned_message_bytes(transaction.message)
         required = transaction.message.header.num_required_signatures
         keys = [str(key) for key in transaction.message.account_keys]
         signatures = [bytes(signature) for signature in transaction.signatures]
