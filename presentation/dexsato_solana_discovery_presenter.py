@@ -1284,9 +1284,16 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     .dex-gas-dot.is-offline{background:var(--risk);box-shadow:0 0 6px var(--risk)}
     .dex-connect-wallet{
       height:36px;padding:0 16px;border:0;background:var(--cyan);color:#06110F;
-      font:600 12.5px "Space Grotesk",sans-serif;cursor:default;
+      font:600 12.5px "Space Grotesk",sans-serif;cursor:pointer;
       clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)
     }
+    .dex-connect-wallet:hover{filter:brightness(1.06)}
+    .dex-connect-wallet:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+    .dex-connect-wallet.is-connected{
+      background:var(--panel2);color:var(--cyan);border:1px solid var(--cyan);
+    }
+    .dex-connect-wallet.is-busy{opacity:.72;cursor:wait}
+    .dex-connect-wallet.is-error{background:var(--panel2);color:var(--risk);border:1px solid var(--risk)}
 
     .shell{
       width:min(1540px,100%);margin:0;padding:92px 28px 38px;
@@ -1651,6 +1658,133 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
       .dex-volume-substat:last-child{grid-column:1/-1}
     }
 
+
+    /* HEADER V1.2 CORRECTED — Mobile/Tablet Responsive Fix */
+
+    /* Tablet: keep Gas visible; preserve KPI row beside primary DEX metric. */
+    @media(max-width:980px){
+      .dex-gas-pill{
+        display:flex!important;
+        height:30px;
+        padding:0 8px;
+        font-size:10px;
+        flex:0 0 auto;
+      }
+
+      .dex-volume-top{
+        display:grid!important;
+        grid-template-columns:minmax(150px,.78fr) minmax(300px,1.22fr)!important;
+        align-items:start!important;
+        column-gap:18px!important;
+      }
+      .dex-volume-side{
+        width:auto!important;
+        align-items:flex-end!important;
+        gap:9px!important;
+      }
+      .dex-volume-substats{
+        width:100%!important;
+        display:grid!important;
+        grid-template-columns:repeat(3,minmax(0,1fr))!important;
+        gap:14px!important;
+        justify-content:stretch!important;
+      }
+      .dex-volume-substat{
+        text-align:right!important;
+      }
+      .dex-volume-substat strong{
+        font-size:16px!important;
+      }
+      .dex-volume-substat span{
+        margin-top:4px!important;
+        font-size:8px!important;
+        line-height:1.3!important;
+        letter-spacing:.03em!important;
+        white-space:nowrap!important;
+      }
+    }
+
+    /* Narrow tablet: search yields space first, Gas + Connect remain. */
+    @media(max-width:820px){
+      .dex-topbar{
+        gap:12px!important;
+        padding-left:18px!important;
+        padding-right:18px!important;
+      }
+      .dex-header-search{display:none!important}
+      .dex-top-actions{gap:8px!important}
+      .dex-gas-pill{display:flex!important}
+      .dex-connect-wallet{
+        flex:0 0 auto;
+        height:34px!important;
+        padding:0 12px!important;
+        font-size:11.5px!important;
+      }
+
+      .dex-volume-top{
+        grid-template-columns:minmax(138px,.72fr) minmax(260px,1.28fr)!important;
+        column-gap:14px!important;
+      }
+      .dex-volume-substats{gap:10px!important}
+      .dex-volume-substat strong{font-size:15px!important}
+      .dex-volume-substat span{font-size:7.5px!important}
+    }
+
+    /* Phone: turn KPI row into one controlled strip, not loose stacked text. */
+    @media(max-width:620px){
+      .dex-volume-top{display:block!important}
+      .dex-volume-side{
+        width:100%!important;
+        margin-top:10px!important;
+        align-items:stretch!important;
+      }
+      .dex-volume-substats{
+        display:grid!important;
+        grid-template-columns:repeat(3,minmax(0,1fr))!important;
+        gap:1px!important;
+        width:100%!important;
+        border-top:1px solid var(--line);
+        border-bottom:1px solid var(--line);
+        background:var(--line);
+      }
+      .dex-volume-substat,
+      .dex-volume-substat:last-child{
+        grid-column:auto!important;
+        min-width:0;
+        padding:8px 7px;
+        text-align:left!important;
+        background:var(--panel);
+      }
+      .dex-volume-substat strong{font-size:14px!important}
+      .dex-volume-substat span{
+        font-size:7px!important;
+        line-height:1.3!important;
+        white-space:normal!important;
+      }
+      .dex-volume-state{align-self:flex-start!important}
+    }
+
+    @media(max-width:520px){
+      .dex-topbar{
+        gap:8px!important;
+        padding-left:10px!important;
+        padding-right:10px!important;
+      }
+      .dex-brand strong{font-size:17px!important}
+      .dex-top-actions{gap:6px!important}
+      .dex-gas-pill{
+        display:flex!important;
+        height:28px!important;
+        padding:0 6px!important;
+        font-size:9px!important;
+      }
+      .dex-connect-wallet{
+        height:32px!important;
+        padding:0 9px!important;
+        font-size:10.5px!important;
+      }
+    }
+
   </style>
 </head>
 <body><div class="dex-app-shell">
@@ -1683,7 +1817,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
       </label>
       <div class="dex-top-actions">
         <div class="dex-gas-pill" aria-label="Solana recent priority fee"><span class="dex-gas-dot__SOLANA_GAS_DOT_CLASS__"></span><span>__SOLANA_GAS_LABEL__</span></div>
-        <button class="dex-connect-wallet" type="button" aria-label="Connect Wallet">Connect Wallet</button>
+        <button id="dex-solana-wallet-button" class="dex-connect-wallet" type="button" aria-label="Connect Solana Wallet" aria-live="polite">Connect Wallet</button>
       </div>
     </header>
     <main class="shell">
@@ -1781,6 +1915,141 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
   </div>
 </div><script>
   const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){const value=theme==="plain"?"plain":theme==="intel"?"intel":"current";if(value==="current")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=value;themeOptions.forEach(button=>{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});try{localStorage.setItem("dexsato-theme",value);}catch(error){}}let saved="current";try{saved=localStorage.getItem("dexsato-theme")||"current";}catch(error){}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
+
+  /* HEADER V1.3 — Solana Wallet Connect */
+  (() => {
+    const button = document.getElementById("dex-solana-wallet-button");
+    if (!button) return;
+
+    let provider = null;
+    let connectedPublicKey = "";
+
+    function detectProvider() {
+      if (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) {
+        return window.phantom.solana;
+      }
+      if (window.solflare && window.solflare.isSolflare) {
+        return window.solflare;
+      }
+      if (window.solana && typeof window.solana.connect === "function") {
+        return window.solana;
+      }
+      return null;
+    }
+
+    function shortAddress(value) {
+      const address = String(value || "");
+      if (address.length <= 12) return address;
+      return address.slice(0, 4) + "…" + address.slice(-4);
+    }
+
+    function setDefault() {
+      connectedPublicKey = "";
+      button.textContent = "Connect Wallet";
+      button.title = "";
+      button.classList.remove("is-connected", "is-busy", "is-error");
+      button.setAttribute("aria-label", "Connect Solana Wallet");
+    }
+
+    function setConnected(publicKey) {
+      connectedPublicKey = String(publicKey || "");
+      button.textContent = shortAddress(connectedPublicKey);
+      button.title = connectedPublicKey;
+      button.classList.remove("is-busy", "is-error");
+      button.classList.add("is-connected");
+      button.setAttribute("aria-label", "Solana wallet connected: " + connectedPublicKey);
+    }
+
+    function setError(message) {
+      button.textContent = message;
+      button.title = message;
+      button.classList.remove("is-busy", "is-connected");
+      button.classList.add("is-error");
+      window.setTimeout(setDefault, 2200);
+    }
+
+    async function connectWallet() {
+      provider = detectProvider();
+      if (!provider) {
+        setError("Wallet not found");
+        return;
+      }
+
+      button.classList.add("is-busy");
+      button.classList.remove("is-error");
+      button.textContent = "Connecting…";
+
+      try {
+        const response = await provider.connect();
+        const publicKey =
+          (response && response.publicKey && response.publicKey.toString()) ||
+          (provider.publicKey && provider.publicKey.toString()) ||
+          "";
+        if (!publicKey) throw new Error("Wallet connected without public key");
+        try{localStorage.removeItem("dexsato-wallet-manual-disconnect");}catch(error){}
+        setConnected(publicKey);
+      } catch (error) {
+        const rejected =
+          error &&
+          (error.code === 4001 ||
+           /reject|cancel|declin/i.test(String(error.message || error)));
+        setError(rejected ? "Cancelled" : "Connect failed");
+      }
+    }
+
+    async function disconnectWallet() {
+      button.classList.add("is-busy");
+      button.textContent = "Disconnecting…";
+      try {
+        try{localStorage.setItem("dexsato-wallet-manual-disconnect","1");}catch(error){}
+        if (provider && typeof provider.disconnect === "function") {
+          await provider.disconnect();
+        }
+      } catch (error) {
+        /* Provider disconnect errors should not trap the UI in connected state. */
+      } finally {
+        setDefault();
+      }
+    }
+
+    button.addEventListener("click", () => {
+      if (connectedPublicKey) {
+        disconnectWallet();
+        return;
+      }
+      connectWallet();
+    });
+
+    provider = detectProvider();
+    let manualDisconnect = false;
+    try{manualDisconnect=localStorage.getItem("dexsato-wallet-manual-disconnect")==="1";}catch(error){}
+    if (provider && typeof provider.connect === "function" && !manualDisconnect) {
+      Promise.resolve(provider.connect({ onlyIfTrusted: true }))
+        .then((response) => {
+          const publicKey =
+            (response && response.publicKey && response.publicKey.toString()) ||
+            (provider.publicKey && provider.publicKey.toString()) ||
+            "";
+          if (publicKey) setConnected(publicKey);
+        })
+        .catch(() => {});
+
+      if (typeof provider.on === "function") {
+        provider.on("connect", (publicKey) => {
+          const value =
+            (publicKey && publicKey.toString && publicKey.toString()) ||
+            (provider.publicKey && provider.publicKey.toString()) ||
+            "";
+          if (value) setConnected(value);
+        });
+        provider.on("disconnect", () => setDefault());
+        provider.on("accountChanged", (publicKey) => {
+          if (publicKey) setConnected(publicKey.toString());
+          else setDefault();
+        });
+      }
+    }
+  })();
 </script>
 </script></body></html>"""
     return (
