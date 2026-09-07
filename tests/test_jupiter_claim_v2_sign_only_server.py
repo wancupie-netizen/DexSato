@@ -5,11 +5,12 @@ from pathlib import Path
 from tools.claim_v2_sign_only import server as sign_server
 
 
-def request(server, method, path, *, host=None):
+def request(server, method, path, *, host=None, headers=None):
     connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=2)
     connection.putrequest(method, path, skip_host=host is not None)
     if host is not None:
         connection.putheader("Host", host)
+    for key,value in (headers or {}).items():connection.putheader(key,value)
     connection.endheaders()
     response = connection.getresponse()
     body = response.read()
@@ -74,5 +75,22 @@ def test_server_and_page_contain_no_secret_or_transaction_submission_path():
     sources.extend((root / name).read_text(encoding="utf-8")
                    for name in ("index.html", "sign-only.js"))
     forbidden = ("sendTransaction", "sendRawTransaction", "privateKey",
-                 "secretKey", "seedPhrase", "/api/", "fetch(")
+                 "secretKey", "seedPhrase", "/api/", "send_signature")
     assert all(term not in source for source in sources for term in forbidden)
+
+def test_jit_endpoint_requires_exact_origin_token_and_is_one_shot(monkeypatch,tmp_path):
+ config={"identity":"i","evidence_closure":"e","boundary":"b",
+  "output_dir":"o","gate":"g"}
+ monkeypatch.setattr(sign_server,"_prepare_payload",lambda value:
+  {"status":"JIT_UNSIGNED_ARTIFACTS_READY","capture":{},"gate":{},"handoff":{}})
+ instance=sign_server.make_server(0,config);thread=threading.Thread(
+  target=instance.serve_forever,daemon=True);thread.start()
+ try:
+  origin=f"http://127.0.0.1:{instance.server_port}"
+  assert request(instance,"POST","/jit/prepare")[0]==403
+  headers={"Origin":origin,"X-DexSato-JIT-Token":instance.jit_token,
+   "Content-Length":"0"}
+  status,_,body=request(instance,"POST","/jit/prepare",headers=headers)
+  assert status==200 and b"JIT_UNSIGNED_ARTIFACTS_READY" in body
+  assert request(instance,"POST","/jit/prepare",headers=headers)[0]==409
+ finally:instance.shutdown();thread.join();instance.server_close()

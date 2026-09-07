@@ -76,7 +76,45 @@
     return { status: "WALLET_SIGNED_BINARY_DOWNLOADED_NO_SUBMISSION", gate_id: identity.gateId, message_sha256: capture.message_sha256, signed_transaction_sha256: signedHash, signed_transaction_persisted_by_server: false, live_claim_approved: false, submission_attempt_count: 0, transaction_submitted: false, execution_ready: false };
   }
 
-  const api = Object.freeze({ base64Bytes, sha256Hex, validateArtifacts, signSelected });
+  async function signJit() {
+    const provider = root.solana;
+    requireCondition(provider && typeof provider.connect === "function" &&
+      typeof provider.signTransaction === "function", "COMPATIBLE_SOLANA_WALLET_REQUIRED");
+    const connection = await provider.connect({ onlyIfTrusted: false });
+    const sessionResponse = await fetch("/jit/session", { cache: "no-store" });
+    requireCondition(sessionResponse.ok, "JIT_SESSION_UNAVAILABLE");
+    const session = await sessionResponse.json();
+    requireCondition(session.status === "JIT_SESSION_READY" && !session.used,
+      "JIT_SESSION_ALREADY_USED");
+    const response = await fetch("/jit/prepare", { method: "POST",
+      headers: { "X-DexSato-JIT-Token": session.token }, body: null });
+    const payload = await response.json();
+    requireCondition(response.ok && payload.status === "JIT_UNSIGNED_ARTIFACTS_READY",
+      payload.reason || "JIT_PREPARATION_FAILED");
+    const identity = validateArtifacts(payload.capture, payload.gate);
+    requireCondition(payload.handoff && payload.handoff.status ===
+      "CLAIM_V2_JIT_SIGNING_HANDOFF_READY", "JIT_HANDOFF_REQUIRED");
+    requireCondition(connection.publicKey && connection.publicKey.toString() === identity.wallet,
+      "WALLET_IDENTITY_MISMATCH");
+    const unsignedBytes = base64Bytes(payload.capture.transaction);
+    requireCondition(await sha256Hex(unsignedBytes) === payload.capture.transaction_sha256,
+      "UNSIGNED_TRANSACTION_HASH_MISMATCH");
+    const transaction = root.solanaWeb3.VersionedTransaction.deserialize(unsignedBytes);
+    requireCondition(await sha256Hex(transaction.message.serialize()) ===
+      payload.capture.message_sha256, "UNSIGNED_MESSAGE_HASH_MISMATCH");
+    const signed = await provider.signTransaction(transaction);
+    requireCondition(await sha256Hex(signed.message.serialize()) ===
+      payload.capture.message_sha256, "WALLET_CHANGED_MESSAGE");
+    const signedBytes = signed.serialize();const signedHash = await sha256Hex(signedBytes);
+    downloadBinary(signedBytes, identity.gateId);
+    return { status:"WALLET_SIGNED_BINARY_DOWNLOADED_NO_SUBMISSION",
+      gate_id:identity.gateId,message_sha256:payload.capture.message_sha256,
+      signed_transaction_sha256:signedHash,signed_transaction_persisted_by_server:false,
+      live_claim_approved:false,submission_attempt_count:0,
+      transaction_submitted:false,execution_ready:false };
+  }
+
+  const api = Object.freeze({ base64Bytes, sha256Hex, validateArtifacts, signSelected, signJit });
   root.DexSatoClaimSignOnly = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 
@@ -86,6 +124,7 @@
     const confirm = document.getElementById("confirm");
     const button = document.getElementById("sign");
     const status = document.getElementById("status");
+    const jit = document.getElementById("jit");
     let used = false;
     function update() { button.disabled = used || !capture.files[0] || !gate.files[0] || !confirm.checked; }
     capture.addEventListener("change", update); gate.addEventListener("change", update); confirm.addEventListener("change", update);
@@ -98,6 +137,12 @@
       } catch (error) {
         status.textContent = `STOP: ${error instanceof Error ? error.message : "SIGN_ONLY_FAILURE"}`;
       }
+    });
+    jit.addEventListener("click", async () => {
+      jit.disabled=true;status.textContent="Generating fresh transaction after wallet readiness…";
+      try { const report=await signJit();status.textContent=JSON.stringify(report,null,2);
+        status.className="ok"; }
+      catch(error){status.textContent=`STOP: ${error instanceof Error?error.message:"JIT_SIGN_ONLY_FAILURE"}`;}
     });
   }
 })(typeof window !== "undefined" ? window : globalThis);

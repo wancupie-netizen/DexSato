@@ -57,7 +57,10 @@ test("base64 conversion and sha256 are deterministic", async () => {
 
 test("browser signer source has no broadcast, RPC or secret operation", () => {
   const source = fs.readFileSync(path.join(__dirname, "../tools/claim_v2_sign_only/sign-only.js"), "utf8");
-  for (const forbidden of ["sendTransaction", "sendRawTransaction", "privateKey", "secretKey", "seedPhrase", "fetch("]) {
+  for (const forbidden of ["sendTransaction", "sendRawTransaction", "privateKey", "secretKey", "seedPhrase"]) {
     assert.equal(source.includes(forbidden), false);
   }
+  assert.equal((source.match(/fetch\(/g) || []).length, 2);
+  assert.equal(source.includes('fetch("/jit/session"'), true);
+  assert.equal(source.includes('fetch("/jit/prepare"'), true);
 });

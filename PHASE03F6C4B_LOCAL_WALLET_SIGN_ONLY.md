@@ -51,6 +51,10 @@ operator address. Reject the prompt if the wallet offers broadcast/submission or
 unexpected accounts or amounts. The expected browser status is
 `WALLET_SIGNED_BINARY_DOWNLOADED_NO_SUBMISSION`.
 
+F.6C.7.1C optionally replaces the manual file pickers with a one-shot loopback
+JIT endpoint. It connects the trusted wallet first, generates afterward, and
+never uploads the resulting signed bytes.
+
 Stop the local server with `Ctrl+C`. Do not open the `.bin`, upload it, commit it, or
 send it to another person. Move directly to the F.6C.4 independent Python verifier while
 the same gate is still fresh.

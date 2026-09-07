@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
+import secrets
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -16,6 +19,20 @@ ASSETS = {
 }
 MAX_ASSET_BYTES = 2_000_000
 
+def _prepare_payload(config):
+    from application.jupiter_claim_v2_fresh_reconstruction import _read_json,_write_exclusive
+    from application.jupiter_claim_v2_jit_handoff import (
+        HANDOFF_CONFIRMATION,prepare_jit_handoff)
+    from application.jupiter_claim_v2_one_shot_gate import CONFIRMATION_PHRASE
+    report=prepare_jit_handoff(_read_json(config["identity"]),
+        _read_json(config["evidence_closure"]),_read_json(config["boundary"]),
+        config["output_dir"],config["gate"],CONFIRMATION_PHRASE,HANDOFF_CONFIRMATION)
+    output=Path(config["output_dir"])
+    _write_exclusive(output/"jit_signing_handoff.json",report)
+    return {"status":"JIT_UNSIGNED_ARTIFACTS_READY",
+        "capture":_read_json(output/"unsigned_claim_v2_capture.json"),
+        "gate":_read_json(config["gate"]),"handoff":report}
+
 
 class SignOnlyHandler(BaseHTTPRequestHandler):
     server_version = "DexSatoSignOnly/1"
@@ -28,8 +45,9 @@ class SignOnlyHandler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
+        connect = "'self'" if getattr(self.server, "jit_config", None) else "'none'"
         self.send_header("Content-Security-Policy",
-                         "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+                         f"default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src {connect}; img-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
         self.end_headers()
 
     def _host_allowed(self):
@@ -59,13 +77,38 @@ class SignOnlyHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def do_GET(self):
+        if urlsplit(self.path).path == "/jit/session":
+            if not self._host_allowed() or not getattr(self.server,"jit_config",None):
+                self._headers(404);return
+            data=json.dumps({"status":"JIT_SESSION_READY","token":self.server.jit_token,
+                "used":self.server.jit_used}).encode()
+            self._headers(200,"application/json; charset=utf-8",len(data));self.wfile.write(data);return
         self._serve()
 
     def do_HEAD(self):
         self._serve(head=True)
 
     def do_POST(self):
-        self._headers(405)
+        if urlsplit(self.path).path != "/jit/prepare" or not getattr(self.server,"jit_config",None):
+            self._headers(405);return
+        origin=self.headers.get("Origin","")
+        expected=f"http://127.0.0.1:{self.server.server_port}"
+        if (not self._host_allowed() or origin!=expected or
+            self.headers.get("X-DexSato-JIT-Token","")!=self.server.jit_token or
+            self.headers.get("Content-Length","0")!="0"):
+            self._headers(403);return
+        with self.server.jit_lock:
+            if self.server.jit_used:self._headers(409);return
+            self.server.jit_used=True
+        try:
+            data=json.dumps(_prepare_payload(self.server.jit_config),
+                separators=(",",":")).encode()
+            self._headers(200,"application/json; charset=utf-8",len(data));self.wfile.write(data)
+        except Exception as error:
+            reason=str(error) if error.__class__.__name__.endswith("Rejected") else "JIT_PREPARATION_UNAVAILABLE"
+            data=json.dumps({"status":"JIT_UNSIGNED_ARTIFACTS_NOT_VERIFIED",
+                "reason":reason,"transaction_submitted":False,"execution_ready":False}).encode()
+            self._headers(409,"application/json; charset=utf-8",len(data));self.wfile.write(data)
 
     def do_PUT(self):
         self._headers(405)
@@ -77,21 +120,29 @@ class SignOnlyHandler(BaseHTTPRequestHandler):
         return
 
 
-def make_server(port):
+def make_server(port,jit_config=None):
     if type(port) is not int or not 0 <= port <= 65535:
         raise ValueError("INVALID_PORT")
-    return ThreadingHTTPServer(("127.0.0.1", port), SignOnlyHandler)
+    server=ThreadingHTTPServer(("127.0.0.1", port), SignOnlyHandler)
+    server.jit_config=jit_config;server.jit_token=secrets.token_urlsafe(32)
+    server.jit_used=False;server.jit_lock=threading.Lock();return server
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
+    for name in ("identity","evidence-closure","boundary","output-dir","gate"):
+        parser.add_argument("--jit-"+name)
     args = parser.parse_args(argv)
     if not WEB3.is_file():
         parser.error("pinned web3 browser bundle is missing; run npm ci --ignore-scripts in tools/claim_v2_capture")
-    server = make_server(args.port)
+    names=("identity","evidence_closure","boundary","output_dir","gate")
+    values={name:getattr(args,"jit_"+name) for name in names}
+    provided=[bool(value) for value in values.values()]
+    if any(provided) and not all(provided):parser.error("all --jit-* arguments are required together")
+    server = make_server(args.port,values if all(provided) else None)
     print(f"ClaimV2 sign-only page: http://127.0.0.1:{server.server_port}/")
-    print("GET-only loopback server; no RPC, approval, or submission endpoint exists.")
+    print("Loopback sign-only server; no signed-byte upload, approval, or submission endpoint exists.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
