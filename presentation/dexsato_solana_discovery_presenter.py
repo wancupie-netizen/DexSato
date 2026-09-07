@@ -205,6 +205,73 @@ def _solana_perps_volume_24h() -> str:
     return "—"
 
 
+def _solana_priority_fee() -> tuple[str, str]:
+    """Read a presentation-only recent Solana priority fee from public RPC."""
+    endpoint = "https://api.mainnet-beta.solana.com"
+    payload = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getRecentPrioritizationFees",
+            "params": [],
+        }
+    ).encode("utf-8")
+    request = Request(
+        endpoint,
+        data=payload,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "DexSato/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=4) as response:
+            result = json.loads(response.read().decode("utf-8"))
+
+        rows = result.get("result")
+        if not isinstance(rows, list):
+            raise ValueError("missing prioritization fee result")
+
+        values: list[int] = []
+        for row in rows[-60:]:
+            if not isinstance(row, dict):
+                continue
+            try:
+                fee = int(row.get("prioritizationFee"))
+            except (TypeError, ValueError):
+                continue
+            if fee >= 0:
+                values.append(fee)
+
+        if not values:
+            raise ValueError("no recent prioritization fee samples")
+
+        nonzero = sorted(value for value in values if value > 0)
+        samples = nonzero if nonzero else sorted(values)
+        middle = len(samples) // 2
+        if len(samples) % 2:
+            median = samples[middle]
+        else:
+            median = int(round((samples[middle - 1] + samples[middle]) / 2))
+
+        # HEADER V1.1A — Zero Priority Fee Display Fix
+        if median == 0:
+            return "Gas · Low", ""
+
+        if median >= 1_000_000:
+            label = f"{median / 1_000_000:.2f}".rstrip("0").rstrip(".") + "M"
+        elif median >= 1_000:
+            label = f"{median / 1_000:.2f}".rstrip("0").rstrip(".") + "K"
+        else:
+            label = f"{median:,}"
+
+        return f"Gas · {label} µLam/CU", ""
+    except Exception:
+        return "Gas · —", " is-offline"
+
+
 def _short_address(value: str) -> str:
     return f"{value[:7]}…{value[-7:]}" if len(value) > 18 else value
 
@@ -288,6 +355,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     dex_volume_line = dex_card["line_path"]
     dex_volume_area = dex_card["area_path"]
     perps_volume_24h = _solana_perps_volume_24h()
+    solana_gas_label, solana_gas_dot_class = _solana_priority_fee()
     connected = data.get("connected") is True
     fresh = data.get("fresh") is True
     status_heading = "Collector live" if connected and fresh else (
@@ -1213,6 +1281,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
       font:500 11px "JetBrains Mono",monospace;white-space:nowrap
     }
     .dex-gas-dot{width:6px;height:6px;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+    .dex-gas-dot.is-offline{background:var(--risk);box-shadow:0 0 6px var(--risk)}
     .dex-connect-wallet{
       height:36px;padding:0 16px;border:0;background:var(--cyan);color:#06110F;
       font:600 12.5px "Space Grotesk",sans-serif;cursor:default;
@@ -1613,7 +1682,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         <kbd>/</kbd>
       </label>
       <div class="dex-top-actions">
-        <div class="dex-gas-pill" aria-label="Gas status"><span class="dex-gas-dot"></span><span>Gas · —</span></div>
+        <div class="dex-gas-pill" aria-label="Solana recent priority fee"><span class="dex-gas-dot__SOLANA_GAS_DOT_CLASS__"></span><span>__SOLANA_GAS_LABEL__</span></div>
         <button class="dex-connect-wallet" type="button" aria-label="Connect Wallet">Connect Wallet</button>
       </div>
     </header>
@@ -1748,4 +1817,6 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         .replace("__SOLANA_DEX_DOT_CLASS__", escape(dex_volume_dot_class, quote=True))
         .replace("__SOLANA_DEX_LINE_PATH__", escape(dex_volume_line, quote=True))
         .replace("__SOLANA_DEX_AREA_PATH__", escape(dex_volume_area, quote=True))
+        .replace("__SOLANA_GAS_LABEL__", escape(solana_gas_label))
+        .replace("__SOLANA_GAS_DOT_CLASS__", escape(solana_gas_dot_class, quote=True))
     )
