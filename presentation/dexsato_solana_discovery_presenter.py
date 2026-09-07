@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from html import escape
+import json
+import re
+from html import escape, unescape
 from typing import Any
 from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 
 def _usd(value: Any) -> str:
@@ -17,6 +20,189 @@ def _usd(value: Any) -> str:
     if amount >= 1_000:
         return f"${amount / 1_000:,.2f}K"
     return f"${amount:,.6f}" if amount < 1 else f"${amount:,.2f}"
+
+def _compact_usd(value: Any) -> str:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if amount >= 1_000_000_000:
+        text = f"{amount / 1_000_000_000:.2f}".rstrip("0").rstrip(".")
+        return f"${text}B"
+    if amount >= 1_000_000:
+        text = f"{amount / 1_000_000:.1f}".rstrip("0").rstrip(".")
+        return f"${text}M"
+    if amount >= 1_000:
+        text = f"{amount / 1_000:.1f}".rstrip("0").rstrip(".")
+        return f"${text}K"
+    return f"${amount:,.0f}"
+
+
+def _solana_dex_card_metrics() -> dict[str, str]:
+    """Fetch presentation-only Solana DEX card metrics from public DefiLlama endpoints."""
+    metrics = {
+        "volume": "—",
+        "change": "—",
+        "change_class": "",
+        "tvl": "—",
+        "state": "UNAVAILABLE",
+        "dot_class": " is-offline",
+        "line_path": "",
+        "area_path": "",
+    }
+
+    dex_endpoint = (
+        "https://api.llama.fi/overview/dexs/solana"
+        "?excludeTotalDataChart=false"
+        "&excludeTotalDataChartBreakdown=true"
+        "&dataType=dailyVolume"
+    )
+    try:
+        request = Request(
+            dex_endpoint,
+            headers={"Accept": "application/json", "User-Agent": "DexSato/1.0"},
+        )
+        with urlopen(request, timeout=4) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        total = float(payload.get("total24h"))
+        if total < 0:
+            raise ValueError("negative total24h")
+
+        metrics["volume"] = _compact_usd(total)
+        metrics["state"] = "LIVE"
+        metrics["dot_class"] = ""
+
+        change_value = None
+        try:
+            previous_value = float(payload.get("total48hto24h"))
+            if previous_value > 0:
+                change_value = ((total - previous_value) / previous_value) * 100
+        except (TypeError, ValueError):
+            change_value = None
+
+        points: list[float] = []
+        chart = payload.get("totalDataChart")
+        if isinstance(chart, list):
+            for item in chart[-30:]:
+                if not isinstance(item, (list, tuple)) or len(item) < 2:
+                    continue
+                try:
+                    value = float(item[1])
+                except (TypeError, ValueError):
+                    continue
+                if value >= 0:
+                    points.append(value)
+
+        if change_value is None and len(points) >= 2 and points[-2] > 0:
+            change_value = ((points[-1] - points[-2]) / points[-2]) * 100
+
+        if change_value is not None:
+            arrow = "▲" if change_value >= 0 else "▼"
+            metrics["change"] = f"{arrow} {abs(change_value):.1f}%"
+            metrics["change_class"] = " up" if change_value >= 0 else " down"
+
+        if len(points) >= 2:
+            width, height = 1000.0, 150.0
+            top_pad, bottom_pad = 10.0, 16.0
+            low, high = min(points), max(points)
+            span = high - low
+            if span <= 0:
+                span = max(high, 1.0)
+
+            coordinates: list[tuple[float, float]] = []
+            last_index = len(points) - 1
+            for index, value in enumerate(points):
+                x = (index / last_index) * width
+                normalized = (value - low) / span
+                y = (height - bottom_pad) - normalized * (height - top_pad - bottom_pad)
+                coordinates.append((x, y))
+
+            line = " ".join(
+                ("M" if index == 0 else "L") + f"{x:.1f},{y:.1f}"
+                for index, (x, y) in enumerate(coordinates)
+            )
+            first_x = coordinates[0][0]
+            last_x = coordinates[-1][0]
+            area = f"{line} L{last_x:.1f},{height:.1f} L{first_x:.1f},{height:.1f} Z"
+            metrics["line_path"] = line
+            metrics["area_path"] = area
+    except Exception:
+        pass
+
+    tvl_endpoint = "https://api.llama.fi/v2/historicalChainTvl/Solana"
+    try:
+        request = Request(
+            tvl_endpoint,
+            headers={"Accept": "application/json", "User-Agent": "DexSato/1.0"},
+        )
+        with urlopen(request, timeout=4) as response:
+            tvl_payload = json.loads(response.read().decode("utf-8"))
+
+        if isinstance(tvl_payload, list) and tvl_payload:
+            latest = tvl_payload[-1]
+            if isinstance(latest, dict):
+                metrics["tvl"] = _compact_usd(latest.get("tvl"))
+    except Exception:
+        pass
+
+    return metrics
+
+
+def _solana_perps_volume_24h() -> str:
+    # SOLANA-UI-03C.1 — Replace Trades with Perps Volume 24H
+    """Read Solana 24h perps volume for presentation only."""
+    api_endpoint = (
+        "https://api.llama.fi/overview/derivatives/Solana"
+        "?excludeTotalDataChart=true"
+        "&excludeTotalDataChartBreakdown=true"
+        "&dataType=dailyVolume"
+    )
+    try:
+        request = Request(
+            api_endpoint,
+            headers={"Accept": "application/json", "User-Agent": "DexSato/1.0"},
+        )
+        with urlopen(request, timeout=4) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        total = float(payload.get("total24h"))
+        if total >= 0:
+            return _compact_usd(total)
+    except Exception:
+        pass
+
+    page_endpoint = "https://defillama.com/chain/solana"
+    try:
+        request = Request(
+            page_endpoint,
+            headers={
+                "Accept": "text/html",
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 Chrome/140 Safari/537.36"
+                ),
+            },
+        )
+        with urlopen(request, timeout=5) as response:
+            raw_html = response.read().decode("utf-8", errors="ignore")
+
+        plain = unescape(re.sub(r"<[^>]+>", " ", raw_html))
+        plain = re.sub(r"\s+", " ", plain)
+
+        match = re.search(
+            r"Perps\s+Volume\s*\(24h\)\s*\$?\s*"
+            r"([0-9][0-9,]*(?:\.[0-9]+)?)\s*([kKmMbB]?)",
+            plain,
+        )
+        if match:
+            amount = float(match.group(1).replace(",", ""))
+            suffix = match.group(2).lower()
+            multiplier = {"k": 1_000.0, "m": 1_000_000.0, "b": 1_000_000_000.0}.get(suffix, 1.0)
+            return _compact_usd(amount * multiplier)
+    except Exception:
+        pass
+
+    return "—"
 
 
 def _short_address(value: str) -> str:
@@ -92,6 +278,16 @@ def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
 def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
+    dex_card = _solana_dex_card_metrics()
+    dex_volume_24h = dex_card["volume"]
+    dex_volume_change = dex_card["change"]
+    dex_volume_change_class = dex_card["change_class"]
+    dex_tvl = dex_card["tvl"]
+    dex_volume_state = dex_card["state"]
+    dex_volume_dot_class = dex_card["dot_class"]
+    dex_volume_line = dex_card["line_path"]
+    dex_volume_area = dex_card["area_path"]
+    perps_volume_24h = _solana_perps_volume_24h()
     connected = data.get("connected") is True
     fresh = data.get("fresh") is True
     status_heading = "Collector live" if connected and fresh else (
@@ -179,6 +375,9 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DexSato · Solana Discovery Terminal</title>
   <link rel="icon" type="image/png" href="/static/branding/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>try{const t=localStorage.getItem("dexsato-theme");if(t==="plain"||t==="intel")document.documentElement.dataset.theme=t;}catch(error){}</script>
   <style>
     :root{color-scheme:dark;--bg:#070b12;--panel:#0c111b;--panel2:#101827;--panel3:#131e2e;--line:#1b2b3d;--line2:#25384e;--text:#e8eef7;--muted:#90a0b5;--faint:#64758b;--blue:#518df4;--cyan:#14f1d9;--purple:#9945ff;--amber:#f4b544;--green:#22c88c;--risk:#f05d72;--font-display:"Bahnschrift SemiBold","Bahnschrift","Arial Narrow","Segoe UI",sans-serif;--font-ui:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",Arial,sans-serif;--font-mono:"Cascadia Mono","Cascadia Code","Consolas","Courier New",monospace}
@@ -918,22 +1117,602 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     .feed-tabs{display:flex;gap:6px;padding:12px 18px;border-bottom:1px solid var(--line);overflow:auto}.feed-tab{display:flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid var(--line2);border-radius:5px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:800;white-space:nowrap}.feed-tab b{color:var(--text);font-family:var(--font-mono)}.feed-tab.active{border-color:var(--blue);color:var(--text);background:var(--panel2)}.page-summary{color:var(--muted);font:11px var(--font-mono)}.pagination{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-top:1px solid var(--line)}.pagination a,.pagination span{min-width:86px;color:var(--blue);font-size:11px;text-decoration:none}.pagination span{color:var(--faint)}.pagination strong{font:11px var(--font-mono)}.network-mark{display:flex;align-items:center;gap:10px;margin-top:14px;padding:12px;border:1px solid var(--line)}.network-mark svg{width:30px;fill:var(--purple)}.network-mark strong,.network-mark small{display:block}.network-mark small{color:var(--muted)}.dex-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.dex-badges span{padding:5px 7px;border:1px solid var(--line2);border-radius:999px;color:var(--text);font:10px var(--font-mono)}.dex-badges em{color:var(--muted);font-size:11px}.coming-soon{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.coming-soon span{display:block;color:var(--amber);font:9px var(--font-mono);text-transform:uppercase}.coming-soon strong{display:block;margin-top:3px}.feed-value small{display:block;margin-top:4px;font:10px var(--font-mono)}.feed-value small.up{color:var(--green)}.feed-value small.down{color:var(--risk)}
     @media(max-width:480px){.shell{width:calc(100% - 16px)}.brand img{width:112px}.terminal-name strong{font-size:11px}.top-actions{margin-left:auto}.back-link{padding:7px 8px;font-size:10px}.theme-option{width:29px;height:29px}.terminal-head h1{font-size:25px}.terminal-head p{font-size:13px}.status-cluster{display:grid;grid-template-columns:1fr 1fr}.status-pill{padding:9px}.metric{padding:13px}.metric strong{font-size:19px}.feed-head{padding:15px}.filters button{font-size:9px}.token-cell,.market-cell,.evidence-cell,.action-cell{padding:14px}.market-cell{gap:7px}.candidate-row{border-left:2px solid var(--purple)}.action-cell{align-items:stretch;flex-direction:column}.inspect-link{text-align:center}.rail-card{padding:15px}.empty-state{margin:12px;padding:18px}.empty-actions{display:grid}.primary-link,.secondary-link{text-align:center}}
     .terminal-search{display:flex;align-items:center;gap:7px}.terminal-search input{width:290px;padding:9px 11px;border:1px solid var(--line2);border-radius:5px;background:var(--panel2);color:var(--text);font-size:11px}.terminal-search button,.clear-search{padding:9px 11px;border:1px solid var(--blue);border-radius:5px;background:transparent;color:var(--blue);font-size:10px;font-weight:850;text-decoration:none;cursor:pointer}.sort-note{display:flex;justify-content:space-between;gap:12px;padding:9px 18px;border-bottom:1px solid var(--line);color:var(--muted);font:10px var(--font-mono)}
+
+    /* SOLANA-UI-01 — DEX Intelligence re-skin / shell migration */
+    :root,
+    html[data-theme="plain"],
+    html[data-theme="intel"]{
+      color-scheme:dark;
+      --bg:#080B10;
+      --panel:#0E141C;
+      --panel2:#10171F;
+      --panel3:#10171F;
+      --line:#1D2733;
+      --line2:#2A3847;
+      --text:#E7EDF4;
+      --muted:#7C8CA0;
+      --faint:#45505F;
+      --blue:#4CF4D6;
+      --cyan:#4CF4D6;
+      --purple:#B98CFF;
+      --amber:#B98CFF;
+      --green:#4CF4D6;
+      --risk:#FF5C7A;
+      --font-display:"Space Grotesk",sans-serif;
+      --font-ui:"JetBrains Mono",monospace;
+      --font-mono:"JetBrains Mono",monospace;
+    }
+    body,
+    html[data-theme="plain"] body,
+    html[data-theme="intel"] body{
+      margin:0;
+      background-color:var(--bg);
+      background-image:
+        linear-gradient(rgba(76,244,214,.035) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(76,244,214,.035) 1px,transparent 1px);
+      background-size:42px 42px;
+      color:var(--text);
+      font-family:"JetBrains Mono",monospace;
+    }
+    .dex-app-shell{display:grid;grid-template-columns:144px minmax(0,1fr);min-height:100vh}
+    .dex-side-rail{
+      position:sticky;top:0;height:100vh;z-index:40;
+      display:flex;flex-direction:column;gap:18px;
+      padding:18px 14px;border-right:1px solid var(--line);
+      background:#0E141C;font-family:"Space Grotesk",sans-serif
+    }
+    .dex-rail-logo{width:38px;height:38px;display:grid;place-items:center;margin-left:2px}
+    .dex-rail-logo img{width:34px;height:34px;object-fit:contain}
+    .dex-market-nav,.dex-main-nav,.dex-utility-nav{display:flex;flex-direction:column;gap:2px}
+    .dex-main-nav{margin-top:8px}
+    .dex-side-item{
+      min-height:36px;display:flex;align-items:center;gap:10px;
+      padding:0 10px;color:var(--muted);font-size:13px;font-weight:600;
+      text-decoration:none;border:0;background:transparent
+    }
+    .dex-side-item svg{width:17px;height:17px;flex:0 0 auto}
+    .dex-side-item:hover{color:var(--cyan)}
+    .dex-side-item.active{position:relative;color:var(--cyan)}
+    .dex-side-item.active:before{
+      content:"";position:absolute;left:-14px;top:50%;width:2px;height:18px;
+      transform:translateY(-50%);background:var(--cyan);
+      box-shadow:0 0 7px rgba(76,244,214,.45)
+    }
+    .dex-side-item[aria-disabled="true"]{cursor:default}
+    .dex-rail-spacer{flex:1}
+    .dex-utility-nav{padding-top:8px}
+    .dex-utility-nav .dex-side-item{min-height:32px;color:var(--faint);font-size:12px;font-weight:500}
+    .dex-app-main{min-width:0}
+    .dex-topbar{
+      position:fixed;top:0;left:144px;right:0;height:64px;z-index:35;
+      display:flex;align-items:center;gap:24px;padding:0 28px;
+      border-bottom:1px solid var(--line);
+      background:rgba(8,11,16,.86);backdrop-filter:blur(8px)
+    }
+    .dex-brand{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+    .dex-brand strong{font:700 19px "Space Grotesk",sans-serif;letter-spacing:.01em}
+    .dex-brand span{color:var(--faint);font:500 10px "JetBrains Mono",monospace;letter-spacing:.08em}
+    .dex-header-search{
+      flex:1;max-width:420px;height:36px;display:flex;align-items:center;gap:8px;
+      padding:0 12px;border:1px solid var(--line);background:var(--panel2);color:var(--muted)
+    }
+    .dex-header-search svg{width:14px;height:14px;flex:0 0 auto}
+    .dex-header-search input{
+      width:100%;border:0;outline:0;background:transparent;color:var(--muted);
+      font:500 12.5px "JetBrains Mono",monospace
+    }
+    .dex-header-search input::placeholder{color:var(--faint)}
+    .dex-header-search kbd{
+      margin-left:auto;padding:2px 5px;border:1px solid var(--line2);
+      color:var(--faint);font:500 10px "JetBrains Mono",monospace
+    }
+    .dex-top-actions{margin-left:auto;display:flex;align-items:center;gap:14px}
+    .dex-gas-pill{
+      height:32px;display:flex;align-items:center;gap:7px;padding:0 10px;
+      border:1px solid var(--line);color:var(--muted);
+      font:500 11px "JetBrains Mono",monospace;white-space:nowrap
+    }
+    .dex-gas-dot{width:6px;height:6px;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+    .dex-connect-wallet{
+      height:36px;padding:0 16px;border:0;background:var(--cyan);color:#06110F;
+      font:600 12.5px "Space Grotesk",sans-serif;cursor:default;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)
+    }
+
+    .shell{
+      width:min(1540px,100%);margin:0;padding:92px 28px 38px;
+      font-family:"JetBrains Mono",monospace
+    }
+    h1,h2,h3,.status-pill strong,.metric strong,.token-cell strong,
+    .evidence-cell>strong,.rail-card h3,.future-box strong{
+      font-family:"Space Grotesk",sans-serif;font-stretch:normal
+    }
+    .terminal-head{padding:10px 0 20px;align-items:end}
+    .terminal-head .eyebrow{color:var(--cyan);font-size:10px;letter-spacing:.12em}
+    .terminal-head h1{font-size:36px;font-weight:700}
+    .terminal-head p{color:var(--muted)}
+    .status-pill{
+      border:1px solid var(--line);border-radius:0;background:var(--panel);
+      padding:11px 13px
+    }
+    .status-pill.live{border-left:2px solid var(--cyan)}
+    .status-pill span{color:var(--faint)}
+    .status-pill small{color:var(--muted)}
+
+    .metrics{gap:1px;border:1px solid var(--line);background:var(--line)}
+    .metric{
+      border:0!important;border-radius:0!important;background:var(--panel);
+      padding:18px 20px
+    }
+    .metric:before{height:1px;background:var(--cyan);opacity:.55}
+    .metric span{color:var(--faint)}
+    .metric strong{font:600 22px "Space Grotesk",sans-serif}
+    .metric small{color:var(--muted)}
+
+    .workspace{grid-template-columns:minmax(0,1fr) 300px;gap:14px;margin-top:18px}
+    .feed-panel,.rail-card{border:1px solid var(--line);border-radius:0!important;background:var(--panel)}
+    .feed-head{padding:18px;border-bottom:1px solid var(--line);align-items:end}
+    .feed-head .eyebrow{color:var(--cyan)}
+    .feed-head h2{font-family:"Space Grotesk",sans-serif;font-weight:600}
+    .feed-head p{color:var(--muted)}
+    .terminal-search input{
+      border:1px solid var(--line2);border-radius:0;background:var(--panel2);
+      color:var(--text)
+    }
+    .terminal-search button,.clear-search{
+      border:1px solid var(--cyan);border-radius:0;background:transparent;
+      color:var(--cyan)
+    }
+    .feed-tabs{gap:1px;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+    .feed-tab{
+      border:1px solid var(--line);border-radius:0;background:var(--panel2);
+      color:var(--muted);font-weight:600
+    }
+    .feed-tab.active{border-color:var(--cyan);background:rgba(76,244,214,.07);color:var(--cyan)}
+    .feed-tab b{color:inherit}
+    .sort-note{color:var(--muted);border-color:var(--line)}
+    .feed-columns-v33,
+    html[data-theme="intel"] .feed-columns-v33{background:var(--panel2);border-color:var(--line)}
+    .feed-columns-v33 span,
+    html[data-theme="intel"] .feed-columns-v33 span{color:var(--faint)}
+    .candidate-row-v32,
+    html[data-theme="intel"] .candidate-row-v32{
+      background:var(--panel);border-color:var(--line);
+      border-radius:0!important;box-shadow:none!important;transform:none!important
+    }
+    .candidate-row-v32:hover,
+    html[data-theme="intel"] .candidate-row-v32:hover{background:rgba(76,244,214,.035)}
+    .candidate-row-v32>.token-cell,
+    .candidate-row-v32>.feed-value,
+    .candidate-row-v32>.why-now,
+    .candidate-row-v32>.feed-action,
+    html[data-theme="intel"] .candidate-row-v32>.token-cell,
+    html[data-theme="intel"] .candidate-row-v32>.feed-value,
+    html[data-theme="intel"] .candidate-row-v32>.why-now,
+    html[data-theme="intel"] .candidate-row-v32>.feed-action{border-color:var(--line)}
+    .rank{color:var(--faint)}
+    .token-cell strong{color:var(--text)}
+    .token-cell span,.token-cell small,.feed-value span,.why-now p{color:var(--muted)}
+    .activity-tag{color:var(--cyan)}
+    .inspect-link{
+      border:1px solid var(--cyan)!important;border-radius:0!important;
+      color:var(--cyan)!important;background:transparent!important
+    }
+    .inspect-link:hover{background:rgba(76,244,214,.07)!important}
+    .rail-card{padding:18px}
+    .rail-kicker{color:var(--cyan)}
+    .network-mark{border-color:var(--line);background:var(--panel2)}
+    .network-mark svg{fill:#B98CFF}
+    .status-detail div,.coming-soon{border-color:var(--line)}
+    .dex-badges span{border-color:var(--line2);border-radius:0;background:var(--panel2)}
+    .coming-soon span{color:#B98CFF}
+    .pagination{border-color:var(--line)}
+    .pagination a{color:var(--cyan)}
+    footer{color:var(--faint)}
+
+    @media(max-width:980px){
+      .dex-header-search{max-width:300px}
+      .dex-gas-pill{display:none}
+    }
+    @media(max-width:820px){
+      .dex-header-search{display:none}
+      .shell{width:100%;padding:82px 16px 28px}
+    }
+    @media(max-width:520px){
+      .dex-side-rail{display:none}
+      .dex-app-shell{display:block}
+      .dex-topbar{left:0;padding:0 12px}
+      .dex-brand span{display:none}
+      .dex-connect-wallet{padding:0 11px}
+      .shell{padding-left:12px;padding-right:12px}
+    }
+
+
+    /* SOLANA-UI-02 — DEX Terminal Presentation Rebuild */
+    .shell{padding-top:84px;display:flex;flex-direction:column;gap:16px}
+
+    .dex-volume-panel{
+      position:relative;min-height:210px;overflow:hidden;
+      border:1px solid var(--line);background:
+        radial-gradient(ellipse 800px 230px at 18% 0%,rgba(76,244,214,.075),transparent 62%),
+        var(--panel)
+    }
+    .dex-volume-top{
+      position:relative;z-index:2;display:flex;align-items:flex-start;justify-content:space-between;
+      gap:20px;padding:20px 22px 0
+    }
+    .dex-section-kicker,.dex-section-label span{
+      color:var(--faint);font:500 11px "JetBrains Mono",monospace;
+      letter-spacing:.11em;text-transform:uppercase
+    }
+    .dex-volume-value{
+      margin-top:10px;color:var(--text);font:700 44px "Space Grotesk",sans-serif;
+      line-height:1
+    }
+    .dex-volume-source{
+      margin-top:7px;color:var(--faint);
+      font:500 10px "JetBrains Mono",monospace;
+      letter-spacing:.08em
+    }
+    .dex-volume-state{
+      display:flex;align-items:center;gap:7px;margin-top:2px;color:var(--faint);
+      font:500 11px "JetBrains Mono",monospace;letter-spacing:.07em
+    }
+    .dex-status-dot{width:5px;height:5px;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+    .dex-status-dot.is-offline{background:var(--risk);box-shadow:0 0 6px var(--risk)}
+    .dex-volume-chart{position:absolute;left:18px;right:18px;bottom:14px;height:122px}
+    .dex-chart-grid{
+      position:absolute;inset:0;
+      background-image:linear-gradient(rgba(42,56,71,.45) 1px,transparent 1px);
+      background-size:100% 30px;opacity:.45
+    }
+    .dex-chart-baseline{
+      position:absolute;left:0;right:0;bottom:18px;height:1px;
+      background:linear-gradient(90deg,transparent,var(--line2) 10%,var(--line2) 90%,transparent)
+    }
+
+    .dex-terminal-section{display:flex;flex-direction:column;gap:8px}
+    .dex-section-label{display:flex;align-items:center;gap:10px}
+    .dex-section-label i{height:1px;flex:1;background:var(--line)}
+    .dex-panel-shell{min-width:0;border:1px solid var(--line);background:var(--panel)}
+    .dex-panel-head{
+      min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:0 13px;border-bottom:1px solid var(--line)
+    }
+    .dex-panel-head strong{font:600 13.5px "Space Grotesk",sans-serif;letter-spacing:.01em}
+    .dex-panel-head span{
+      color:var(--faint);font:500 10.5px "JetBrains Mono",monospace;
+      letter-spacing:.07em;text-transform:uppercase
+    }
+
+    .dex-signals-panel .dex-panel-shell{min-height:155px}
+    .dex-empty-stream,.dex-intelligence-empty{
+      min-height:108px;display:flex;align-items:center;gap:12px;padding:16px
+    }
+    .dex-empty-icon{
+      width:28px;height:28px;display:grid;place-items:center;flex:0 0 auto;
+      border:1px solid var(--line2);color:var(--cyan);
+      font:500 12px "JetBrains Mono",monospace
+    }
+    .dex-empty-stream strong,.dex-intelligence-empty strong{
+      display:block;color:var(--muted);font:600 12.5px "Space Grotesk",sans-serif
+    }
+    .dex-empty-stream small,.dex-intelligence-empty small{
+      display:block;margin-top:4px;color:var(--faint);font-size:10.5px
+    }
+
+    .dex-market-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    .dex-market-grid>.dex-panel-shell{min-height:180px}
+    .dex-mini-table-head{
+      display:grid;grid-template-columns:24px minmax(0,1fr) 96px 56px;
+      gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);
+      background:var(--panel2)
+    }
+    .dex-mini-table-head span{
+      color:var(--faint);font:500 10.5px "JetBrains Mono",monospace;
+      letter-spacing:.05em;text-transform:uppercase
+    }
+    .dex-mini-table-head span:nth-child(3),
+    .dex-mini-table-head span:nth-child(4){text-align:right}
+    .dex-panel-empty{
+      min-height:116px;display:grid;place-items:center;padding:16px;text-align:center;
+      color:var(--faint);font:500 10.5px "JetBrains Mono",monospace
+    }
+
+    .dex-token-list .feed-panel{width:100%;border-radius:0;background:var(--panel)}
+    .dex-token-list .feed-head{padding:14px 16px}
+    .dex-token-list .feed-head h2{margin:3px 0 0;font:600 18px "Space Grotesk",sans-serif}
+    .dex-token-list .feed-head p{font-size:11px;line-height:1.5}
+    .dex-token-list .feed-head .eyebrow{color:var(--cyan);font-size:10.5px;letter-spacing:.08em}
+    .dex-token-list .feed-tabs{padding:9px 12px}
+    .dex-token-list .sort-note{padding:8px 12px}
+    .dex-token-list .candidate-row-v32:hover{background:rgba(76,244,214,.03)}
+    .dex-token-list .inspect-link{
+      padding:6px 8px!important;font-family:"JetBrains Mono",monospace!important;
+      font-size:10.5px!important;text-transform:uppercase
+    }
+
+    .terminal-head,.metrics,.workspace,.intel-rail{display:none!important}
+
+    @media(max-width:1050px){
+      .dex-market-grid{grid-template-columns:1fr}
+      .dex-market-grid>.dex-panel-shell{min-height:150px}
+    }
+    @media(max-width:760px){
+      .dex-volume-panel{min-height:185px}
+      .dex-volume-top{padding:16px 16px 0}
+      .dex-volume-chart{left:12px;right:12px}
+      .dex-market-grid{gap:8px}
+    }
+
+
+    /* SOLANA-UI-03B CORRECTED — Typography Match Pass */
+    .dex-panel-head{min-height:46px;padding:0 16px}
+    .dex-mini-table-head{padding:11px 14px}
+
+    .feed-columns-v33 span{
+      font-family:"JetBrains Mono",monospace!important;
+      font-size:10.5px!important;
+      font-weight:500!important;
+      letter-spacing:.04em!important;
+    }
+
+    .dex-token-list .candidate-row-v32{font-size:12.5px}
+    .dex-token-list .candidate-row-v32 .compact-token strong{
+      font-family:"Space Grotesk",sans-serif!important;
+      font-size:13px!important;
+      font-weight:600!important;
+      letter-spacing:-.01em!important;
+    }
+    .dex-token-list .candidate-row-v32 .compact-token span,
+    .dex-token-list .candidate-row-v32 .compact-token small{
+      font-family:"JetBrains Mono",monospace!important;
+    }
+    .dex-token-list .candidate-row-v32 .feed-value span,
+    .dex-token-list .candidate-row-v32 .feed-value strong,
+    .dex-token-list .candidate-row-v32 .why-now>span{
+      font-family:"JetBrains Mono",monospace!important;
+    }
+    .dex-token-list .candidate-row-v32 .feed-value strong{
+      font-size:12.5px!important;
+      font-weight:600!important;
+      letter-spacing:-.015em!important;
+    }
+    .dex-token-list .candidate-row-v32 .why-now strong{
+      font-family:"Space Grotesk",sans-serif!important;
+      font-size:11px!important;
+      font-weight:600!important;
+    }
+
+    .terminal-search input,
+    .terminal-search button,
+    .clear-search,
+    .feed-tab,
+    .sort-note{
+      font-family:"JetBrains Mono",monospace!important;
+      font-size:11.5px;
+    }
+
+    .dex-brand strong,
+    .dex-connect-wallet{
+      font-family:"Space Grotesk",sans-serif!important;
+    }
+    .dex-brand span,
+    .dex-header-search input,
+    .dex-header-search kbd,
+    .dex-gas-pill{
+      font-family:"JetBrains Mono",monospace!important;
+    }
+
+
+    /* SOLANA-UI-03C — DEX Volume Card Live Metrics + SVG Trend */
+    .dex-volume-primary{
+      display:flex;
+      align-items:baseline;
+      gap:14px;
+    }
+    .dex-volume-change{
+      font-family:"JetBrains Mono",monospace;
+      font-size:14px;
+      font-weight:600;
+      color:var(--faint);
+      white-space:nowrap;
+    }
+    .dex-volume-change.up{color:var(--cyan)}
+    .dex-volume-change.down{color:var(--risk)}
+
+    .dex-volume-side{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:12px;
+    }
+    .dex-volume-substats{
+      display:flex;
+      align-items:flex-start;
+      justify-content:flex-end;
+      gap:28px;
+    }
+    .dex-volume-substat{text-align:right}
+    .dex-volume-substat strong{
+      display:block;
+      font-family:"Space Grotesk",sans-serif;
+      font-size:19px;
+      font-weight:600;
+      line-height:1.1;
+      color:var(--text);
+    }
+    .dex-volume-substat span{
+      display:block;
+      margin-top:5px;
+      font-family:"JetBrains Mono",monospace;
+      font-size:10.5px;
+      font-weight:500;
+      letter-spacing:.04em;
+      color:var(--faint);
+      white-space:nowrap;
+    }
+
+    .dex-volume-chart svg{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      display:block;
+      overflow:visible;
+    }
+    .dex-volume-line{
+      fill:none;
+      stroke:var(--cyan);
+      stroke-width:1.8;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      filter:drop-shadow(0 0 5px rgba(76,244,214,.55));
+    }
+
+    @media(max-width:980px){
+      .dex-volume-top{flex-direction:column}
+      .dex-volume-side{width:100%;align-items:flex-start}
+      .dex-volume-substats{justify-content:flex-start;gap:22px}
+      .dex-volume-substat{text-align:left}
+    }
+    @media(max-width:620px){
+      .dex-volume-primary{align-items:flex-start;flex-direction:column;gap:5px}
+      .dex-volume-substats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+      .dex-volume-substat:last-child{grid-column:1/-1}
+    }
+
   </style>
 </head>
-<body><main class="shell">
-  <header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><div class="terminal-name"><strong>Solana Discovery</strong><span>Market intelligence terminal</span></div></div><div class="top-actions"><a class="back-link" href="/">← Markets</a><div class="theme-switcher" role="group" aria-label="Discovery theme"><button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market intelligence theme" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button></div></div></header>
-  <section class="terminal-head"><div><span class="eyebrow">Evidence-led Solana intelligence</span><h1>Solana Discovery Terminal</h1><p>Track emerging tokens through verified pool identity, observable liquidity and recent market activity. Discovery rank reflects activity, not safety.</p></div><div class="status-cluster"><div class="status-pill live"><span>Feed status</span><strong>__STATUS_HEADING__</strong><small>__STATUS_LABEL__</small></div><div class="status-pill"><span>Last update</span><strong>__UPDATED__</strong><small>Collector telemetry</small></div></div></section>
-  <section class="metrics" aria-label="Discovery summary">
-  <div class="metric metric-observed"><span>Qualified Now</span><strong>__QUALIFIED_TOTAL__</strong><small>Current scan</small></div>
-  <div class="metric metric-resolved"><span>Recent Discoveries</span><strong>__RECENT_TOTAL__</strong><small>First qualified in 24h</small></div>
-  <div class="metric metric-qualified"><span>Full Archive</span><strong>__ARCHIVE_TOTAL__</strong><small>Never truncated</small></div>
-  <div class="metric metric-network"><span>Collector Freshness</span><strong>__UPDATED__</strong><small>Observed telemetry</small></div>
-</section>
-  <div class="workspace"><section class="feed-panel"><div class="feed-head"><div><span class="eyebrow">Observed market activity</span><h2>Discovery Feed</h2><p>Persistent, server-paginated observations. Historical inclusion does not mean current qualification.</p></div><form class="terminal-search" method="get" action="/discovery/solana"><input type="hidden" name="view" value="__VIEW__"><input type="hidden" name="page" value="1"><input type="search" name="q" value="__SEARCH_QUERY__" placeholder="Search token, symbol, contract or DEX" aria-label="Search the discovery archive"><button type="submit">Search</button>__CLEAR_SEARCH__</form></div><nav class="feed-tabs" aria-label="Discovery views">__TABS__</nav><div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div><div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>__CANDIDATE_FEED____PAGINATION__</section>
-  <aside class="intel-rail"><section class="rail-card"><span class="rail-kicker">Network activity</span><h3>Observed qualified pools</h3><div class="network-mark"><svg viewBox="0 0 30 24" aria-hidden="true"><path d="M6 3h17l3 3H9z"/><path d="M9 10h17l-3 3H6z"/><path d="M6 17h17l3 3H9z"/></svg><div><strong>Solana</strong><small>Active network</small></div></div><div class="status-detail"><div><span>Observed 24h Volume</span><strong>__OBSERVED_VOLUME__</strong></div><div><span>Observed 24H Txns</span><strong>__OBSERVED_TXNS__</strong></div></div><span class="rail-kicker">DEX / Swap observed</span><div class="dex-badges">__DEX_BADGES__</div><div class="coming-soon"><span>Coming soon</span><strong>Multiple chain</strong></div></section></aside></div>
+<body><div class="dex-app-shell">
+  <aside class="dex-side-rail" aria-label="DexSato navigation">
+    <a class="dex-rail-logo" href="/" aria-label="DexSato"><img src="/static/branding/dexsato-mark.png" alt=""></a>
+    <nav class="dex-market-nav" aria-label="Market scope">
+      <a class="dex-side-item active" href="/discovery/solana" aria-current="page">Solana</a>
+      <a class="dex-side-item" href="/">Major Assets</a>
+    </nav>
+    <nav class="dex-main-nav" aria-label="Main navigation">
+      <span class="dex-side-item" aria-disabled="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6z"/></svg>
+        <span>Watchlist</span>
+      </span>
+    </nav>
+    <div class="dex-rail-spacer"></div>
+    <nav class="dex-utility-nav" aria-label="Utility navigation">
+      <span class="dex-side-item" aria-disabled="true">Wallet Profile</span>
+      <span class="dex-side-item" aria-disabled="true">Documentation</span>
+      <span class="dex-side-item" aria-disabled="true">Disclaimer</span>
+    </nav>
+  </aside>
+  <div class="dex-app-main">
+    <header class="dex-topbar">
+      <div class="dex-brand"><strong>dexsato</strong><span>DEX INTELLIGENCE</span></div>
+      <label class="dex-header-search" aria-label="Search token, pair or contract">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="search" placeholder="Search token, pair or contract" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <div class="dex-top-actions">
+        <div class="dex-gas-pill" aria-label="Gas status"><span class="dex-gas-dot"></span><span>Gas · —</span></div>
+        <button class="dex-connect-wallet" type="button" aria-label="Connect Wallet">Connect Wallet</button>
+      </div>
+    </header>
+    <main class="shell">
+  <section class="dex-volume-panel" aria-label="Total DEX volume">
+    <div class="dex-volume-top">
+      <div>
+        <span class="dex-section-kicker">TOTAL DEX VOLUME · 24H · SOLANA</span>
+        <div class="dex-volume-primary">
+          <div class="dex-volume-value" aria-live="polite">__SOLANA_DEX_VOLUME__</div>
+          <div class="dex-volume-change__SOLANA_DEX_CHANGE_CLASS__">__SOLANA_DEX_CHANGE__</div>
+        </div>
+        <div class="dex-volume-source">SOURCE · DEFILLAMA</div>
+      </div>
+
+      <div class="dex-volume-side">
+        <div class="dex-volume-substats">
+          <div class="dex-volume-substat">
+            <strong>__SOLANA_TVL__</strong>
+            <span>TOTAL VALUE LOCKED</span>
+          </div>
+          <div class="dex-volume-substat">
+            <strong>__SOLANA_PERPS_VOLUME_24H__</strong>
+            <span>PERPS VOLUME · 24H</span>
+          </div>
+          <div class="dex-volume-substat">
+            <strong>__SOLANA_ACTIVE_PAIRS__</strong>
+            <span>ACTIVE PAIRS</span>
+          </div>
+        </div>
+        <div class="dex-volume-state">
+          <span class="dex-status-dot__SOLANA_DEX_DOT_CLASS__"></span>
+          <span>__SOLANA_DEX_STATE__</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dex-volume-chart" aria-hidden="true">
+      <div class="dex-chart-grid"></div>
+      <svg viewBox="0 0 1000 150" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="solanaDexVolumeFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#4CF4D6" stop-opacity="0.28"/>
+            <stop offset="100%" stop-color="#4CF4D6" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="__SOLANA_DEX_AREA_PATH__" fill="url(#solanaDexVolumeFill)"/>
+        <path class="dex-volume-line" d="__SOLANA_DEX_LINE_PATH__"/>
+      </svg>
+      <div class="dex-chart-baseline"></div>
+    </div>
+  </section>
+
+  <section class="dex-terminal-section dex-signals-panel" aria-label="Live signals">
+    <div class="dex-section-label"><span>LIVE SIGNALS</span><i></i></div>
+    <div class="dex-panel-shell">
+      <div class="dex-panel-head"><strong>Live market signal stream</strong><span>Solana discovery</span></div>
+      <div class="dex-empty-stream"><span class="dex-empty-icon">↗</span><div><strong>No signal data displayed yet</strong><small>Presentation shell only. Existing signal logic is unchanged.</small></div></div>
+    </div>
+  </section>
+
+  <section class="dex-terminal-section">
+    <div class="dex-market-grid">
+      <article class="dex-panel-shell">
+        <div class="dex-panel-head"><strong>TOP PAIRS BY VOLUME</strong><span>Solana</span></div>
+        <div class="dex-mini-table-head"><span>#</span><span>PAIR</span><span>VOLUME 24H</span><span>%</span></div>
+        <div class="dex-panel-empty">No pair data connected to this view.</div>
+      </article>
+      <article class="dex-panel-shell">
+        <div class="dex-panel-head"><strong>TRENDING TOKENS</strong><span>Solana</span></div>
+        <div class="dex-mini-table-head"><span>#</span><span>TOKEN</span><span>ACTIVITY</span><span>24H %</span></div>
+        <div class="dex-panel-empty">No trending-token data connected to this view.</div>
+      </article>
+      <article class="dex-panel-shell">
+        <div class="dex-panel-head"><strong>MARKET INTELLIGENCE</strong><span>DexSato</span></div>
+        <div class="dex-intelligence-empty"><span class="dex-empty-icon">◇</span><div><strong>No intelligence items displayed yet</strong><small>Insights will appear only when backed by existing DexSato data.</small></div></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="dex-terminal-section dex-token-list">
+    <div class="dex-section-label"><span>TOKEN LIST</span><i></i></div>
+    <section class="feed-panel">
+      <div class="feed-head">
+        <div><span class="eyebrow">SOLANA DISCOVERY</span><h2>Token List</h2><p>Persistent, server-paginated observations. Historical inclusion does not mean current qualification.</p></div>
+        <form class="terminal-search" method="get" action="/discovery/solana"><input type="hidden" name="view" value="__VIEW__"><input type="hidden" name="page" value="1"><input type="search" name="q" value="__SEARCH_QUERY__" placeholder="Search token, symbol, contract or DEX" aria-label="Search the discovery archive"><button type="submit">Search</button>__CLEAR_SEARCH__</form>
+      </div>
+      <nav class="feed-tabs" aria-label="Discovery views">__TABS__</nav>
+      <div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div>
+      <div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>
+      __CANDIDATE_FEED____PAGINATION__
+    </section>
+  </section>
   <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>__STATUS_MESSAGE__</span></footer>
-</main><script>
+</main>
+  </div>
+</div><script>
   const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){const value=theme==="plain"?"plain":theme==="intel"?"intel":"current";if(value==="current")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=value;themeOptions.forEach(button=>{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});try{localStorage.setItem("dexsato-theme",value);}catch(error){}}let saved="current";try{saved=localStorage.getItem("dexsato-theme")||"current";}catch(error){}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
+</script>
 </script></body></html>"""
     return (
         page.replace("__STATUS_HEADING__", escape(status_heading))
@@ -959,4 +1738,14 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         .replace("__CLEAR_SEARCH__", clear_search)
         .replace("__VIEW_TOTAL__", str(data.get("view_total", len(candidates))))
         .replace("__SORT_LABEL__", escape(sort_label))
+        .replace("__SOLANA_DEX_VOLUME__", escape(dex_volume_24h))
+        .replace("__SOLANA_DEX_CHANGE__", escape(dex_volume_change))
+        .replace("__SOLANA_DEX_CHANGE_CLASS__", escape(dex_volume_change_class, quote=True))
+        .replace("__SOLANA_TVL__", escape(dex_tvl))
+        .replace("__SOLANA_PERPS_VOLUME_24H__", escape(perps_volume_24h))
+        .replace("__SOLANA_ACTIVE_PAIRS__", escape(pairs))
+        .replace("__SOLANA_DEX_STATE__", escape(dex_volume_state))
+        .replace("__SOLANA_DEX_DOT_CLASS__", escape(dex_volume_dot_class, quote=True))
+        .replace("__SOLANA_DEX_LINE_PATH__", escape(dex_volume_line, quote=True))
+        .replace("__SOLANA_DEX_AREA_PATH__", escape(dex_volume_area, quote=True))
     )
