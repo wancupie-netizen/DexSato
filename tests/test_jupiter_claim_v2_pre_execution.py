@@ -48,6 +48,12 @@ def test_exact_read_only_inspection_does_not_consume_gate(tmp_path):
  assert calls==["getGenesisHash","getTokenAccountBalance"]
  assert path.read_bytes()==before and read_gate(path)["submission_attempt_count"]==0
 
+def test_exact_raw_binary_inspection_does_not_consume_gate(tmp_path):
+ path=gate(tmp_path);before=path.read_bytes();calls,post=provider()
+ report=inspect_pre_execution(path,RAW,APPROVAL,environment=env(),post=post,current=NOW)
+ assert report["signed_transaction_sha256"]==DIGEST
+ assert path.read_bytes()==before and calls==["getGenesisHash","getTokenAccountBalance"]
+
 @pytest.mark.parametrize("amount",["0","4999","5001"])
 def test_non_exact_funded_balance_is_rejected_without_consumption(tmp_path,amount):
  path=gate(tmp_path);calls,post=provider(amount=amount)

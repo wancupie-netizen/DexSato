@@ -89,3 +89,14 @@ def test_coordinator_binds_wallet_then_approves_but_never_submits(monkeypatch,tm
 def test_module_contains_no_submission_provider_method():
  source=Path(fresh.__file__).read_text(encoding="utf-8")
  assert "sendTransaction" not in source and "submit_claim" not in source
+
+def test_cli_forwards_raw_binary_without_ascii_conversion(monkeypatch,tmp_path,capsys):
+ capture_path=tmp_path/"capture.json";closure_path=tmp_path/"closure.json"
+ signed=tmp_path/"signed.bin";capture_path.write_text("{}");closure_path.write_text("{}")
+ signed.write_bytes(b"\xffraw-solana");seen=[]
+ monkeypatch.setattr(fresh,"bind_and_approve_fresh",
+  lambda *args,**kwargs:seen.append(args[3]) or {"status":"ok"})
+ result=fresh.main(["--gate",str(tmp_path/"gate"),"--closure",str(closure_path),
+  "--capture",str(capture_path),"--wallet","wallet","--signed-transaction-file",
+  str(signed),"--confirm","confirm"])
+ assert result==2 and seen==[b"\xffraw-solana"]

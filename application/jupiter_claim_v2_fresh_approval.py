@@ -130,7 +130,7 @@ def main(argv=None):
         raw=open(args.signed_transaction_file,"rb").read(MAX_SIGNED_FILE_BYTES+1)
         require(len(raw)<=MAX_SIGNED_FILE_BYTES,"SIGNED_TRANSACTION_FILE_TOO_LARGE")
         report=bind_and_approve_fresh(args.gate,closure,capture,
-            raw.decode("ascii").strip(),args.wallet,args.confirm)
+            raw,args.wallet,args.confirm)
         print(json.dumps(report));return 2
     except ClaimV2GateRejected as error:reason=str(error)
     except Exception:reason="FRESH_CLAIM_APPROVAL_INPUT_OR_RPC_UNAVAILABLE"

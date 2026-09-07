@@ -16,6 +16,12 @@ from application.jupiter_referral_verification import (
 
 MAX_SIGNED_FILE_BYTES=16_384
 
+def _signed_read_only(value):
+    if type(value) is bytes:
+        require(1<=len(value)<=MAX_SIGNED_FILE_BYTES,"INVALID_SIGNED_TRANSACTION")
+        return value
+    return _signed(value)
+
 
 def _rpc(post,endpoint,method,params):
     response=None
@@ -46,7 +52,7 @@ def inspect_pre_execution(path,signed_transaction,approval_id,*,environment=None
     require(env.get("DEXSATO_JUPITER_FEE_ENABLED","false").strip().lower()=="false",
             "KEEP_PRODUCTION_FEES_DISABLED")
     endpoint=_endpoint(env.get("SOLANA_RPC_URL",""))
-    digest=hashlib.sha256(_signed(signed_transaction)).hexdigest()
+    digest=hashlib.sha256(_signed_read_only(signed_transaction)).hexdigest()
     gate=read_gate(path);current=current or utc_now()
     require(current.tzinfo is not None,"INVALID_CLAIM_GATE_TIMESTAMP")
     require(gate.get("status")=="LIVE_CLAIM_APPROVED",
@@ -98,7 +104,7 @@ def main(argv=None):
     try:
         raw=open(args.signed_transaction_file,"rb").read(MAX_SIGNED_FILE_BYTES+1)
         require(len(raw)<=MAX_SIGNED_FILE_BYTES,"SIGNED_TRANSACTION_FILE_TOO_LARGE")
-        report=inspect_pre_execution(args.gate,raw.decode("ascii").strip(),
+        report=inspect_pre_execution(args.gate,raw,
             args.approval_id)
         print(json.dumps(report));return 2
     except ClaimV2GateRejected as error:reason=str(error)
