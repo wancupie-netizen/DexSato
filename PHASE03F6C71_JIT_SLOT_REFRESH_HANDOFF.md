@@ -16,3 +16,8 @@ the handoff. The operator selects the newly created unsigned capture and exact
 gate-review copy, signs immediately, and uses an already-running PowerShell
 watcher to invoke the separate F.6C.7 short-lived approval. No `.bin` is uploaded
 or persisted by the server.
+
+The F.6C.7 approval boundary accepts this JIT report only when its sign-now
+action, unchanged 32-slot maximum, at-most-four-slot handoff age, exact remaining
+budget, unconsumed gate, and disabled submission fields are all present. Merely
+renaming another report to the JIT status cannot authorize approval.

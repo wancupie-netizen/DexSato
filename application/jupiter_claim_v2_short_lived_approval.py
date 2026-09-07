@@ -6,6 +6,8 @@ from application.jupiter_claim_v2_fresh_approval import bind_and_approve_fresh
 from application.jupiter_claim_v2_one_shot_gate import ClaimV2GateRejected,read_gate,require
 
 MAX_JSON_BYTES=131072;MAX_SIGNED_BYTES=16384
+PREPARATION_STATUS="CLAIM_V2_FRESH_RECONSTRUCTION_PREPARED_REVIEW_REQUIRED"
+JIT_HANDOFF_STATUS="CLAIM_V2_JIT_SIGNING_HANDOFF_READY"
 def _read(path):
  try:
   raw=Path(path).read_bytes();require(0<len(raw)<=MAX_JSON_BYTES,"INVALID_JSON_INPUT")
@@ -24,9 +26,20 @@ def approve_reconstructed_claim(preparation,gate_path,closure,capture,signed,wal
  require(env.get("DEXSATO_JUPITER_FEE_ENABLED","false").lower()=="false",
   "KEEP_PRODUCTION_FEES_DISABLED")
  require(type(signed) is bytes and 0<len(signed)<=MAX_SIGNED_BYTES,"INVALID_SIGNED_TRANSACTION")
- require(type(preparation) is dict and preparation.get("status")==
-  "CLAIM_V2_FRESH_RECONSTRUCTION_PREPARED_REVIEW_REQUIRED",
+ require(type(preparation) is dict and preparation.get("status") in
+  (PREPARATION_STATUS,JIT_HANDOFF_STATUS),
   "FRESH_RECONSTRUCTION_PREPARATION_REQUIRED")
+ if preparation.get("status")==JIT_HANDOFF_STATUS:
+  require(preparation.get("operator_action")=="SIGN_IMMEDIATELY"
+   and preparation.get("maximum_capture_slot_age")==32
+   and type(preparation.get("handoff_slot_age")) is int
+   and 0<=preparation.get("handoff_slot_age")<=4
+   and type(preparation.get("remaining_slot_budget")) is int
+   and preparation.get("remaining_slot_budget")==
+    32-preparation.get("handoff_slot_age")
+   and preparation.get("gate_consumed") is False
+   and preparation.get("submission_permitted") is False,
+   "JIT_HANDOFF_CONTRACT_INVALID")
  gate=gate_reader(gate_path)
  require(gate.get("status")=="ARMED" and gate.get("gate_id")==preparation.get("fresh_gate_id")
   and gate.get("closure_id")==preparation.get("fresh_simulation_closure_id")
