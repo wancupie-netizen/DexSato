@@ -15,13 +15,25 @@ from application.jupiter_claim_v2_one_shot_gate import (
 MAX_TRANSACTION_BYTES = 4096
 
 
+def _raw_transaction(value):
+    """Accept SDK Base64 or an operator-selected binary, with identical bounds."""
+    if type(value) is bytes:
+        raw = value
+    else:
+        require(type(value) is str and 1 <= len(value) <= 8192,
+                "INVALID_TRANSACTION_ENCODING")
+        try:
+            raw = base64.b64decode(value, validate=True)
+        except Exception:
+            raise ClaimV2GateRejected("INVALID_TRANSACTION_ENCODING") from None
+    require(1 <= len(raw) <= MAX_TRANSACTION_BYTES,
+            "INVALID_TRANSACTION_SIZE")
+    return raw
+
+
 def decode_transaction(value):
-    require(type(value) is str and 1 <= len(value) <= 8192,
-            "INVALID_TRANSACTION_ENCODING")
     try:
-        raw = base64.b64decode(value, validate=True)
-        require(1 <= len(raw) <= MAX_TRANSACTION_BYTES,
-                "INVALID_TRANSACTION_SIZE")
+        raw = _raw_transaction(value)
         from solders.signature import Signature
         from solders.transaction import VersionedTransaction
         transaction = VersionedTransaction.from_bytes(raw)

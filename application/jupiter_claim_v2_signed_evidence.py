@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from application.jupiter_claim_v2_artifact_workflow import MAX_SIGNED_BYTES
-from application.jupiter_claim_v2_one_shot_gate import read_gate
+from application.jupiter_claim_v2_one_shot_gate import ClaimV2GateRejected, read_gate
 from application.jupiter_claim_v2_wallet_boundary import validate_wallet_signed_claim
 
 MAX_JSON_BYTES = 131_072
@@ -189,7 +189,8 @@ def main(argv=None):
         print(json.dumps(report, separators=(",", ":")))
         return 2
     except Exception as error:
-        reason = (str(error) if isinstance(error, ClaimV2SignedEvidenceRejected)
+        reason = (str(error) if isinstance(
+                    error, (ClaimV2SignedEvidenceRejected, ClaimV2GateRejected))
                   else "SIGNED_EVIDENCE_INPUT_OR_VERIFICATION_UNAVAILABLE")
         print(json.dumps({
             "status": "CLAIM_V2_WALLET_SIGNED_EVIDENCE_NOT_VERIFIED",

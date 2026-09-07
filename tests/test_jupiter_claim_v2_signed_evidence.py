@@ -1,4 +1,5 @@
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -139,3 +140,52 @@ def test_evidence_report_requires_live_reconstruction(tmp_path):
     assert report["rpc_freshness_verified"] is False
     assert report["live_reconstruction_required"] is True
     assert report["execution_ready"] is False
+
+
+def test_cli_preserves_safe_downstream_rejection_code(monkeypatch, tmp_path,
+                                                       capsys):
+    capture = tmp_path / "capture.json"
+    closure = tmp_path / "closure.json"
+    signed = tmp_path / "signed.bin"
+    for path in (capture, closure):
+        path.write_text("{}", encoding="utf-8")
+    signed.write_bytes(b"signed")
+
+    def rejected(*args, **kwargs):
+        from application.jupiter_claim_v2_one_shot_gate import ClaimV2GateRejected
+        raise ClaimV2GateRejected("INVALID_VERSIONED_TRANSACTION")
+
+    monkeypatch.setattr(evidence, "capture_wallet_signed_evidence", rejected)
+    result = evidence.main([
+        "--gate", str(tmp_path / "gate.json"),
+        "--closure", str(closure), "--capture", str(capture),
+        "--signed-transaction-file", str(signed), "--wallet", "wallet",
+        "--output", str(tmp_path / "report.json"),
+    ])
+    report = json.loads(capsys.readouterr().out)
+    assert result == 1
+    assert report["reason"] == "INVALID_VERSIONED_TRANSACTION"
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_cli_redacts_unknown_exception(monkeypatch, tmp_path, capsys):
+    capture = tmp_path / "capture.json"
+    closure = tmp_path / "closure.json"
+    signed = tmp_path / "signed.bin"
+    for path in (capture, closure):
+        path.write_text("{}", encoding="utf-8")
+    signed.write_bytes(b"signed")
+    monkeypatch.setattr(
+        evidence, "capture_wallet_signed_evidence",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("secret")),
+    )
+    result = evidence.main([
+        "--gate", str(tmp_path / "gate.json"),
+        "--closure", str(closure), "--capture", str(capture),
+        "--signed-transaction-file", str(signed), "--wallet", "wallet",
+        "--output", str(tmp_path / "report.json"),
+    ])
+    report = json.loads(capsys.readouterr().out)
+    assert result == 1
+    assert report["reason"] == "SIGNED_EVIDENCE_INPUT_OR_VERIFICATION_UNAVAILABLE"
+    assert "secret" not in json.dumps(report)

@@ -121,3 +121,16 @@ def test_wallet_boundary_has_no_submission_or_secret_key_api():
     for forbidden in ("requests", "sendTransaction", "sendRawTransaction",
                       "Keypair", "secretKey", "private_key", "seed_phrase"):
         assert forbidden not in source
+
+
+def test_raw_decoder_accepts_binary_and_base64_with_identical_bytes():
+    raw = b"signed-wire-transaction"
+    import base64
+    assert boundary._raw_transaction(raw) == raw
+    assert boundary._raw_transaction(base64.b64encode(raw).decode("ascii")) == raw
+
+
+def test_real_decoder_rejects_unsupported_input_type():
+    with pytest.raises(ClaimV2GateRejected,
+                       match="INVALID_TRANSACTION_ENCODING"):
+        boundary._raw_transaction(bytearray(b"signed"))
