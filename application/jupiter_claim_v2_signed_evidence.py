@@ -8,10 +8,9 @@ import json
 import os
 from pathlib import Path
 
-from application.jupiter_claim_v2_artifact_workflow import (
-    MAX_SIGNED_BYTES,
-    bind_wallet_signed_evidence,
-)
+from application.jupiter_claim_v2_artifact_workflow import MAX_SIGNED_BYTES
+from application.jupiter_claim_v2_one_shot_gate import read_gate
+from application.jupiter_claim_v2_wallet_boundary import validate_wallet_signed_claim
 
 MAX_JSON_BYTES = 131_072
 
@@ -99,11 +98,37 @@ def _write_exclusive(path, value):
         raise ClaimV2SignedEvidenceRejected("EVIDENCE_OUTPUT_ALREADY_EXISTS") from None
 
 
+def bind_no_submission_evidence(gate_path, closure, capture, signed_transaction,
+                                wallet, *, environment=None, current=None,
+                                decoder=None, **_ignored):
+    """Bind within gate TTL without asserting live-execution slot freshness."""
+    env = os.environ if environment is None else environment
+    for name, code in (
+        ("DEXSATO_JUPITER_FEE_ENABLED", "KEEP_PRODUCTION_FEES_DISABLED"),
+        ("DEXSATO_JUPITER_CLAIM_SUBMISSION_ENABLED", "KEEP_CLAIM_SUBMISSION_DISABLED"),
+        ("DEXSATO_JUPITER_CLAIM_LIVE_APPROVAL_ENABLED", "KEEP_LIVE_APPROVAL_DISABLED"),
+    ):
+        require(env.get(name, "false").strip().lower() == "false", code)
+    bound = validate_wallet_signed_claim(
+        gate_path, closure, capture, signed_transaction, wallet,
+        current=current, decoder=decoder,
+    )
+    gate = read_gate(gate_path)
+    require(gate.get("status") == "WALLET_APPROVAL_BOUND"
+            and gate.get("approval_count") == 0
+            and gate.get("submission_attempt_count") == 0
+            and gate.get("live_claim_approved") is False
+            and gate.get("claim_submitted") is False
+            and gate.get("execution_ready") is False,
+            "UNSAFE_GATE_STATE_AFTER_HASH_ONLY_BINDING")
+    return bound
+
+
 def capture_wallet_signed_evidence(gate_path, closure, capture,
                                    signed_transaction, wallet, output_path,
                                    *, environment=None, request_post=None,
                                    current=None, decoder=None,
-                                   binder=bind_wallet_signed_evidence):
+                                   binder=bind_no_submission_evidence):
     """Cross-check independent hashes, bind the digest, then persist hash evidence."""
     require(not Path(output_path).exists(), "EVIDENCE_OUTPUT_ALREADY_EXISTS")
     require(type(capture) is dict and capture.get("status") == "SDK_UNSIGNED_CAPTURED",
@@ -130,6 +155,9 @@ def capture_wallet_signed_evidence(gate_path, closure, capture,
         "independent_hash_verified": True,
         "wallet_signature_verified": True,
         "signed_transaction_persisted": False,
+        "rpc_freshness_verified": False,
+        "capture_freshness_policy": "GATE_TTL_ONLY_NO_SUBMISSION",
+        "live_reconstruction_required": True,
         "gate_status": "WALLET_APPROVAL_BOUND",
         "live_claim_approved": False,
         "approval_count": 0,

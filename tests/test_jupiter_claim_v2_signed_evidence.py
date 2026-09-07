@@ -85,3 +85,57 @@ def test_source_contains_no_approval_submission_or_secret_handling():
     forbidden = ("sendTransaction", "submit_claim", "approve_live_claim",
                  "reserve_submission", "private_key", "secret_key")
     assert all(term not in source for term in forbidden)
+
+
+def test_no_submission_binding_uses_gate_ttl_without_rpc_slot_claim(monkeypatch):
+    expected = {"gate_id": "gate", "closure_id": "closure",
+                "message_sha256": "a" * 64,
+                "signed_transaction_sha256": "b" * 64}
+    seen = []
+    monkeypatch.setattr(evidence, "validate_wallet_signed_claim",
+                        lambda *args, **kwargs: seen.append((args, kwargs)) or expected)
+    monkeypatch.setattr(evidence, "read_gate", lambda path: {
+        "status": "WALLET_APPROVAL_BOUND", "approval_count": 0,
+        "submission_attempt_count": 0, "live_claim_approved": False,
+        "claim_submitted": False, "execution_ready": False,
+    })
+    result = evidence.bind_no_submission_evidence(
+        "gate.json", {}, {}, b"signed", "wallet",
+        environment={"DEXSATO_JUPITER_FEE_ENABLED": "false",
+                     "DEXSATO_JUPITER_CLAIM_SUBMISSION_ENABLED": "false",
+                     "DEXSATO_JUPITER_CLAIM_LIVE_APPROVAL_ENABLED": "false"},
+    )
+    assert result == expected and len(seen) == 1
+
+
+@pytest.mark.parametrize("flag", [
+    "DEXSATO_JUPITER_FEE_ENABLED",
+    "DEXSATO_JUPITER_CLAIM_SUBMISSION_ENABLED",
+    "DEXSATO_JUPITER_CLAIM_LIVE_APPROVAL_ENABLED",
+])
+def test_no_submission_binding_rejects_every_unsafe_flag(monkeypatch, flag):
+    monkeypatch.setattr(evidence, "validate_wallet_signed_claim",
+                        lambda *args, **kwargs: pytest.fail("gate must remain untouched"))
+    with pytest.raises(evidence.ClaimV2SignedEvidenceRejected):
+        evidence.bind_no_submission_evidence(
+            "gate.json", {}, {}, b"signed", "wallet", environment={flag: "true"},
+        )
+
+
+def test_evidence_report_requires_live_reconstruction(tmp_path):
+    raw = transaction()
+    message_hash = hashlib.sha256(b"versioned-message").hexdigest()
+    signed_hash = hashlib.sha256(raw).hexdigest()
+    report = evidence.capture_wallet_signed_evidence(
+        "gate", {}, {"status": "SDK_UNSIGNED_CAPTURED",
+                     "message_sha256": message_hash}, raw, "wallet",
+        tmp_path / "report.json", binder=lambda *args, **kwargs: {
+            "gate_id": "gate", "closure_id": "closure",
+            "message_sha256": message_hash,
+            "signed_transaction_sha256": signed_hash,
+        },
+    )
+    assert report["capture_freshness_policy"] == "GATE_TTL_ONLY_NO_SUBMISSION"
+    assert report["rpc_freshness_verified"] is False
+    assert report["live_reconstruction_required"] is True
+    assert report["execution_ready"] is False
