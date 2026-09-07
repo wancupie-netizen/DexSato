@@ -37,21 +37,23 @@ def lock(tmp_path,*,sdk_version="0.3.0",web3_version="1.98.4",integrity=True):
 
 def audit_payload(web3_range="<=0.0.0-pr-29130 || 0.0.4 - 1.99.0-beta.0"):
     specs={
-      "@coral-xyz/anchor":("moderate",False,"*",["@coral-xyz/borsh","@solana/web3.js"]),
+      "@coral-xyz/anchor":("high",False,"*",["@coral-xyz/borsh","@solana/web3.js","toml"]),
       "@coral-xyz/borsh":("moderate",False,"*",["@solana/web3.js"]),
       "@jup-ag/referral-sdk":("high",True,"*",["@coral-xyz/anchor","@solana/spl-token","@solana/web3.js"]),
       "@solana/buffer-layout-utils":("high",False,"*",["@solana/web3.js","bigint-buffer"]),
       "@solana/spl-token":("high",False,"*",["@solana/buffer-layout-utils","@solana/web3.js"]),
       "@solana/web3.js":("moderate",True,web3_range,["jayson"]),
       "bigint-buffer":("high",False,"*",[{"source":1103747}]),
-      "jayson":("moderate",False,">=2.0.6",["uuid"]),
+      "jayson":("moderate",False,">=2.0.6",["stream-json","uuid"]),
+      "stream-json":("moderate",False,"<=3.4.0",[{"source":1164823}]),
+      "toml":("high",False,"<=4.1.2",[{"source":1164824},{"source":1164825}]),
       "uuid":("moderate",False,"<11.1.1",[{"source":1119441}])}
     vulnerabilities={name:{"name":name,"severity":severity,"isDirect":direct,
       "via":via,"effects":[],"range":version_range,"nodes":[],"fixAvailable":False}
       for name,(severity,direct,version_range,via) in specs.items()}
     return {"auditReportVersion":2,"vulnerabilities":vulnerabilities,
-      "metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":5,"high":4,
-        "critical":0,"total":9},"dependencies":{"prod":75,"dev":0,"optional":23,
+      "metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":5,"high":6,
+        "critical":0,"total":11},"dependencies":{"prod":75,"dev":0,"optional":23,
         "peer":21,"peerOptional":0,"total":98}}}
 
 
@@ -64,7 +66,10 @@ def prepare_gate(tmp_path,monkeypatch):
       "reviewed_audit_sha256":sdk.REVIEWED_AUDIT_SHA256,
       "reviewed_dependency_tree_sha256":sdk.REVIEWED_DEPENDENCY_TREE_SHA256,
       "root_advisories":[{"source":1103747,"ghsa":"GHSA-3gc7-fjrx-p6mg"},
-                           {"source":1119441,"ghsa":"GHSA-w5hq-g745-h8pq"}],
+                           {"source":1119441,"ghsa":"GHSA-w5hq-g745-h8pq"},
+                           {"source":1164823,"ghsa":"GHSA-528h-pc64-c93x"},
+                           {"source":1164824,"ghsa":"GHSA-82x6-q7mm-w9cf"},
+                           {"source":1164825,"ghsa":"GHSA-v5mp-jgw5-2x6j"}],
       "production_runtime_approved":False,"live_claim_approved":False,
       "execution_ready":False,"fee_receipt_verified":False}
     (tmp_path/sdk.ATTESTATION_FILE).write_text(json.dumps(attestation),encoding="utf-8")
@@ -115,7 +120,7 @@ def test_pinned_sdk_output_is_reaudited_by_e4b(monkeypatch,tmp_path):
     assert report["compiled_account_binding_verified"] is True
     assert report["rpc_endpoint_recorded"] is False
     assert report["dependency_advisory_counts"]=={
-      "info":0,"low":0,"moderate":5,"high":4,"critical":0,"total":9}
+      "info":0,"low":0,"moderate":5,"high":6,"critical":0,"total":11}
     assert report["production_runtime_approved"] is False
     assert report["live_claim_approved"] is False
     assert capture["transaction"]==encoded

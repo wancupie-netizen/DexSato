@@ -1,11 +1,11 @@
 {
   "attestation_version": 1,
-  "reviewed_at": "2026-09-02",
+  "reviewed_at": "2026-09-07",
   "accepted_scope": "ONE_SHOT_READ_ONLY_UNSIGNED_CLAIM_V2_CAPTURE_ONLY",
   "package_lock_sha256": "f174f8bdaa2ea9096060e3714a39a4b486fafb082ec4ae1e7fa484af9b6908f4",
-  "advisory_profile_sha256": "f948fc71f79aed1ac0b699a073fe76c5a1c574389fe55b9c5b52f29e1c47bcd1",
-  "reviewed_audit_sha256": "d9469e8bd2dc8686a0c0b75f6bb4cc39978b7dc8a3cc0a07947cca2926686cee",
-  "reviewed_dependency_tree_sha256": "de268ab351a5fa34af654b0edd7ef69b26f46636547b142b24652044f1ef6e64",
+  "advisory_profile_sha256": "a1be05d1b8d121f2c056bd07f57cc6ec1a3318fd563c0b39f44277898506910e",
+  "reviewed_audit_sha256": "bc23015ed0d89edd11b884b622fc48ec5f1f84a9419b5702da695179095bddec",
+  "reviewed_dependency_tree_sha256": "e58ad16c64e4bec3513de4fabdd417b9fbe6f87dbbc4a950eec87e18af6f6322",
   "root_advisories": [
     {
       "source": 1103747,
@@ -20,6 +20,27 @@
       "package": "uuid",
       "severity": "moderate",
       "accepted_impact": "AFFECTED_V3_V5_V6_BUFFER_API_NOT_USED_BY_CAPTURE"
+    },
+    {
+      "source": 1164823,
+      "ghsa": "GHSA-528h-pc64-c93x",
+      "package": "stream-json",
+      "severity": "moderate",
+      "accepted_impact": "FILTER_APIS_NOT_USED_AND_CHILD_PROCESS_TIMEOUT_BOUNDED"
+    },
+    {
+      "source": 1164824,
+      "ghsa": "GHSA-82x6-q7mm-w9cf",
+      "package": "toml",
+      "severity": "high",
+      "accepted_impact": "UNTRUSTED_TOML_PARSE_NOT_USED_BY_FIXED_CAPTURE"
+    },
+    {
+      "source": 1164825,
+      "ghsa": "GHSA-v5mp-jgw5-2x6j",
+      "package": "toml",
+      "severity": "high",
+      "accepted_impact": "UNTRUSTED_TOML_PARSE_NOT_USED_BY_FIXED_CAPTURE"
     }
   ],
   "production_runtime_approved": false,

@@ -21,9 +21,9 @@ MAX_LOCK_BYTES=1_048_576
 MAX_STDOUT_BYTES=8192
 TOOL_DIR=Path(__file__).resolve().parents[1]/"tools"/"claim_v2_capture"
 ATTESTATION_FILE="dependency_advisory_attestation.json"
-KNOWN_PROFILE_SHA256="f948fc71f79aed1ac0b699a073fe76c5a1c574389fe55b9c5b52f29e1c47bcd1"
-REVIEWED_AUDIT_SHA256="d9469e8bd2dc8686a0c0b75f6bb4cc39978b7dc8a3cc0a07947cca2926686cee"
-REVIEWED_DEPENDENCY_TREE_SHA256="de268ab351a5fa34af654b0edd7ef69b26f46636547b142b24652044f1ef6e64"
+KNOWN_PROFILE_SHA256="a1be05d1b8d121f2c056bd07f57cc6ec1a3318fd563c0b39f44277898506910e"
+REVIEWED_AUDIT_SHA256="bc23015ed0d89edd11b884b622fc48ec5f1f84a9419b5702da695179095bddec"
+REVIEWED_DEPENDENCY_TREE_SHA256="e58ad16c64e4bec3513de4fabdd417b9fbe6f87dbbc4a950eec87e18af6f6322"
 LOCK_SHA256="f174f8bdaa2ea9096060e3714a39a4b486fafb082ec4ae1e7fa484af9b6908f4"
 
 
@@ -132,9 +132,15 @@ def audit_advisory_gate(tool_dir,lock,*,environment,runner=None):
             and attestation["fee_receipt_verified"] is False,
             "UNSAFE_DEPENDENCY_ATTESTATION_SCOPE")
     advisories=attestation["root_advisories"]
+    expected_advisories={
+        (1103747,"GHSA-3gc7-fjrx-p6mg"),
+        (1119441,"GHSA-w5hq-g745-h8pq"),
+        (1164823,"GHSA-528h-pc64-c93x"),
+        (1164824,"GHSA-82x6-q7mm-w9cf"),
+        (1164825,"GHSA-v5mp-jgw5-2x6j"),
+    }
     require(type(advisories) is list and {(item.get("source"),item.get("ghsa"))
-        for item in advisories if type(item) is dict}=={
-            (1103747,"GHSA-3gc7-fjrx-p6mg"),(1119441,"GHSA-w5hq-g745-h8pq")},
+        for item in advisories if type(item) is dict}==expected_advisories,
         "ROOT_ADVISORY_SET_MISMATCH")
     npm_name="npm.cmd" if os.name=="nt" else "npm"
     npm=shutil.which(npm_name,path=environment.get("PATH"))
@@ -157,7 +163,7 @@ def audit_advisory_gate(tool_dir,lock,*,environment,runner=None):
     return {"dependency_advisory_profile_sha256":digest,
             "dependency_advisory_counts":profile["counts"],
             "dependency_risk_scope":attestation["accepted_scope"],
-            "root_advisory_sources":[1103747,1119441],
+            "root_advisory_sources":[1103747,1119441,1164823,1164824,1164825],
             "production_runtime_approved":False,"live_claim_approved":False}
 
 
