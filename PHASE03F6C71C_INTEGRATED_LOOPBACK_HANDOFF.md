@@ -9,3 +9,7 @@ The endpoint binds only to IPv4 loopback, requires the exact Origin and session
 token, accepts an empty body, and can run once. It has no approval, RPC submission,
 or broadcast endpoint. Production fee, live approval, and claim submission flags
 remain disabled during generation.
+
+Loopback failures are classified by fixed stage and an uppercase domain-code
+whitelist. Exception prose, paths, RPC endpoints, provider bodies, and transaction
+material are never copied into the HTTP diagnostic response.

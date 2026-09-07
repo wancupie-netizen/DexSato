@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,20 +19,44 @@ ASSETS = {
     "/vendor/solana-web3.js": (WEB3, "text/javascript; charset=utf-8"),
 }
 MAX_ASSET_BYTES = 2_000_000
+SAFE_CODE=re.compile(r"^[A-Z][A-Z0-9_]{2,95}$")
+
+class JitStageRejected(RuntimeError):
+    def __init__(self,stage,reason="UNCLASSIFIED_FAILURE"):
+        self.stage=stage;self.reason=reason;super().__init__(stage)
+
+def _reason(error):
+    value=str(error)
+    if error.__class__.__name__.endswith("Rejected") and SAFE_CODE.fullmatch(value):
+        return value
+    if isinstance(error,FileExistsError):return "OUTPUT_ALREADY_EXISTS"
+    if isinstance(error,(KeyError,TypeError,ValueError)):return "INTERNAL_CONTRACT_MISMATCH"
+    if isinstance(error,OSError):return "LOCAL_IO_UNAVAILABLE"
+    return "UNCLASSIFIED_FAILURE"
 
 def _prepare_payload(config):
     from application.jupiter_claim_v2_fresh_reconstruction import _read_json,_write_exclusive
     from application.jupiter_claim_v2_jit_handoff import (
         HANDOFF_CONFIRMATION,prepare_jit_handoff)
     from application.jupiter_claim_v2_one_shot_gate import CONFIRMATION_PHRASE
-    report=prepare_jit_handoff(_read_json(config["identity"]),
-        _read_json(config["evidence_closure"]),_read_json(config["boundary"]),
-        config["output_dir"],config["gate"],CONFIRMATION_PHRASE,HANDOFF_CONFIRMATION)
+    try:
+        identity=_read_json(config["identity"]);closure=_read_json(config["evidence_closure"])
+        boundary=_read_json(config["boundary"])
+    except Exception as error:raise JitStageRejected("JIT_INPUT_READ_FAILED",_reason(error)) from None
+    try:
+        report=prepare_jit_handoff(identity,closure,boundary,config["output_dir"],
+            config["gate"],CONFIRMATION_PHRASE,HANDOFF_CONFIRMATION)
+    except Exception as error:
+        raise JitStageRejected("JIT_FRESH_RECONSTRUCTION_FAILED",_reason(error)) from None
     output=Path(config["output_dir"])
-    _write_exclusive(output/"jit_signing_handoff.json",report)
-    return {"status":"JIT_UNSIGNED_ARTIFACTS_READY",
-        "capture":_read_json(output/"unsigned_claim_v2_capture.json"),
-        "gate":_read_json(config["gate"]),"handoff":report}
+    try:_write_exclusive(output/"jit_signing_handoff.json",report)
+    except Exception as error:raise JitStageRejected("JIT_HANDOFF_WRITE_FAILED",_reason(error)) from None
+    try:
+        capture=_read_json(output/"unsigned_claim_v2_capture.json");gate=_read_json(config["gate"])
+    except Exception as error:
+        raise JitStageRejected("JIT_RESPONSE_ARTIFACT_READ_FAILED",_reason(error)) from None
+    return {"status":"JIT_UNSIGNED_ARTIFACTS_READY","capture":capture,
+        "gate":gate,"handoff":report}
 
 
 class SignOnlyHandler(BaseHTTPRequestHandler):
@@ -105,9 +130,11 @@ class SignOnlyHandler(BaseHTTPRequestHandler):
                 separators=(",",":")).encode()
             self._headers(200,"application/json; charset=utf-8",len(data));self.wfile.write(data)
         except Exception as error:
-            reason=str(error) if error.__class__.__name__.endswith("Rejected") else "JIT_PREPARATION_UNAVAILABLE"
+            stage=error.stage if isinstance(error,JitStageRejected) else "JIT_HTTP_HANDLER_FAILED"
+            reason=error.reason if isinstance(error,JitStageRejected) else "UNCLASSIFIED_FAILURE"
             data=json.dumps({"status":"JIT_UNSIGNED_ARTIFACTS_NOT_VERIFIED",
-                "reason":reason,"transaction_submitted":False,"execution_ready":False}).encode()
+                "stage":stage,"reason":reason,"transaction_submitted":False,
+                "execution_ready":False}).encode()
             self._headers(409,"application/json; charset=utf-8",len(data));self.wfile.write(data)
 
     def do_PUT(self):

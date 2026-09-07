@@ -94,3 +94,21 @@ def test_jit_endpoint_requires_exact_origin_token_and_is_one_shot(monkeypatch,tm
   assert status==200 and b"JIT_UNSIGNED_ARTIFACTS_READY" in body
   assert request(instance,"POST","/jit/prepare",headers=headers)[0]==409
  finally:instance.shutdown();thread.join();instance.server_close()
+
+def test_stage_diagnostics_never_copy_exception_prose(monkeypatch):
+ monkeypatch.setattr(sign_server,"_prepare_payload",
+  lambda config:(_ for _ in ()).throw(RuntimeError("https://secret-rpc.example/key")))
+ instance=sign_server.make_server(0,{"identity":"i"});thread=threading.Thread(
+  target=instance.serve_forever,daemon=True);thread.start()
+ try:
+  headers={"Origin":f"http://127.0.0.1:{instance.server_port}",
+   "X-DexSato-JIT-Token":instance.jit_token,"Content-Length":"0"}
+  status,_,body=request(instance,"POST","/jit/prepare",headers=headers)
+  assert status==409 and b"JIT_HTTP_HANDLER_FAILED" in body
+  assert b"secret-rpc" not in body
+ finally:instance.shutdown();thread.join();instance.server_close()
+
+def test_safe_reason_whitelists_codes_only():
+ class DomainRejected(RuntimeError):pass
+ assert sign_server._reason(DomainRejected("SDK_CONSTRUCTION_FAILED"))=="SDK_CONSTRUCTION_FAILED"
+ assert sign_server._reason(DomainRejected("secret prose"))=="UNCLASSIFIED_FAILURE"
