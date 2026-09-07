@@ -21,3 +21,9 @@ The F.6C.7 approval boundary accepts this JIT report only when its sign-now
 action, unchanged 32-slot maximum, at-most-four-slot handoff age, exact remaining
 budget, unconsumed gate, and disabled submission fields are all present. Merely
 renaming another report to the JIT status cannot authorize approval.
+
+After simulation, the exact transaction bytes are decoded and their recent
+blockhash is checked with mainnet `isBlockhashValid`. The resulting attestation
+is bound to the gate, closure, message hash, and transaction hash. Its own slot
+has the unchanged 32-slot maximum; the older pre-simulation capture slot is
+retained for audit but is not mislabelled as a post-simulation observation.

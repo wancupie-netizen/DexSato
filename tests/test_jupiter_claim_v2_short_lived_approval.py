@@ -13,7 +13,7 @@ PREP={"status":"CLAIM_V2_FRESH_RECONSTRUCTION_PREPARED_REVIEW_REQUIRED",
 JIT={**PREP,"status":"CLAIM_V2_JIT_SIGNING_HANDOFF_READY",
  "operator_action":"SIGN_IMMEDIATELY","maximum_capture_slot_age":32,
  "handoff_slot_age":2,"remaining_slot_budget":30,"gate_consumed":False,
- "submission_permitted":False}
+ "submission_permitted":False,"blockhash_attestation":{"status":"attested"}}
 ARMED={"status":"ARMED","gate_id":"gate","closure_id":"closure","message_sha256":"a"*64,
  "unsigned_transaction_sha256":"b"*64}
 APPROVED={**ARMED,"status":"LIVE_CLAIM_APPROVED","signed_transaction_sha256":DIGEST,
@@ -32,7 +32,8 @@ def test_exact_preparation_reaches_review_only_approval():
 def test_legacy_and_exact_jit_contract_reach_same_approval_boundary(preparation):
  states=iter((ARMED,APPROVED))
  result=short.approve_reconstructed_claim(preparation,"gate",{}, {},RAW,"wallet","confirm",
-  environment=ENV,current=NOW,gate_reader=lambda p:next(states),approver=lambda *a,**k:
+  environment=ENV,current=NOW,gate_reader=lambda p:next(states),
+  freshness_attestation=preparation.get("blockhash_attestation"),approver=lambda *a,**k:
   {"status":"FRESH_CLAIM_V2_WALLET_APPROVAL_BOUND","approval_id":"id",
    "approval_expires_at":"soon","execution_ready":False})
  assert result["status"]=="CLAIM_V2_SHORT_LIVED_APPROVAL_REVIEW_REQUIRED"

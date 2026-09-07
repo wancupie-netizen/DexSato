@@ -19,6 +19,7 @@ from application.jupiter_claim_v2_fresh_reconstruction import (
     require,
 )
 from application.jupiter_claim_v2_one_shot_gate import read_gate, write_gate
+from application.jupiter_claim_v2_blockhash_attestation import attest_blockhash
 
 
 HANDOFF_CONFIRMATION = "I AM READY TO SIGN FRESH CLAIM V2 NOW"
@@ -50,9 +51,10 @@ def prepare_jit_handoff(identity, evidence_closure, boundary, output_dir,
     output = Path(output_dir)
     capture = _read_json(output / ARTIFACT_NAMES["capture"])
     closure = _read_json(output / ARTIFACT_NAMES["closure"])
-    freshness = inspect_fresh_capture(
-        gate_path, closure, capture, environment=env, post=post)
-    if freshness["slot_age"] > MAX_HANDOFF_SLOT_AGE:
+    try:
+        attestation = attest_blockhash(
+            gate_path, closure, capture, environment=env, post=post)
+    except Exception:
         stale_gate = read_gate(gate_path)
         require(stale_gate.get("status") == "ARMED"
                 and stale_gate.get("approval_count") == 0
@@ -64,11 +66,11 @@ def prepare_jit_handoff(identity, evidence_closure, boundary, output_dir,
             live_claim_approved=False,
             claim_execution_ready=False,
             execution_ready=False,
-            jit_retirement_reason="INSUFFICIENT_FRESH_SLOT_BUDGET",
+            jit_retirement_reason="POST_SIMULATION_BLOCKHASH_NOT_ATTESTED",
         )
         write_gate(gate_path, stale_gate)
         raise ClaimV2FreshReconstructionRejected(
-            "JIT_HANDOFF_SLOT_BUDGET_INSUFFICIENT")
+            "POST_SIMULATION_BLOCKHASH_NOT_ATTESTED")
     gate = read_gate(gate_path)
     require(gate.get("status") == "ARMED"
             and gate.get("approval_count") == 0
@@ -77,11 +79,12 @@ def prepare_jit_handoff(identity, evidence_closure, boundary, output_dir,
     return {
         **prepared,
         "status": "CLAIM_V2_JIT_SIGNING_HANDOFF_READY",
-        "handoff_capture_slot": freshness["capture_slot"],
-        "handoff_current_slot": freshness["current_slot"],
-        "handoff_slot_age": freshness["slot_age"],
+        "handoff_capture_slot": capture["rpc_slot"],
+        "handoff_current_slot": attestation["attestation_slot"],
+        "handoff_slot_age": 0,
         "maximum_capture_slot_age": MAX_CAPTURE_SLOT_AGE,
-        "remaining_slot_budget": MAX_CAPTURE_SLOT_AGE - freshness["slot_age"],
+        "remaining_slot_budget": MAX_CAPTURE_SLOT_AGE,
+        "blockhash_attestation": attestation,
         "operator_action": "SIGN_IMMEDIATELY",
         "gate_consumed": False,
         "live_claim_approved": False,

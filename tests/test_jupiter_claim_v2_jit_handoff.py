@@ -35,9 +35,10 @@ def test_jit_handoff_preserves_32_slot_limit_and_never_approves(monkeypatch,
     (output / "claim_v2_simulation_closure.json").write_text("{}")
     monkeypatch.setattr(jit, "prepare_fresh_reconstruction",
                         lambda *a, **k: prepared())
-    monkeypatch.setattr(jit, "_read_json", lambda path: {})
-    monkeypatch.setattr(jit, "inspect_fresh_capture", lambda *a, **k: {
-        "capture_slot": 100, "current_slot": 102, "slot_age": 2})
+    monkeypatch.setattr(jit, "_read_json", lambda path: {"rpc_slot":100})
+    monkeypatch.setattr(jit, "attest_blockhash", lambda *a, **k: {
+        "status":"CLAIM_V2_POST_SIMULATION_BLOCKHASH_ATTESTED",
+        "attestation_slot":102,"maximum_attestation_slot_age":32})
     monkeypatch.setattr(jit, "read_gate", lambda path: {
         "status": "ARMED", "approval_count": 0,
         "submission_attempt_count": 0})
@@ -45,7 +46,7 @@ def test_jit_handoff_preserves_32_slot_limit_and_never_approves(monkeypatch,
         "gate-confirm", jit.HANDOFF_CONFIRMATION, environment=env())
     assert report["status"] == "CLAIM_V2_JIT_SIGNING_HANDOFF_READY"
     assert report["maximum_capture_slot_age"] == 32
-    assert report["remaining_slot_budget"] == 30
+    assert report["remaining_slot_budget"] == 32
     assert report["live_claim_approved"] is False
     assert report["submission_attempt_count"] == 0
     assert report["transaction_submitted"] is False
@@ -85,15 +86,14 @@ def test_explicit_sign_now_phrase_required_before_generation(monkeypatch,
     assert called == []
 
 
-def test_insufficient_post_generation_slot_budget_retires_gate(monkeypatch,
-                                                                tmp_path):
+def test_invalid_post_simulation_blockhash_retires_gate(monkeypatch,tmp_path):
     output = tmp_path / "capture"
     output.mkdir()
     monkeypatch.setattr(jit, "prepare_fresh_reconstruction",
                         lambda *a, **k: prepared())
-    monkeypatch.setattr(jit, "_read_json", lambda path: {})
-    monkeypatch.setattr(jit, "inspect_fresh_capture", lambda *a, **k: {
-        "capture_slot": 100, "current_slot": 105, "slot_age": 5})
+    monkeypatch.setattr(jit, "_read_json", lambda path: {"rpc_slot":100})
+    monkeypatch.setattr(jit, "attest_blockhash",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError()))
     stale = {"status": "ARMED", "approval_count": 0,
              "submission_attempt_count": 0}
     written = []
@@ -101,7 +101,7 @@ def test_insufficient_post_generation_slot_budget_retires_gate(monkeypatch,
     monkeypatch.setattr(jit, "write_gate",
                         lambda path, value: written.append(dict(value)))
     with pytest.raises(ClaimV2FreshReconstructionRejected,
-                       match="JIT_HANDOFF_SLOT_BUDGET_INSUFFICIENT"):
+                       match="POST_SIMULATION_BLOCKHASH_NOT_ATTESTED"):
         jit.prepare_jit_handoff({}, {}, {}, output, tmp_path / "gate",
             "gate-confirm", jit.HANDOFF_CONFIRMATION, environment=env())
     assert written[0]["status"] == "JIT_HANDOFF_RETIRED"

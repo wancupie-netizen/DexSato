@@ -17,7 +17,7 @@ def _read(path):
 
 def approve_reconstructed_claim(preparation,gate_path,closure,capture,signed,wallet,
  confirmation,*,environment=None,post=None,current=None,decoder=None,
- approver=bind_and_approve_fresh,gate_reader=read_gate):
+ approver=bind_and_approve_fresh,gate_reader=read_gate,freshness_attestation=None):
  env=os.environ if environment is None else environment
  require(env.get("DEXSATO_JUPITER_CLAIM_LIVE_APPROVAL_ENABLED","false").lower()=="true",
   "CLAIM_LIVE_APPROVAL_FEATURE_DISABLED")
@@ -40,6 +40,9 @@ def approve_reconstructed_claim(preparation,gate_path,closure,capture,signed,wal
    and preparation.get("gate_consumed") is False
    and preparation.get("submission_permitted") is False,
    "JIT_HANDOFF_CONTRACT_INVALID")
+  require(type(freshness_attestation) is dict
+   and freshness_attestation==preparation.get("blockhash_attestation"),
+   "JIT_BLOCKHASH_ATTESTATION_REQUIRED")
  gate=gate_reader(gate_path)
  require(gate.get("status")=="ARMED" and gate.get("gate_id")==preparation.get("fresh_gate_id")
   and gate.get("closure_id")==preparation.get("fresh_simulation_closure_id")
@@ -50,8 +53,13 @@ def approve_reconstructed_claim(preparation,gate_path,closure,capture,signed,wal
   and preparation.get("submission_attempt_count")==0,
   "FRESH_PREPARATION_GATE_BINDING_MISMATCH")
  digest=hashlib.sha256(signed).hexdigest()
- result=approver(gate_path,closure,capture,signed,wallet,confirmation,
-  environment=env,post=post,current=current,decoder=decoder)
+ if freshness_attestation is not None:
+  result=approver(gate_path,closure,capture,signed,wallet,confirmation,
+   environment=env,post=post,current=current,decoder=decoder,
+   freshness_attestation=freshness_attestation)
+ else:
+  result=approver(gate_path,closure,capture,signed,wallet,confirmation,
+   environment=env,post=post,current=current,decoder=decoder)
  approved=gate_reader(gate_path)
  require(result.get("status")=="FRESH_CLAIM_V2_WALLET_APPROVAL_BOUND"
   and approved.get("status")=="LIVE_CLAIM_APPROVED"
@@ -70,10 +78,16 @@ def main(argv=None):
  p=argparse.ArgumentParser(description=__doc__)
  for name in ("preparation","gate","closure","capture","signed-transaction-file","wallet","confirm"):
   p.add_argument("--"+name,required=True)
+ p.add_argument("--freshness-attestation")
  a=p.parse_args(argv)
  try:
-  report=approve_reconstructed_claim(_read(a.preparation),a.gate,_read(a.closure),
-   _read(a.capture),Path(a.signed_transaction_file).read_bytes(),a.wallet,a.confirm)
+  preparation=_read(a.preparation)
+  attestation=_read(a.freshness_attestation) if a.freshness_attestation else None
+  if type(attestation) is dict and type(attestation.get("blockhash_attestation")) is dict:
+   attestation=attestation["blockhash_attestation"]
+  report=approve_reconstructed_claim(preparation,a.gate,_read(a.closure),
+   _read(a.capture),Path(a.signed_transaction_file).read_bytes(),a.wallet,a.confirm,
+   freshness_attestation=attestation)
   print(json.dumps(report,separators=(",",":")));return 2
  except ClaimV2GateRejected as e:reason=str(e)
  except Exception:reason="SHORT_LIVED_APPROVAL_INPUT_OR_RPC_UNAVAILABLE"

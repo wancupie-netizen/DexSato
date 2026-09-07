@@ -100,9 +100,14 @@ def inspect_fresh_capture(path,closure,capture,*,environment=None,post=None):
 
 def bind_and_approve_fresh(path,closure,capture,signed_transaction,wallet,
                            confirmation,*,environment=None,post=None,current=None,
-                           decoder=None):
+                           decoder=None,freshness_attestation=None):
     env=os.environ if environment is None else environment
-    freshness=inspect_fresh_capture(path,closure,capture,environment=env,post=post)
+    if freshness_attestation is None:
+        freshness=inspect_fresh_capture(path,closure,capture,environment=env,post=post)
+    else:
+        from application.jupiter_claim_v2_blockhash_attestation import verify_blockhash_attestation
+        freshness=verify_blockhash_attestation(path,closure,capture,
+            freshness_attestation,environment=env,post=post)
     current=current or utc_now()
     bound=validate_wallet_signed_claim(path,closure,capture,signed_transaction,wallet,
         current=current,decoder=decoder)
@@ -113,7 +118,8 @@ def bind_and_approve_fresh(path,closure,capture,signed_transaction,wallet,
         "gate_id":bound["gate_id"],"approval_id":approval["approval_id"],
         "approval_expires_at":approval["approval_expires_at"],
         "signed_transaction_sha256":bound["signed_transaction_sha256"],
-        "capture_slot":freshness["capture_slot"],"slot_age":freshness["slot_age"],
+        "capture_slot":capture.get("rpc_slot"),
+        "slot_age":freshness.get("slot_age",freshness.get("attestation_slot_age")),
         "wallet_signature_verified":True,"submission_attempt_count":0,
         "transaction_submitted":False,"claim_submitted":False,
         "execution_ready":False}
