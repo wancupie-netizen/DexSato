@@ -59,6 +59,9 @@ def render_user_dashboard(
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DexSato · Market Evidence</title>
   <link rel="icon" type="image/png" href="/static/branding/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>try{{if(localStorage.getItem("dexsato-theme")==="plain")document.documentElement.dataset.theme="plain";}}catch(error){{}}</script>
   <style>
     :root{{--bg:#06111f;--panel:#0b1a2c;--panel2:#0f2238;--line:#1d3852;--text:#f5f8ff;--muted:#91a8c1;--green:#39df9a;--amber:#f7b928;--red:#ff5364;--blue:#5394ff;--cyan:#23d9d2}}
@@ -108,10 +111,66 @@ def render_user_dashboard(
       .coin-column{{grid-template-columns:58px minmax(0,1fr);gap:13px;min-height:116px;padding:16px}} .coin-logo{{width:58px;height:58px}}
       .market-title-button{{font-size:20px}} .evidence-column,.summary-column{{padding:17px 16px}}
     }}
+    /* UI-01 CORRECTED — DexSato DEX Intelligence shell */
+    :root{{--bg:#080B10;--panel:#0E141C;--panel2:#10171F;--line:#1D2733;--text:#E7EDF4;--muted:#7C8CA0;--green:#4CF4D6;--amber:#F7B928;--red:#FF5C7A;--blue:#4CF4D6;--cyan:#4CF4D6;--violet:#B98CFF}}
+    body{{background-color:var(--bg);background-image:linear-gradient(rgba(76,244,214,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(76,244,214,.035) 1px,transparent 1px);background-size:42px 42px;font-family:"JetBrains Mono",monospace}}
+    .app-shell{{display:grid;grid-template-columns:144px minmax(0,1fr);min-height:100vh}}
+    .side-rail{{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:#0E141C;display:flex;flex-direction:column;padding:18px 14px;gap:18px;z-index:30;font-family:"Space Grotesk",sans-serif}}
+    .rail-logo{{width:38px;height:38px;display:grid;place-items:center;margin-left:2px}}.rail-logo img{{width:34px;height:34px;object-fit:contain}}
+    .market-nav{{display:flex;flex-direction:column;gap:2px}}
+    .rail-nav{{display:flex;flex-direction:column;gap:2px;margin-top:8px}}
+    .side-item{{min-height:36px;display:flex;align-items:center;gap:10px;padding:0 10px;color:var(--text-dim);font-size:13px;font-weight:600;text-decoration:none;border:0;background:transparent}}
+    .side-item svg{{width:17px;height:17px;flex:0 0 auto}}
+    .side-item:hover{{color:var(--cyan)}}
+    .side-item.active{{position:relative;color:var(--cyan)}}
+    .side-item.active:before{{content:"";position:absolute;left:-14px;top:50%;width:2px;height:18px;transform:translateY(-50%);background:var(--cyan);box-shadow:0 0 7px rgba(76,244,214,.45)}}
+    .side-item[aria-disabled="true"]{{cursor:default}}
+    .rail-spacer{{flex:1}}
+    .utility-nav{{display:flex;flex-direction:column;gap:1px;padding-top:8px}}
+    .utility-nav .side-item{{min-height:32px;color:var(--text-faint);font-size:12px;font-weight:500}}
+    .utility-nav .side-item:hover{{color:var(--text-dim)}}
+    .app-main{{min-width:0}}.shell{{width:100%;margin:0;padding:92px 28px 38px}}
+    .topbar{{position:fixed;top:0;left:144px;right:0;height:64px;z-index:25;padding:0 28px;border-bottom:1px solid var(--line);background:rgba(8,11,16,.86);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:flex-start;gap:24px}}
+    .brand{{gap:8px}}.brand img{{display:none}}.brand strong{{font-family:"Space Grotesk",sans-serif;font-size:17px;letter-spacing:.01em}}.brand span{{font-family:"JetBrains Mono",monospace;color:#45505F;font-size:10px;letter-spacing:.08em}}.top-actions{{margin-left:auto}}
+    .learn-link{{border-color:var(--line);border-radius:0;color:var(--muted);font-size:11px}}.theme-switcher{{border-radius:0;background:var(--panel2)}}.theme-option{{border-radius:0}}
+    .hero{{margin:0 0 22px;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);gap:1px;border:1px solid var(--line);background:var(--line)}}.hero-copy,.attention-card{{border:0;border-radius:0;background:radial-gradient(ellipse 700px 220px at 15% 0%,rgba(76,244,214,.10),transparent 60%),var(--panel)}}.hero-copy{{padding:28px}}.attention-card{{border-left:1px solid var(--line);padding:24px}}.eyebrow{{color:var(--cyan);font-family:"JetBrains Mono",monospace}}.hero h1{{font-family:"Space Grotesk",sans-serif;font-size:38px}}.hero-copy p{{color:var(--muted)}}
+    .pulse{{gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:22px}}.pulse-card{{border:0;border-radius:0;background:var(--panel);padding:18px 20px}}.pulse-card strong{{font-family:"Space Grotesk",sans-serif;font-size:22px}}
+    .market-head h2,.learn h2{{font-family:"Space Grotesk",sans-serif}}.search,.filters button{{border-radius:0;background:var(--panel)}}.filters button.active{{border-color:var(--cyan);background:rgba(76,244,214,.08);color:var(--cyan)}}
+    .decision-list{{gap:1px;background:var(--line);border:1px solid var(--line)}}.decision-card{{border:0;border-left:2px solid var(--blue);border-radius:0;background:var(--panel)}}.tone-alert{{border-left-color:var(--red)}}.tone-watch{{border-left-color:var(--amber)}}.tone-reference{{border-left-color:var(--cyan)}}.coin-logo{{border-radius:0;background:var(--panel2)}}.decision-pill,.decision-button{{border-radius:0}}.decision-button{{border-color:var(--cyan);color:var(--cyan)}}
+    .learn{{border:1px solid var(--line);border-radius:0;background:var(--panel)}}.learn-grid div{{border-radius:0;background:var(--panel2)}}
+    footer{{padding-bottom:4px}}
+    html[data-theme="plain"]{{--bg:#080B10;--panel:#0E141C;--panel2:#10171F;--line:#1D2733;--text:#E7EDF4;--muted:#7C8CA0;--green:#4CF4D6;--amber:#F7B928;--red:#FF5C7A;--blue:#4CF4D6;--cyan:#4CF4D6}}html[data-theme="plain"] body{{background-color:var(--bg);background-image:linear-gradient(rgba(76,244,214,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(76,244,214,.035) 1px,transparent 1px)}}
+    @media(max-width:780px){{.app-shell{{grid-template-columns:144px minmax(0,1fr)}}.topbar{{left:144px;padding:0 16px}}.shell{{padding:80px 16px 28px}}.hero{{grid-template-columns:1fr}}.attention-card{{border-left:0;border-top:1px solid var(--line)}}.side-rail{{padding-left:10px;padding-right:10px}}}}
+    @media(max-width:520px){{.side-rail{{display:none}}.app-shell{{display:block}}.topbar{{left:0}}.shell{{padding-left:12px;padding-right:12px}}.brand span{{display:none}}}}
   </style>
 </head>
-<body><main class="shell">
-  <header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span>Market Evidence</span></div><div class="top-actions"><a class="learn-link" href="#how-to-read">How to read DexSato</a><div class="theme-switcher" role="group" aria-label="Dashboard theme"><button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button></div></div></header>
+<body><div class="app-shell">
+  <aside class="side-rail" aria-label="DexSato navigation">
+    <a class="rail-logo" href="/" aria-label="DexSato"><img src="/static/branding/dexsato-mark.png" alt=""></a>
+
+    <nav class="market-nav" aria-label="Market scope">
+      <span class="side-item" aria-disabled="true">Solana</span>
+      <span class="side-item active" aria-current="page">Major Assets</span>
+    </nav>
+
+    <nav class="rail-nav" aria-label="Main navigation">
+      <span class="side-item" aria-disabled="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6z"/></svg>
+        <span>Watchlist</span>
+      </span>
+    </nav>
+
+    <div class="rail-spacer"></div>
+
+    <nav class="utility-nav" aria-label="Utility navigation">
+      <span class="side-item" aria-disabled="true">Wallet Profile</span>
+      <span class="side-item" aria-disabled="true">Documentation</span>
+      <span class="side-item" aria-disabled="true">Disclaimer</span>
+    </nav>
+  </aside>
+  <div class="app-main">
+    <header class="topbar"><div class="brand"><strong>dexsato</strong><span>DEX INTELLIGENCE</span></div><div class="top-actions"><a class="learn-link" href="#how-to-read">How to read</a><div class="theme-switcher" role="group" aria-label="Dashboard theme"><button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">●</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain theme" title="Plain theme" aria-pressed="false">○</button></div></div></header>
+    <main class="shell">
   <section class="hero"><div class="hero-copy"><span class="eyebrow">Evidence-led market decisions</span><h1>See what changed, what supports it, and what must happen next.</h1><p>DexSato turns technical evidence and verified context into a structured market review—without pretending uncertainty is a trade signal.</p></div><div class="attention-card"><div><span>Needs attention</span><strong>{_text(attention_message)}</strong></div><button id="show-attention" type="button">Review markets</button></div></section>
   <section class="pulse" aria-label="Market pulse"><div class="pulse-card"><span>Markets covered</span><strong>{available}/{total}</strong><small>Latest universe</small></div><div class="pulse-card"><span>Alerts</span><strong>{counts["ALERT"]}</strong><small>Immediate review</small></div><div class="pulse-card"><span>Under review</span><strong>{counts["REVIEW"]}</strong><small>Evidence developing</small></div><div class="pulse-card"><span>Data status</span><strong>{_text(freshness.title())}</strong><small id="scan-age" data-generated-at="{generated_at}">Updated recently</small></div></section>
   <section id="markets"><div class="market-head"><div><h2>Market Decisions</h2><p>Start with the evidence snapshot, then open the full conditions only when relevant.</p></div><input id="market-search" class="search" type="search" placeholder="Search BTC, ETH, SOL..." aria-label="Search markets"></div>
@@ -120,7 +179,9 @@ def render_user_dashboard(
   </section>
   <section id="how-to-read" class="learn"><h2>How to read DexSato</h2><p>Use the dashboard as a review process, not as an instruction to enter a trade.</p><div class="learn-grid"><div><strong>1. Read the current evidence</strong><span>Check 4H bias, RSI, trend structure and relative volume.</span></div><div><strong>2. Check what changed</strong><span>A decision change matters more when the underlying evidence also changed.</span></div><div><strong>3. Wait for confirmation</strong><span>Open the market workspace to see pending conditions and invalidation.</span></div></div></section>
   <footer><span>Evidence synthesis only · not financial advice.</span><span>Snapshot <strong data-footer-at="{generated_at}">{generated_at}</strong></span></footer>
-</main><script>
+</main>
+  </div>
+</div><script>
   const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){{const value=theme==="plain"?"plain":"current";if(value==="plain")document.documentElement.dataset.theme="plain";else delete document.documentElement.dataset.theme;themeOptions.forEach(button=>{{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));}});try{{localStorage.setItem("dexsato-theme",value);}}catch(error){{}}}}let saved="current";try{{saved=localStorage.getItem("dexsato-theme")||"current";}}catch(error){{}}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
   const cards=[...document.querySelectorAll(".decision-card")],filters=[...document.querySelectorAll("[data-filter]")],search=document.getElementById("market-search"),empty=document.getElementById("empty-results");let selected="";function matches(card){{return !selected||(selected==="attention"?["alert","watch"].includes(card.dataset.decision):card.dataset.decision===selected);}}function applyFilters(){{const query=search.value.trim().toLowerCase();let visible=0;cards.forEach(card=>{{card.hidden=!(matches(card)&&(!query||card.dataset.token.includes(query)));if(!card.hidden)visible+=1;}});empty.classList.toggle("visible",visible===0);}}filters.forEach(button=>button.addEventListener("click",()=>{{filters.forEach(item=>item.classList.remove("active"));button.classList.add("active");selected=button.dataset.filter;applyFilters();}}));search.addEventListener("input",applyFilters);document.getElementById("show-attention").addEventListener("click",()=>{{const button=document.querySelector('[data-filter="attention"]');button.click();document.getElementById("markets").scrollIntoView({{behavior:"smooth",block:"start"}});}});
   function formatMYT(raw){{const date=new Date(raw);if(Number.isNaN(date.getTime()))return"Not available";return new Intl.DateTimeFormat("en-MY",{{timeZone:"Asia/Kuala_Lumpur",day:"2-digit",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true}}).format(date)+" MYT";}}const footer=document.querySelector("[data-footer-at]");footer.textContent=formatMYT(footer.dataset.footerAt);const age=document.getElementById("scan-age"),time=new Date(age.dataset.generatedAt),minutes=Math.max(0,Math.floor((Date.now()-time.getTime())/60000));age.textContent=Number.isNaN(minutes)?"Update unavailable":minutes<60?`Updated ${{minutes}} min ago`:`Updated ${{Math.floor(minutes/60)}} hr ago`;
