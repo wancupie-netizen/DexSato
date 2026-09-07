@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DexSato ClaimV2 Sign Only</title>
+  <style>
+    body{max-width:760px;margin:40px auto;padding:0 20px;background:#071525;color:#e8f2ff;font:16px system-ui}fieldset{border:1px solid #345;padding:18px;margin:18px 0}label{display:block;margin:12px 0}button{padding:12px 18px;background:#258cff;color:white;border:0;border-radius:6px;font-weight:700}button:disabled{opacity:.45}.warning{border-left:4px solid #f4bd21;padding:12px;background:#1e211d}.ok{color:#22cdb8}code,pre{white-space:pre-wrap;word-break:break-all}input[type=file]{display:block;margin-top:6px}
+  </style>
+</head>
+<body>
+  <h1>ClaimV2 Wallet Sign Only</h1>
+  <p class="warning">This page signs but cannot broadcast. Never enter a seed phrase or private key. Close the page immediately after downloading the temporary binary.</p>
+  <fieldset>
+    <legend>Fresh evidence</legend>
+    <label>Unsigned capture JSON<input id="capture" type="file" accept="application/json,.json"></label>
+    <label>ARMED gate JSON<input id="gate" type="file" accept="application/json,.json"></label>
+    <label><input id="confirm" type="checkbox"> I understand this signs exactly 5,000 raw WSOL for offline verification and does not submit it.</label>
+  </fieldset>
+  <button id="sign" disabled>Connect wallet and sign without broadcast</button>
+  <pre id="status" aria-live="polite">Select both files and confirm.</pre>
+  <script src="/vendor/solana-web3.js"></script>
+  <script src="/sign-only.js"></script>
+</body>
+</html>
