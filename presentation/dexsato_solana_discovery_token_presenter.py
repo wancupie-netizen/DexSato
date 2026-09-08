@@ -271,7 +271,12 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
         '<div class="tw-market-identity">'
         f'<div class="token-avatar tw-market-avatar">{avatar}</div>'
         '<div class="tw-market-identity-copy">'
+        '<div class="tw-market-title-row-v07g">'
         f'<h1>{symbol} / {quote}</h1>'
+        f'<button class="token-watch tw-market-watch tw-market-watch-icon-v07g" type="button" '
+        f'data-watch-token="{token_attr}" aria-label="Watch {symbol}" title="Watch {symbol}">'
+        '<span aria-hidden="true">&#9734;</span></button>'
+        '</div>'
         f'<span>{name} · {dex} exact pool</span>'
         '</div></div>'
         '<div class="tw-market-price">'
@@ -287,17 +292,6 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
         f'<strong>{liquidity}</strong></div>'
         '<div class="tw-market-kpi"><span>VOLUME · 24H</span>'
         f'<strong>{volume_24h}</strong></div>'
-        '</div>'
-        '<div class="tw-market-meta">'
-        '<div class="tw-market-meta-cell"><span>CONTRACT</span><div>'
-        f'<code title="{token_attr}">{contract_short}</code>{token_copy}</div></div>'
-        '<div class="tw-market-meta-cell"><span>PAIR ADDRESS</span><div>'
-        f'<code title="{pair_attr}">{pair_short}</code>{pair_copy}</div></div>'
-        '<div class="tw-market-meta-cell"><span>STATUS</span>'
-        f'<strong class="tw-market-status{status_class}"><i></i>{status_label}</strong></div>'
-        '<div class="tw-market-meta-cell tw-market-watch-cell"><span>ACTION</span>'
-        f'<button class="token-watch tw-market-watch" type="button" data-watch-token="{token_attr}" '
-        f'aria-label="Watch {symbol}"><span aria-hidden="true">&#9734;</span> Watch</button></div>'
         '</div>'
         f'{_trader_timeframe_strip(detail)}'
         '</section>'
@@ -470,6 +464,30 @@ def _token_observation_panel(detail: dict[str, Any]) -> str:
         attribute = ' data-sell-route-status' if tone == "sell-route" else ""
         css_tone = "" if tone == "sell-route" else f" {escape(tone)}" if tone else ""
         rendered.append(f'<div class="token-observation-row"><span>{escape(label)}</span><b class="token-observation-value{css_tone}"{attribute}>{escape(value)}</b></div>')
+
+    token_raw = str(detail.get("token_address") or "").strip()
+    pair_raw = str(detail.get("pair_address") or "").strip()
+    for label, raw in (("Contract", token_raw), ("Pair address", pair_raw)):
+        value = escape(_compact_contract(raw)) if raw else "Unavailable"
+        title = escape(raw, quote=True)
+        copy_button = (
+            f'<button class="copy-address token-intel-copy-v07g" type="button" '
+            f'data-copy-address="{title}" aria-label="Copy {escape(label.lower())}">Copy</button>'
+            if raw else ""
+        )
+        rendered.append(
+            f'<div class="token-observation-row token-intel-address-v07g"><span>{escape(label)}</span>'
+            f'<span class="token-intel-address-value-v07g"><b class="token-observation-value" title="{title}">{value}</b>{copy_button}</span></div>'
+        )
+
+    status = str(detail.get("quote_status") or "STORED").upper()
+    status_label = "LIVE" if status == "LIVE" else "STORED"
+    status_tone = " verified" if status == "LIVE" else ""
+    rendered.append(
+        f'<div class="token-observation-row"><span>Status</span>'
+        f'<b class="token-observation-value{status_tone}">{status_label}</b></div>'
+    )
+
     return ('<section class="workspace-rail-card token-observation-v28" data-token-observation>'
             '<div class="workspace-rail-head"><h2>Token Intelligence</h2><small>Observed data only</small></div>'
             f'<div class="token-observation-rows">{"".join(rendered)}</div>'
@@ -2044,6 +2062,140 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
   padding-top:14px!important;
 }
 
+/* TW-DEX-07E — Market Header Divider Cleanup
+   UI-only: preserve the outer market-header card and all existing data;
+   remove only the internal separator lines. */
+.tw-market-header .tw-market-top>div{
+  border-right:0!important;
+}
+.tw-market-header .tw-market-meta{
+  border-top:0!important;
+}
+.tw-market-header .tw-market-meta-cell{
+  border-right:0!important;
+}
+.tw-market-header .trader-tf-strip{
+  border:0!important;
+}
+.tw-market-header .trader-tf-cell,
+.tw-market-header .trader-tf-cell:nth-child(3),
+.tw-market-header .trader-tf-cell:nth-child(-n+3){
+  border-right:0!important;
+  border-bottom:0!important;
+}
+
+/* TW-DEX-07F — Market Header Meta Alignment & Divider Fix
+   UI-only: remove remaining timeframe separators and compact the meta row. */
+
+/* Force all timeframe cell separators off, including responsive 1H / 4H leftovers. */
+.tw-market-header .trader-tf-strip,
+.tw-market-header .trader-tf-cell,
+.tw-market-header .trader-tf-cell:nth-child(3),
+.tw-market-header .trader-tf-cell:nth-child(-n+3),
+.tw-market-header .trader-tf-cell:nth-child(4),
+.tw-market-header .trader-tf-cell:nth-child(5),
+.tw-market-header .trader-tf-cell:nth-child(6){
+  border:0!important;
+  border-right:0!important;
+  border-bottom:0!important;
+}
+
+/* Keep CONTRACT / PAIR ADDRESS / STATUS / ACTION compact and aligned. */
+.tw-market-header .tw-market-meta{
+  display:flex!important;
+  align-items:flex-start!important;
+  justify-content:flex-start!important;
+  gap:26px!important;
+  padding:10px 14px 11px!important;
+  border-top:0!important;
+}
+.tw-market-header .tw-market-meta-cell{
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:0!important;
+  padding:0!important;
+  border:0!important;
+}
+.tw-market-header .tw-market-meta-cell:nth-child(1){min-width:215px!important}
+.tw-market-header .tw-market-meta-cell:nth-child(2){min-width:215px!important}
+.tw-market-header .tw-market-meta-cell:nth-child(3){min-width:110px!important}
+.tw-market-header .tw-market-meta-cell:nth-child(4){min-width:88px!important}
+.tw-market-header .tw-market-meta-cell>span{
+  margin:0 0 4px!important;
+}
+.tw-market-header .tw-market-meta-cell>div,
+.tw-market-header .tw-market-status,
+.tw-market-header .tw-market-watch{
+  margin-top:0!important;
+}
+@media(max-width:1180px){
+  .tw-market-header .tw-market-meta{
+    flex-wrap:wrap!important;
+    gap:14px 22px!important;
+  }
+}
+@media(max-width:700px){
+  .tw-market-header .tw-market-meta{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:12px 16px!important;
+  }
+  .tw-market-header .tw-market-meta-cell:nth-child(n){
+    min-width:0!important;
+  }
+}
+
+/* TW-DEX-07G — Market Meta Consolidation
+   UI-only consolidation: Contract / Pair Address / Status live in Token Intelligence;
+   Watch remains the same local action and is shown as a star beside the token name. */
+.tw-market-title-row-v07g{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.tw-market-title-row-v07g h1{min-width:0}
+.tw-market-watch-icon-v07g{
+  flex:0 0 auto!important;
+  width:25px!important;
+  height:25px!important;
+  min-height:25px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:5px!important;
+  background:transparent!important;
+  color:#7C8CA0!important;
+  font:700 15px/1 var(--mono)!important;
+}
+.tw-market-watch-icon-v07g:hover,
+.tw-market-watch-icon-v07g.active{
+  color:#4CF4D6!important;
+  background:rgba(76,244,214,.035)!important;
+}
+.token-intel-address-value-v07g{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  min-width:0;
+}
+.token-intel-address-value-v07g .token-observation-value{
+  max-width:112px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.token-intel-copy-v07g{
+  flex:0 0 auto;
+  margin:0!important;
+  padding:2px 5px!important;
+  border:1px solid #2A3847!important;
+  border-radius:3px!important;
+  background:transparent!important;
+  color:#4CF4D6!important;
+  font:700 7px/1.2 var(--mono)!important;
+}
+
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
 .token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
@@ -2997,8 +3149,10 @@ __QUALIFICATION_PANEL__
   function paint(active){
     button.classList.toggle("active",active);
     button.innerHTML=active
-      ? '<span aria-hidden="true">&#9733;</span> Watching'
-      : '<span aria-hidden="true">&#9734;</span> Watch';
+      ? '<span aria-hidden="true">&#9733;</span>'
+      : '<span aria-hidden="true">&#9734;</span>';
+    button.setAttribute("aria-label",active ? "Remove from watchlist" : "Add to watchlist");
+    button.setAttribute("title",active ? "Watching" : "Watch");
   }
   let watched=load();
   paint(watched.includes(token));
