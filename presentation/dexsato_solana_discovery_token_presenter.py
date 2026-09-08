@@ -468,7 +468,7 @@ def _token_observation_panel(detail: dict[str, Any]) -> str:
         css_tone = "" if tone == "sell-route" else f" {escape(tone)}" if tone else ""
         rendered.append(f'<div class="token-observation-row"><span>{escape(label)}</span><b class="token-observation-value{css_tone}"{attribute}>{escape(value)}</b></div>')
     return ('<section class="workspace-rail-card token-observation-v28" data-token-observation>'
-            '<div class="workspace-rail-head"><h2>Token Observation</h2><small>Observed data only</small></div>'
+            '<div class="workspace-rail-head"><h2>Token Intelligence</h2><small>Observed data only</small></div>'
             f'<div class="token-observation-rows">{"".join(rendered)}</div>'
             '<p class="token-observation-note">Route availability is not a safety guarantee.</p></section>')
 
@@ -581,7 +581,7 @@ def render_solana_discovery_token_page(
     current_scan = escape(_relative_timestamp(assessment.get("scan_at")))
     qualification_panel = (
         f'<section class="qualification qualification-vp0d3 {qualification_tone}">'
-        '<span class="eyebrow">Current qualification</span>'
+        '<span class="eyebrow">Qualification</span>'
         f'<h3>{qualification_title}</h3><p class="qualification-reason">{qualification_message}</p>'
         '<span class="eyebrow qualification-history-label">Last confirmed checks</span>'
         '<div class="check">Solana token identity</div><div class="check">Exact token and pool match</div>'
@@ -1443,6 +1443,289 @@ html[data-theme="intel"] .recent-trades-card{border-color:#1d2733;background:#0e
 html[data-theme="intel"] .transactions-table{background:#10171f}
 @media(max-width:700px){.transactions-table{min-width:0}}
 
+/* TW-DEX-06 — Token Intelligence + Qualification
+   UI-only evidence hierarchy. Existing observations, qualification facts and data semantics remain unchanged. */
+
+/* Left rail: verified observation card */
+.token-observation-v28{
+  padding:0!important;
+  border-color:#1D2733!important;
+  border-radius:10px;
+  background:#0E141C!important;
+}
+.token-observation-v28 .workspace-rail-head{
+  padding:14px 15px 12px!important;
+  border-bottom:1px solid #1D2733!important;
+  background:#0E141C;
+}
+.token-observation-v28 .workspace-rail-head h2{
+  color:#E7EDF4;
+  font:800 12px/1.25 var(--mono);
+  letter-spacing:.055em;
+  text-transform:uppercase;
+}
+.token-observation-v28 .workspace-rail-head small{
+  color:#7C8CA0;
+  font:500 10px/1.3 var(--ui);
+}
+.token-observation-rows{
+  border-top:0!important;
+  background:#10171F;
+}
+.token-observation-row{
+  padding:11px 14px!important;
+  border-bottom:1px solid #1D2733!important;
+}
+.token-observation-row span{
+  color:#45505F!important;
+  font:700 10px/1.35 var(--mono);
+  letter-spacing:.025em;
+}
+.token-observation-value{
+  color:#E7EDF4;
+  font:750 11px/1.35 var(--mono)!important;
+  font-variant-numeric:tabular-nums lining-nums;
+}
+.token-observation-value.up,
+.token-observation-value.verified{color:#4CF4D6!important}
+.token-observation-value.down{color:#FF5C7A!important}
+.token-observation-note{
+  margin:0!important;
+  padding:11px 14px!important;
+  border-left:0!important;
+  border-top:1px solid #1D2733;
+  background:#0E141C!important;
+  color:#7C8CA0!important;
+  font:500 10px/1.45 var(--ui)!important;
+}
+
+/* Right rail: Market Snapshot becomes a compact intelligence stack. */
+.market-snapshot-v26{
+  padding:0!important;
+  overflow:hidden;
+  border-color:#1D2733!important;
+  border-radius:10px;
+  background:#0E141C!important;
+}
+.market-snapshot-v26>h3{
+  margin:0!important;
+  padding:14px 15px 12px;
+  border-bottom:1px solid #1D2733;
+  color:#E7EDF4;
+  font:800 12px/1.25 var(--mono)!important;
+  letter-spacing:.055em;
+  text-transform:uppercase;
+}
+.market-snapshot-v26 .metrics{
+  gap:0!important;
+  background:#10171F;
+}
+.market-snapshot-v26 .metric{
+  min-height:62px!important;
+  padding:11px 12px!important;
+  border:0!important;
+  border-right:1px solid #1D2733!important;
+  border-bottom:1px solid #1D2733!important;
+  background:#10171F!important;
+}
+.market-snapshot-v26 .metric:nth-child(2n){border-right:0!important}
+.market-snapshot-v26 .metric span{
+  color:#45505F!important;
+  font:700 9px/1.25 var(--mono)!important;
+  letter-spacing:.04em!important;
+  text-transform:uppercase;
+}
+.market-snapshot-v26 .metric .value{
+  margin-top:5px;
+  color:#E7EDF4;
+  font:750 13px/1.25 var(--mono)!important;
+}
+.market-snapshot-v26 .metric .value.up{color:#4CF4D6!important}
+.market-snapshot-v26 .metric .value.down{color:#FF5C7A!important}
+
+/* Why this token appeared: positive evidence, not a recommendation. */
+.market-snapshot-v26 .evidence{
+  margin:0!important;
+  padding:13px 14px!important;
+  border-left:0!important;
+  border-bottom:1px solid #1D2733;
+  background:#10171F!important;
+  color:#7C8CA0;
+  font:500 11px/1.5 var(--ui);
+}
+.market-snapshot-v26 .evidence strong{
+  display:block;
+  margin:0 0 5px!important;
+  color:#E7EDF4;
+  font:800 10px/1.3 var(--mono);
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.market-snapshot-v26 .evidence strong:before{
+  content:"";
+  display:inline-block;
+  width:6px;height:6px;
+  margin-right:7px;
+  border-radius:50%;
+  background:#4CF4D6;
+  vertical-align:1px;
+}
+
+/* Risk stays visually distinct but calm. */
+.market-snapshot-v26 .risk{
+  margin:0!important;
+  padding:13px 14px!important;
+  border-left:0!important;
+  border-bottom:1px solid #1D2733;
+  background:#0E141C!important;
+}
+.market-snapshot-v26 .risk strong{
+  color:#FF5C7A!important;
+  font:800 10px/1.3 var(--mono);
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.market-snapshot-v26 .risk p{
+  margin:5px 0 0;
+  color:#7C8CA0;
+  font:500 10px/1.5 var(--ui);
+}
+
+/* Qualification: evidence-first state, existing text/checks only. */
+.market-snapshot-v26 .qualification-vp0d3{
+  margin:0!important;
+  padding:13px 14px 14px;
+  background:#10171F;
+}
+.market-snapshot-v26 .qualification-vp0d3>.eyebrow{
+  color:#45505F!important;
+  font:800 9px/1.25 var(--mono)!important;
+  letter-spacing:.06em!important;
+}
+.market-snapshot-v26 .qualification-vp0d3 h3{
+  margin:6px 0 8px!important;
+  color:#E7EDF4;
+  font:750 13px/1.3 var(--mono)!important;
+}
+.market-snapshot-v26 .qualification-reason{
+  margin:0 0 11px!important;
+  padding:10px 11px!important;
+  border:1px solid #1D2733!important;
+  border-left:2px solid #FF5C7A!important;
+  border-radius:6px;
+  background:#0E141C!important;
+  color:#7C8CA0!important;
+  font:500 10px/1.5 var(--ui)!important;
+}
+.market-snapshot-v26 .qualification-vp0d3.qualified .qualification-reason{
+  border-left-color:#4CF4D6!important;
+}
+.market-snapshot-v26 .qualification-history-label{
+  margin:0!important;
+  padding:8px 0 5px;
+  color:#45505F!important;
+  border-top:1px solid #1D2733;
+}
+.market-snapshot-v26 .qualification-vp0d3 .check{
+  position:relative;
+  padding:8px 0 8px 16px!important;
+  border-top:1px solid #1D2733!important;
+  color:#E7EDF4;
+  font:650 10px/1.35 var(--ui)!important;
+}
+.market-snapshot-v26 .qualification-vp0d3 .check:before{
+  position:absolute;
+  left:0;
+  margin:0!important;
+  color:#4CF4D6!important;
+  font-size:10px!important;
+}
+.market-snapshot-v26 .qualification-vp0d3 .source{
+  margin:9px 0 0!important;
+  padding:9px 0 0!important;
+  border-top:1px solid #1D2733!important;
+  color:#7C8CA0;
+  font:500 9px/1.5 var(--mono);
+}
+
+/* Theme override: retain the official DEX Intelligence palette. */
+html[data-theme="intel"] .token-observation-v28,
+html[data-theme="intel"] .market-snapshot-v26{border-color:#1D2733!important;background:#0E141C!important}
+html[data-theme="intel"] .token-observation-rows,
+html[data-theme="intel"] .market-snapshot-v26 .metrics,
+html[data-theme="intel"] .market-snapshot-v26 .qualification-vp0d3{background:#10171F!important}
+
+@media(max-width:620px){
+  .market-snapshot-v26 .metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+/* TW-DEX-06A — Token Intelligence & Qualification Relocation
+   UI-only relocation. Two independent rounded cards under Jupiter. */
+.workspace-right-v26>.token-observation-v28,
+.workspace-right-v26>.qualification-vp0d3{
+  margin:0!important;
+  border:1px solid #1D2733!important;
+  border-radius:10px!important;
+  overflow:hidden;
+  background:#0E141C!important;
+}
+.workspace-right-v26>.token-observation-v28 .workspace-rail-head{
+  background:#0E141C!important;
+}
+.workspace-right-v26>.qualification-vp0d3{
+  padding:0!important;
+}
+.workspace-right-v26>.qualification-vp0d3>.eyebrow{
+  display:block;
+  margin:0!important;
+  padding:14px 15px 12px;
+  border-bottom:1px solid #1D2733;
+  color:#E7EDF4!important;
+  background:#0E141C;
+  font:800 12px/1.25 var(--mono)!important;
+  letter-spacing:.055em!important;
+  text-transform:uppercase;
+}
+.workspace-right-v26>.qualification-vp0d3 h3{
+  margin:0!important;
+  padding:12px 14px 5px!important;
+  color:#E7EDF4;
+  background:#10171F;
+  font:750 13px/1.3 var(--mono)!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .qualification-reason{
+  margin:0 14px 11px!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .qualification-history-label{
+  padding:9px 14px 6px!important;
+  background:#10171F;
+}
+.workspace-right-v26>.qualification-vp0d3 .check{
+  margin:0 14px;
+}
+.workspace-right-v26>.qualification-vp0d3 .source{
+  margin:9px 14px 0!important;
+  padding:9px 0 12px!important;
+}
+html[data-theme="intel"] .workspace-right-v26>.token-observation-v28,
+html[data-theme="intel"] .workspace-right-v26>.qualification-vp0d3{
+  border-color:#1D2733!important;
+  background:#0E141C!important;
+}
+
+/* TW-DEX-06B — Qualification Status Cleanup
+   UI-only: hide current-cycle status/reason copy, keep all qualification evidence/checks/timestamps. */
+.workspace-right-v26>.qualification-vp0d3>h3,
+.workspace-right-v26>.qualification-vp0d3>.qualification-reason{
+  display:none!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .qualification-history-label{
+  border-top:0!important;
+  padding-top:11px!important;
+}
+
+
+
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
 .token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
@@ -2113,7 +2396,7 @@ a.tw-market-dex:hover{color:#4CF4D6!important}
 <header class="topbar tw-dex-topbar"><div class="brand tw-dex-brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
 <main class="shell tw-dex-content"><div class="tw-dex-workspace-title"><h1>TOKEN WORKSPACE</h1><span>SOLANA · EXACT POOL</span></div>
 <div class="token-workspace-v26" data-token-workspace-v26>
-<aside class="workspace-rail-v26 workspace-left-v26" aria-label="Token observation and coin navigation">__TOKEN_OBSERVATION_PANEL____COIN_LIST_PANEL__</aside>
+<aside class="workspace-rail-v26 workspace-left-v26" aria-label="Coin navigation">__COIN_LIST_PANEL__</aside>
 <section class="workspace-main-v26" aria-label="Selected token market evidence">
 __TOKEN_OVERVIEW_CARD__
 <section class="hero"><div><span class="eyebrow">Qualified exact-token workspace</span><h1>__SYMBOL__ / __QUOTE__</h1><p>Review observed market activity, exact-pool identity and disclosed risk before taking any action.</p></div><div class="status"><span class="eyebrow">Market data</span><b>__STATUS__</b><small>__STATUS_LABEL__</small></div></section>
@@ -2139,7 +2422,9 @@ __CANDLESTICK_CHART_PANEL__
   <div class="quote-result" data-swap-result aria-live="polite"></div>
   <p class="wallet-safety-v27"><i aria-hidden="true">&#10003;</i><span>You approve every transaction in your wallet. DexSato never holds your funds or private keys. Fees are shown in the quote and order review before wallet approval.</span></p>
 </section>
-<section class="card market-snapshot-v26"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div><section class="qualification"><span class="eyebrow">Qualification evidence</span><h3>Checks passed for this feed</h3><div class="check">Solana token identity</div><div class="check">Exact token and pool match</div><div class="check">Observed liquidity threshold</div><div class="check">Observed 24h activity</div><div class="check">Fresh collector data</div><div class="source">Collector updated __UPDATED__</div></section></section>
+__TOKEN_OBSERVATION_PANEL__
+__QUALIFICATION_PANEL__
+<section class="card market-snapshot-v26"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div></section>
 </aside></div>
 <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>Market observations, indicative quotes and transaction results are distinct.</span></footer></main></div></div><script src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-04" defer></script><script>
 (function(){
@@ -4043,9 +4328,6 @@ __CANDLESTICK_CHART_PANEL__
     html = html.replace("__TOKEN_OVERVIEW_CARD__", token_overview_card)
     html = html.replace("__CANDLESTICK_CHART_PANEL__", candlestick_chart_panel + transactions_table_panel)
     html = html.replace("__TOKEN_OBSERVATION_PANEL__", token_observation_panel)
+    html = html.replace("__QUALIFICATION_PANEL__", qualification_panel)
     html = html.replace("__COIN_LIST_PANEL__", coin_list_panel)
-    qualification_start = html.index('<section class="qualification">')
-    qualification_pair_end = html.index('</section></section>', qualification_start)
-    qualification_end = qualification_pair_end + len('</section>')
-    html = html[:qualification_start] + qualification_panel + html[qualification_end:]
     return html
