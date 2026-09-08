@@ -1412,6 +1412,37 @@ html[data-theme="intel"] .transactions-panel,html[data-theme="intel"] .transacti
 html[data-theme="intel"] .market-activity{border-color:#1d2733;background:#0e141c}html[data-theme="intel"] .market-activity-table{background:#10171f}
 @media(max-width:700px){.market-activity-table{min-width:0}.market-activity-head{align-items:center;flex-direction:row}}
 
+/* TW-DEX-05B — Recent Trades Visual Alignment
+   UI only: align Recent Trades with TW-DEX-05A Market Activity. */
+.recent-trades-card{border-color:#1d2733;background:#0e141c}
+.transactions-head{border-bottom-color:#1d2733}
+.transactions-head h2{color:#e7edf4;font:800 13px/1.2 var(--mono);letter-spacing:.045em;text-transform:uppercase}
+.transactions-state{color:#7c8ca0;font-weight:750}
+.transactions-state.ready,.transactions-state.live{color:#4cf4d6}
+.transactions-state.stale,.transactions-state.unavailable{color:#7c8ca0}
+.transactions-table-wrap{overflow-x:hidden;background:#10171f}
+.transactions-table{width:100%;min-width:0;background:#10171f;border-collapse:collapse}
+.transactions-table th,.transactions-table td{
+  padding:11px 10px;
+  border-right:0!important;
+  border-bottom:0!important;
+  background:transparent!important;
+  font:750 12px/1.35 var(--mono);
+}
+.transactions-table th{color:#45505f;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.transactions-table td{color:#e7edf4}
+.transactions-table tbody tr:hover{background:rgba(76,244,214,.035)}
+.transactions-table .transaction-side{font-weight:800}
+.transactions-table .transaction-side.buy{color:#4cf4d6;background:rgba(76,244,214,.07)}
+.transactions-table .transaction-side.sell{color:#ff5c7a;background:rgba(255,92,122,.07)}
+.transactions-table .transaction-trader,.transactions-table .transaction-tx{color:#7c8ca0;font-weight:750}
+.transactions-table .transaction-trader:hover,.transactions-table .transaction-tx:hover{color:#4cf4d6}
+.transactions-table .transactions-placeholder td,.transactions-table .transactions-empty td{color:#7c8ca0}
+.transactions-table .transactions-error td{color:#ff5c7a}
+html[data-theme="intel"] .recent-trades-card{border-color:#1d2733;background:#0e141c}
+html[data-theme="intel"] .transactions-table{background:#10171f}
+@media(max-width:700px){.transactions-table{min-width:0}}
+
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
 .token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
