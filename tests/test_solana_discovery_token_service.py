@@ -246,7 +246,7 @@ def test_live_candle_loader_fetches_only_requested_timeframe():
         "aggregate": 1,
         "limit": 300,
         "currency": "usd",
-        "token": "base",
+        "token": "token-address",
     }
 
     exact_pool_url, exact_pool_params = exact_pool_calls[0]
@@ -321,6 +321,74 @@ def test_live_candle_builder_never_rewrites_future_provider_history():
 
     assert used is False
     assert merged == candles
+
+
+def test_live_candle_builder_does_not_create_history_from_current_price_only():
+    from application.solana_discovery_token_service import _merge_live_price_into_candles
+
+    merged, used = _merge_live_price_into_candles([], "5m", 0.00000299924, 1700000055.0)
+
+    assert merged == []
+    assert used is False
+
+
+def test_ohlcv_normalizer_keeps_valid_flat_candles_and_deduplicates_timestamp():
+    from application.solana_discovery_token_service import _normalize_ohlcv_rows
+
+    rows = [
+        [1700000060, 2.0, 2.0, 2.0, 2.0, 4.0],
+        [1700000000, 1.0, 1.2, 0.9, 1.1, 3.0],
+        [1700000000, 9.0, 9.5, 8.5, 9.1, 8.0],
+        [1700000120, 1.0, 0.9, 1.1, 1.0, 2.0],
+    ]
+
+    result = _normalize_ohlcv_rows(rows)
+
+    assert [row["time"] for row in result] == [1700000000.0, 1700000060.0]
+    assert result[0]["open"] == 1.0
+    assert result[1] == {
+        "time": 1700000060.0,
+        "open": 2.0,
+        "high": 2.0,
+        "low": 2.0,
+        "close": 2.0,
+        "volume": 4.0,
+    }
+
+
+def test_every_ohlcv_provider_requests_the_exact_target_token_address():
+    from application.solana_discovery_token_service import (
+        _chart_provider,
+        _hourly_candles_provider,
+        _minute_candles_provider,
+    )
+
+    calls = []
+
+    class OhlcvResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": {"attributes": {"ohlcv_list": [
+                [1700000000, 1.0, 1.0, 1.0, 1.0, 0.0],
+            ]}}}
+
+    def get(url, params=None, timeout=10):
+        calls.append((url, params, timeout))
+        return OhlcvResponse()
+
+    candidate = {
+        "pair_address": "shared-pair",
+        "token_address": "exact-target-token",
+    }
+
+    assert _chart_provider(candidate, get)
+    assert _minute_candles_provider(candidate, get)
+    assert _hourly_candles_provider(candidate, get)
+    assert len(calls) == 3
+    assert all(params["token"] == "exact-target-token" for _, params, _ in calls)
+    assert all(timeout == 10 for _, _, timeout in calls)
 
 
 
@@ -490,7 +558,7 @@ def test_provider_resilience_reuses_minute_ohlcv_cache(monkeypatch):
         }]
 
     monkeypatch.setattr(service, "_minute_candles_provider", provider)
-    candidate = {"pair_address": "cache-pair"}
+    candidate = {"pair_address": "cache-pair", "token_address": "cache-token"}
 
     first = service._minute_candles(candidate, requests.get)
     second = service._minute_candles(candidate, requests.get)
@@ -499,12 +567,40 @@ def test_provider_resilience_reuses_minute_ohlcv_cache(monkeypatch):
     assert calls == ["cache-pair"]
 
 
+def test_provider_resilience_separates_ohlcv_cache_by_target_token(monkeypatch):
+    import requests
+    import application.solana_discovery_token_service as service
+
+    service._OHLCV_CACHE.clear()
+    calls = []
+
+    def provider(candidate, request_get):
+        calls.append(candidate["token_address"])
+        price = 1.0 if candidate["token_address"] == "base-token" else 2.0
+        return [{
+            "time": 1700000000.0,
+            "open": price,
+            "high": price,
+            "low": price,
+            "close": price,
+            "volume": 1.0,
+        }]
+
+    monkeypatch.setattr(service, "_minute_candles_provider", provider)
+    base = {"pair_address": "shared-pair", "token_address": "base-token"}
+    quote = {"pair_address": "shared-pair", "token_address": "quote-token"}
+
+    assert service._minute_candles(base, requests.get)[0]["close"] == 1.0
+    assert service._minute_candles(quote, requests.get)[0]["close"] == 2.0
+    assert calls == ["base-token", "quote-token"]
+
+
 def test_provider_resilience_uses_stale_ohlcv_when_refresh_fails(monkeypatch):
     import requests
     import application.solana_discovery_token_service as service
 
     service._OHLCV_CACHE.clear()
-    candidate = {"pair_address": "stale-pair"}
+    candidate = {"pair_address": "stale-pair", "token_address": "stale-token"}
     cached_rows = [{
         "time": 1700000000.0,
         "open": 1.0,
@@ -513,7 +609,7 @@ def test_provider_resilience_uses_stale_ohlcv_when_refresh_fails(monkeypatch):
         "close": 1.05,
         "volume": 100.0,
     }]
-    service._OHLCV_CACHE[("stale-pair", "minute")] = (
+    service._OHLCV_CACHE[("stale-pair", "stale-token", "minute")] = (
         service.monotonic() - 999.0,
         cached_rows,
     )

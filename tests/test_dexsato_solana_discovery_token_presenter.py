@@ -354,6 +354,28 @@ def test_chart_does_not_imply_a_trend_from_two_candles():
     assert "At least 6 are required" not in html
     assert "<polyline" not in html
 
+
+def test_chart_sanitizer_keeps_observed_flat_candle_without_current_price_repair():
+    html = render_solana_discovery_token_page({
+        **DETAIL,
+        "price_usd": 99.0,
+    })
+
+    assert "TW-DEX-03J.1 — Observed Candle Sanitizer" in html
+    assert "(hasCurrentObservedPrice?currentObservedPrice:null)" not in html
+    assert "if([open,high,low,close].some(value=>value===null)) return null;" in html
+    assert "Math.abs(high-low)<=epsilon" in html
+
+
+def test_chart_sanitizer_deduplicates_timestamp_after_validating_ohlc():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "if(!Number.isFinite(time)||seen.has(time)) return;" in html
+    assert "const clean=sanitizeOhlc(row);" in html
+    assert "if(!clean) return;" in html
+    assert "seen.add(time);" in html
+    assert html.index("if(!clean) return;") < html.index("seen.add(time);")
+
 def test_token_workspace_supports_market_intelligence_theme():
     html = render_solana_discovery_token_page({
         "symbol": "EX",

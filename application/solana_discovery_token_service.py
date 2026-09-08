@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 import os
 from time import monotonic
 from typing import Any, Callable
@@ -57,6 +58,46 @@ def _number(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+# TW_DEX_03J1_EXACT_TARGET_OHLCV
+def _normalize_ohlcv_rows(rows: Any) -> list[dict[str, float]]:
+    """Return valid provider candles in ascending order, one per timestamp."""
+    if not isinstance(rows, list):
+        return []
+
+    candles_by_time: dict[float, dict[str, float]] = {}
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 6:
+            continue
+        values = [_number(value) for value in row[:6]]
+        if any(value is None or not math.isfinite(value) for value in values):
+            continue
+
+        timestamp, open_value, high_value, low_value, close_value, volume = (
+            float(value) for value in values if value is not None
+        )
+        if (
+            timestamp <= 0
+            or min(open_value, high_value, low_value, close_value) <= 0
+            or volume < 0
+            or high_value < max(open_value, close_value)
+            or low_value > min(open_value, close_value)
+        ):
+            continue
+
+        # GeckoTerminal normally returns newest first. When a timestamp is
+        # repeated, retain the provider's first row deterministically.
+        candles_by_time.setdefault(timestamp, {
+            "time": timestamp,
+            "open": open_value,
+            "high": high_value,
+            "low": low_value,
+            "close": close_value,
+            "volume": volume,
+        })
+
+    return [candles_by_time[timestamp] for timestamp in sorted(candles_by_time)]
 
 
 # TOKEN_OBSERVATION_V28_ONCHAIN_AUTHORITY
@@ -143,11 +184,12 @@ def _live_pair(candidate: dict[str, Any], request_get: Callable[..., Any]) -> di
 
 def _chart_provider(candidate: dict[str, Any], request_get: Callable[..., Any]) -> list[dict[str, float]]:
     pair_address = str(candidate.get("pair_address") or "")
-    if not pair_address:
+    token_address = str(candidate.get("token_address") or "")
+    if not pair_address or not token_address:
         return []
     response = request_get(
         GECKO_OHLCV_URL.format(pair_address=pair_address),
-        params={"aggregate": 4, "limit": 90, "currency": "usd", "token": "base"},
+        params={"aggregate": 4, "limit": 90, "currency": "usd", "token": token_address},
         timeout=10,
     )
     response.raise_for_status()
@@ -155,20 +197,7 @@ def _chart_provider(candidate: dict[str, Any], request_get: Callable[..., Any]) 
     data = payload.get("data") if isinstance(payload, dict) else None
     attributes = data.get("attributes") if isinstance(data, dict) else None
     rows = attributes.get("ohlcv_list") if isinstance(attributes, dict) else None
-    if not isinstance(rows, list):
-        return []
-    candles: list[dict[str, float]] = []
-    for row in reversed(rows):
-        if not isinstance(row, list) or len(row) < 6:
-            continue
-        values = [_number(value) for value in row[:6]]
-        if any(value is None for value in values):
-            continue
-        candles.append({
-            "time": values[0], "open": values[1], "high": values[2],
-            "low": values[3], "close": values[4], "volume": values[5],
-        })
-    return candles
+    return _normalize_ohlcv_rows(rows)
 
 
 
@@ -177,7 +206,8 @@ def _minute_candles_provider(
     request_get: Callable[..., Any],
 ) -> list[dict[str, float]]:
     pair_address = str(candidate.get("pair_address") or "")
-    if not pair_address:
+    token_address = str(candidate.get("token_address") or "")
+    if not pair_address or not token_address:
         return []
     response = request_get(
         GECKO_MINUTE_OHLCV_URL.format(pair_address=pair_address),
@@ -185,7 +215,7 @@ def _minute_candles_provider(
             "aggregate": 1,
             "limit": 300,
             "currency": "usd",
-            "token": "base",
+            "token": token_address,
         },
         timeout=10,
     )
@@ -194,25 +224,7 @@ def _minute_candles_provider(
     data = payload.get("data") if isinstance(payload, dict) else None
     attributes = data.get("attributes") if isinstance(data, dict) else None
     rows = attributes.get("ohlcv_list") if isinstance(attributes, dict) else None
-    if not isinstance(rows, list):
-        return []
-
-    candles: list[dict[str, float]] = []
-    for row in reversed(rows):
-        if not isinstance(row, list) or len(row) < 6:
-            continue
-        values = [_number(value) for value in row[:6]]
-        if any(value is None for value in values):
-            continue
-        candles.append({
-            "time": values[0],
-            "open": values[1],
-            "high": values[2],
-            "low": values[3],
-            "close": values[4],
-            "volume": values[5],
-        })
-    return candles
+    return _normalize_ohlcv_rows(rows)
 
 
 def _change_between(newer: float, older: float) -> float | None:
@@ -304,7 +316,8 @@ def _hourly_candles_provider(
     request_get: Callable[..., Any],
 ) -> list[dict[str, float]]:
     pair_address = str(candidate.get("pair_address") or "")
-    if not pair_address:
+    token_address = str(candidate.get("token_address") or "")
+    if not pair_address or not token_address:
         return []
     response = request_get(
         GECKO_HOURLY_OHLCV_URL.format(pair_address=pair_address),
@@ -312,7 +325,7 @@ def _hourly_candles_provider(
             "aggregate": 1,
             "limit": 120,
             "currency": "usd",
-            "token": "base",
+            "token": token_address,
         },
         timeout=10,
     )
@@ -321,30 +334,12 @@ def _hourly_candles_provider(
     data = payload.get("data") if isinstance(payload, dict) else None
     attributes = data.get("attributes") if isinstance(data, dict) else None
     rows = attributes.get("ohlcv_list") if isinstance(attributes, dict) else None
-    if not isinstance(rows, list):
-        return []
-
-    candles: list[dict[str, float]] = []
-    for row in reversed(rows):
-        if not isinstance(row, list) or len(row) < 6:
-            continue
-        values = [_number(value) for value in row[:6]]
-        if any(value is None for value in values):
-            continue
-        candles.append({
-            "time": values[0],
-            "open": values[1],
-            "high": values[2],
-            "low": values[3],
-            "close": values[4],
-            "volume": values[5],
-        })
-    return candles
+    return _normalize_ohlcv_rows(rows)
 
 
 
 # TRANSACTIONS_FEED_V123_PROVIDER_RESILIENCE
-_OHLCV_CACHE: dict[tuple[str, str], tuple[float, list[dict[str, float]]]] = {}
+_OHLCV_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, float]]]] = {}
 _TRANSACTION_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 _OHLCV_TTL_SECONDS = {
@@ -369,10 +364,11 @@ def _cached_ohlcv(
         return provider(candidate, request_get)
 
     pair_address = str(candidate.get("pair_address") or "")
-    if not pair_address:
+    token_address = str(candidate.get("token_address") or "")
+    if not pair_address or not token_address:
         return []
 
-    key = (pair_address, cache_kind)
+    key = (pair_address, token_address, cache_kind)
     now = monotonic()
     cached = _OHLCV_CACHE.get(key)
     ttl = _OHLCV_TTL_SECONDS[cache_kind]
@@ -450,7 +446,12 @@ def _merge_live_price_into_candles(
 ) -> tuple[list[dict[str, Any]], bool]:
     # Merge one verified exact-pool price observation into the open candle.
     # Historical OHLCV remains provider-owned. No trade volume is invented.
-    if timeframe not in LIVE_CANDLE_SECONDS or live_price is None or live_price <= 0:
+    if (
+        not candles
+        or timeframe not in LIVE_CANDLE_SECONDS
+        or live_price is None
+        or live_price <= 0
+    ):
         return [dict(candle) for candle in candles], False
 
     bucket_seconds = LIVE_CANDLE_SECONDS[timeframe]

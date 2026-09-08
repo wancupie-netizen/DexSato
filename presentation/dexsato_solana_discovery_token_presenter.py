@@ -370,12 +370,25 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
         '</div>'
         '</div>'
         '<div class="candlestick-stage">'
-        '<svg class="candlestick-chart" viewBox="0 0 1000 420" '
-        'preserveAspectRatio="none" role="img" aria-label="Exact-pool interactive candlestick chart" '
-        'tabindex="0" data-candlestick-svg></svg>'
+        '<div class="lightweight-chart" data-lightweight-chart '
+        'role="img" aria-label="Exact-pool interactive candlestick chart powered by TradingView Lightweight Charts"></div>'
+        '<svg class="candlestick-chart lightweight-fallback-chart" viewBox="0 0 1000 420" '
+        'preserveAspectRatio="none" role="img" aria-label="Exact-pool interactive candlestick chart fallback" '
+        'tabindex="0" data-candlestick-svg hidden></svg>'
         '<div class="candlestick-empty" data-candlestick-empty hidden>'
         'Market candles unavailable for this timeframe.'
         '</div>'
+        '<div class="lw-runtime-diagnostic static-bootstrap-diagnostic" '
+        'data-static-bootstrap-diagnostic>'
+        'TW-DEX-03F.2 HTML BOOTSTRAP ACTIVE'
+        '</div>'
+        '<script>'
+        '(function(){'
+        'var n=document.querySelector("[data-static-bootstrap-diagnostic]");'
+        'if(n){n.textContent+=" | JS ACTIVE";n.dataset.scriptProbe="1";}'
+        '})();'
+        '</script>'
+        '<div class="lw-runtime-diagnostic" data-lw-runtime-diagnostic hidden></div>'
         '</div>'
         '<script type="application/json" data-candlestick-data>'
         + payload
@@ -1930,7 +1943,87 @@ a.tw-market-dex:hover{color:#4CF4D6!important}
   .tw-dex-content .candlestick-chart{height:300px!important}
 }
 
-</style></head><body><div class="tw-dex-app">
+
+/* TW-DEX-03D — TradingView Lightweight Charts Integration */
+.tw-dex-content .lightweight-chart{
+  width:100%;
+  height:450px;
+  min-height:450px;
+  background:#0A1118;
+}
+.tw-dex-content .lightweight-chart table{
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+}
+.tw-dex-content .lightweight-fallback-chart[hidden]{display:none!important}
+.tw-dex-content .candlestick-panel[data-lightweight-active="1"] .candlestick-stage{
+  padding:0!important;
+  background:#0A1118!important;
+}
+.tw-dex-content .candlestick-panel[data-lightweight-active="1"] .candlestick-empty{
+  z-index:4;
+  background:rgba(10,17,24,.94)!important;
+}
+@media(max-width:820px){
+  .tw-dex-content .lightweight-chart{height:340px;min-height:340px}
+}
+@media(max-width:520px){
+  .tw-dex-content .lightweight-chart{height:300px;min-height:300px}
+}
+
+
+/* TW-DEX-03F — Lightweight Runtime Diagnostic */
+.tw-dex-content .lw-runtime-diagnostic{
+  display:none;
+  position:absolute;
+  z-index:8;
+  left:10px;
+  bottom:10px;
+  max-width:min(520px,calc(100% - 20px));
+  padding:8px 10px;
+  border:1px solid #2A3847;
+  border-radius:6px;
+  background:rgba(8,11,16,.94);
+  color:#B8C5D2;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  font-size:9px;
+  line-height:1.5;
+  white-space:pre-wrap;
+  pointer-events:none;
+}
+.tw-dex-content .lw-runtime-diagnostic.visible{display:block}
+.tw-dex-content .lw-runtime-diagnostic.error{
+  border-color:rgba(255,92,122,.7);
+  color:#FFD2DA;
+}
+.tw-dex-content .lw-runtime-diagnostic.ok{
+  border-color:rgba(76,244,214,.45);
+  color:#BFFCF0;
+}
+.tw-dex-content .static-bootstrap-diagnostic{
+  display:block!important;
+  position:absolute;
+  z-index:9;
+  left:10px;
+  top:10px;
+  bottom:auto;
+  max-width:420px;
+  padding:7px 10px;
+  border:1px solid rgba(185,140,255,.7);
+  border-radius:6px;
+  background:rgba(15,13,24,.96);
+  color:#DCC7FF;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  font-size:9px;
+  font-weight:700;
+  line-height:1.4;
+  letter-spacing:.03em;
+  white-space:normal;
+  pointer-events:none;
+}
+
+</style>
+<script src="/static/vendor/lightweight-charts.standalone.production.js?v=5.2.1"></script>
+</head><body><div class="tw-dex-app">
 <aside class="tw-dex-side" aria-label="DexSato navigation">
   <a class="tw-dex-side-brand" href="/" aria-label="DexSato home"><img src="/static/branding/dexsato-mark.png" alt=""><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></a>
   <nav class="tw-dex-side-nav" aria-label="Market navigation">
@@ -2224,10 +2317,633 @@ __CANDLESTICK_CHART_PANEL__
 
 
 <script>
+/* TW-DEX-03F.5 — Pre Runtime Script Probe */
+/* TW-DEX-03F.6 — Pre-Runtime Error Trap */
+(function(){
+  var n=document.querySelector("[data-static-bootstrap-diagnostic]");
+  if(n) n.textContent+=" | BEFORE LW";
+
+  window.__dexsatoLwErrorTrap=function(kind,message){
+    try{
+      var probe=document.querySelector("[data-static-bootstrap-diagnostic]");
+      if(!probe) return;
+      var text=String(message||"unknown");
+      if(text.length>180) text=text.slice(0,177)+"...";
+      probe.textContent+=" | "+kind+": "+text;
+    }catch(_error){}
+  };
+
+  window.addEventListener("error",function(event){
+    var message=String(event&&event.message||"");
+    var filename=String(event&&event.filename||"");
+    var lineno=event&&event.lineno?String(event.lineno):"";
+    var detail=message;
+    if(filename) detail+=" @ "+filename+(lineno?":"+lineno:"");
+    window.__dexsatoLwErrorTrap("LW ERROR",detail);
+  },true);
+
+  window.addEventListener("unhandledrejection",function(event){
+    var reason=event&&event.reason;
+    var message=String(reason&&reason.message||reason||"unknown rejection");
+    window.__dexsatoLwErrorTrap("LW PROMISE",message);
+  });
+})();
+</script>
+
+<script>
+/* TW-DEX-03D — TradingView Lightweight Charts Integration */
+(function(){
+  /* TW-DEX-03F.4 — Runtime Entry Probe */
+  var runtimeProbe=document.querySelector("[data-static-bootstrap-diagnostic]");
+  if(runtimeProbe) runtimeProbe.textContent+=" | LW ENTRY";
+
+  const panel=document.querySelector("[data-candlestick-panel]");
+  if(!panel){
+    if(runtimeProbe) runtimeProbe.textContent+=" | PANEL MISSING";
+    return;
+  }
+  if(runtimeProbe) runtimeProbe.textContent+=" | PANEL FOUND";
+
+  const L=window.LightweightCharts;
+  const container=panel.querySelector("[data-lightweight-chart]");
+  const fallbackSvg=panel.querySelector("[data-candlestick-svg]");
+  const empty=panel.querySelector("[data-candlestick-empty]");
+  const dataNode=panel.querySelector("[data-candlestick-data]");
+  const buttons=[...panel.querySelectorAll("[data-candle-timeframe]")];
+  const resetButton=panel.querySelector("[data-candle-reset]");
+  const liveState=panel.querySelector("[data-candle-live-state]");
+  const liveUrl=panel.dataset.liveCandleUrl||"";
+  const currentObservedPrice=Number(panel.dataset.currentPriceUsd||"");
+  const hasCurrentObservedPrice=Number.isFinite(currentObservedPrice)&&currentObservedPrice>0;
+  const ohlc={
+    open:panel.querySelector("[data-ohlc-open]"),
+    high:panel.querySelector("[data-ohlc-high]"),
+    low:panel.querySelector("[data-ohlc-low]"),
+    close:panel.querySelector("[data-ohlc-close]"),
+    volume:panel.querySelector("[data-ohlc-volume]")
+  };
+  const diagnostic=panel.querySelector("[data-lw-runtime-diagnostic]");
+  const diagnosticState={
+    library:!!L,
+    chartCreated:false,
+    seriesCreated:false,
+    rawRows:0,
+    sanitizedRows:0,
+    timeframe:"5m",
+    setDataOk:false,
+    lastError:"",
+    firstTime:null,
+    lastTime:null,
+    firstOhlc:null,
+    lastOhlc:null
+  };
+
+  function showDiagnostic(kind,message){
+    if(!diagnostic) return;
+    diagnostic.hidden=false;
+    diagnostic.classList.add("visible");
+    diagnostic.classList.toggle("error",kind==="error");
+    diagnostic.classList.toggle("ok",kind==="ok");
+    diagnostic.textContent=message;
+  }
+
+  function diagnosticText(prefix=""){
+    const lines=[
+      prefix,
+      "Lightweight library: "+(diagnosticState.library?"loaded":"missing"),
+      "Chart created: "+(diagnosticState.chartCreated?"yes":"no"),
+      "Series created: "+(diagnosticState.seriesCreated?"yes":"no"),
+      "Timeframe: "+diagnosticState.timeframe,
+      "Raw rows: "+diagnosticState.rawRows,
+      "Sanitized rows: "+diagnosticState.sanitizedRows,
+      "setData(): "+(diagnosticState.setDataOk?"ok":"not confirmed"),
+      "First time: "+(diagnosticState.firstTime??"--"),
+      "Last time: "+(diagnosticState.lastTime??"--"),
+      "First OHLC: "+(diagnosticState.firstOhlc??"--"),
+      "Last OHLC: "+(diagnosticState.lastOhlc??"--"),
+      "Error: "+(diagnosticState.lastError||"--")
+    ];
+    /* TW-DEX-03G — Lightweight Runtime Escape Fix */
+    return lines.filter(Boolean).join("\\n");
+  }
+
+  function reportDiagnostic(kind=""){
+    const finalKind=kind||(diagnosticState.lastError?"error":(diagnosticState.setDataOk?"ok":""));
+    showDiagnostic(finalKind,diagnosticText());
+  }
+
+  /* TW-DEX-03F.1 — Diagnostic Bootstrap Guard
+     Make diagnostics visible before any Lightweight Charts API call can throw. */
+  showDiagnostic("",diagnosticText("Diagnostic bootstrap: script entered"));
+
+  window.addEventListener("error",event=>{
+    const message=String(event?.message||"");
+    if(!message) return;
+    diagnosticState.lastError="window.error: "+message;
+    reportDiagnostic("error");
+  });
+
+  window.addEventListener("unhandledrejection",event=>{
+    const reason=String(event?.reason?.message||event?.reason||"");
+    if(!reason) return;
+    diagnosticState.lastError="promise: "+reason;
+    reportDiagnostic("error");
+  });
+
+  if(!L||!container||typeof L.createChart!=="function"||!L.CandlestickSeries||!L.HistogramSeries){
+    diagnosticState.lastError="Lightweight Charts library/API unavailable";
+    reportDiagnostic("error");
+    if(fallbackSvg) fallbackSvg.hidden=false;
+    return;
+  }
+
+  panel.dataset.lightweightActive="1";
+  if(fallbackSvg) fallbackSvg.hidden=true;
+
+  let datasets={};
+  try{datasets=JSON.parse(dataNode?.textContent||"{}");}catch(error){datasets={};}
+
+  const TIMEFRAME_SECONDS={"1m":60,"5m":300,"15m":900,"30m":1800,"1H":3600,"4H":14400};
+  const state={timeframe:"5m",liveInFlight:false};
+  let tradeOverlayRows=[];
+  let markerPlugin=null;
+
+  const finitePositive=value=>{
+    const n=Number(value);
+    return Number.isFinite(n)&&n>0?n:null;
+  };
+
+  function formatPrice(value){
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    if(Math.abs(n)>=1000) return n.toLocaleString(undefined,{maximumFractionDigits:2});
+    if(Math.abs(n)>=1) return n.toLocaleString(undefined,{maximumFractionDigits:6});
+    if(Math.abs(n)>=0.01) return n.toFixed(6);
+    if(Math.abs(n)>=0.000001) return n.toFixed(8);
+    return n.toFixed(10);
+  }
+
+  function formatVolume(value){
+    const n=Number(value);
+    if(!Number.isFinite(n)) return "--";
+    if(Math.abs(n)>=1e9) return (n/1e9).toFixed(2)+"B";
+    if(Math.abs(n)>=1e6) return (n/1e6).toFixed(2)+"M";
+    if(Math.abs(n)>=1e3) return (n/1e3).toFixed(2)+"K";
+    return n.toFixed(2);
+  }
+
+  function precisionForPrice(value){
+    const n=Math.abs(Number(value));
+    if(!Number.isFinite(n)||n<=0) return 8;
+    if(n>=100) return 2;
+    if(n>=1) return 4;
+    if(n>=0.01) return 6;
+    if(n>=0.000001) return 8;
+    return 10;
+  }
+
+  function updateOHLC(row){
+    if(!row){
+      Object.values(ohlc).forEach(node=>{if(node) node.textContent="--";});
+      return;
+    }
+    if(ohlc.open) ohlc.open.textContent=formatPrice(row.open);
+    if(ohlc.high) ohlc.high.textContent=formatPrice(row.high);
+    if(ohlc.low) ohlc.low.textContent=formatPrice(row.low);
+    if(ohlc.close) ohlc.close.textContent=formatPrice(row.close);
+    if(ohlc.volume) ohlc.volume.textContent=formatVolume(row.volume);
+  }
+
+  function setLiveState(ok){
+    if(!liveState) return;
+    liveState.classList.toggle("stale",!ok);
+    const textNode=[...liveState.childNodes].find(node=>node.nodeType===Node.TEXT_NODE);
+    if(textNode) textNode.textContent=ok?"LIVE":"STALE";
+  }
+
+  function normalizeRows(rows){
+    const source=Array.isArray(rows)?rows:[];
+    const result=[];
+    const seen=new Set();
+
+    function sanitizeOhlc(row){
+      const open=finitePositive(row.open);
+      const high=finitePositive(row.high);
+      const low=finitePositive(row.low);
+      const close=finitePositive(row.close);
+
+      /* TW-DEX-03J.1 — Observed Candle Sanitizer
+         Accept only complete provider-owned OHLC. Never repair rejected history
+         with the current token price or manufacture missing candle fields. */
+      if([open,high,low,close].some(value=>value===null)) return null;
+      if(!(high>=open&&high>=close&&low<=open&&low<=close&&high>=low)) return null;
+
+      const epsilon=Math.max(Math.abs(close)*1e-12,1e-18);
+      const visualFlat=
+        Math.abs(close-open)<=epsilon&&
+        Math.abs(high-low)<=epsilon;
+      return {
+        open,
+        high,
+        low,
+        close,
+        visualFlat
+      };
+    }
+
+    source.forEach(row=>{
+      if(!row||typeof row!=="object") return;
+      const time=Math.floor(Number(row.time));
+      if(!Number.isFinite(time)||seen.has(time)) return;
+
+      const clean=sanitizeOhlc(row);
+      if(!clean) return;
+
+      const volume=Math.max(0,Number(row.volume)||0);
+      seen.add(time);
+      result.push({
+        time,
+        open:clean.open,
+        high:clean.high,
+        low:clean.low,
+        close:clean.close,
+        volume,
+        visualFlat:!!clean.visualFlat
+      });
+    });
+    result.sort((a,b)=>a.time-b.time);
+    return result;
+  }
+
+  let chart;
+  try{
+    chart=L.createChart(container,{
+    autoSize:true,
+    height:450,
+    layout:{
+      background:{type:L.ColorType.Solid,color:"#0A1118"},
+      textColor:"#7C8CA0",
+      fontSize:10,
+      fontFamily:'"JetBrains Mono","Cascadia Mono",Consolas,monospace',
+      attributionLogo:true
+    },
+    grid:{
+      vertLines:{color:"#17212B"},
+      horzLines:{color:"#17212B"}
+    },
+    rightPriceScale:{
+      borderColor:"#2A3847",
+      scaleMargins:{top:.08,bottom:.24}
+    },
+    timeScale:{
+      borderColor:"#2A3847",
+      timeVisible:true,
+      secondsVisible:false,
+      rightOffset:4,
+      barSpacing:8,
+      minBarSpacing:3,
+      fixLeftEdge:false,
+      fixRightEdge:false
+    },
+    crosshair:{
+      mode:L.CrosshairMode.Normal,
+      vertLine:{color:"#607084",width:1,labelBackgroundColor:"#10171F"},
+      horzLine:{color:"#607084",width:1,labelBackgroundColor:"#10171F"}
+    },
+    handleScroll:{
+      mouseWheel:true,
+      pressedMouseMove:true,
+      horzTouchDrag:true,
+      vertTouchDrag:false
+    },
+    handleScale:{
+      axisPressedMouseMove:true,
+      mouseWheel:true,
+      pinch:true,
+      axisDoubleClickReset:true
+    },
+    kineticScroll:{mouse:true,touch:true}
+    });
+    diagnosticState.chartCreated=true;
+  }catch(error){
+    diagnosticState.lastError="createChart: "+String(error?.message||error);
+    reportDiagnostic("error");
+    if(fallbackSvg) fallbackSvg.hidden=false;
+    panel.dataset.lightweightActive="0";
+    return;
+  }
+
+  const precision=precisionForPrice(currentObservedPrice);
+  let candleSeries,volumeSeries,flatVisibilitySeries=null;
+  try{
+    candleSeries=chart.addSeries(L.CandlestickSeries,{
+    upColor:"#31D89C",
+    downColor:"#FF5C7A",
+    wickUpColor:"#31D89C",
+    wickDownColor:"#FF5C7A",
+    borderUpColor:"#31D89C",
+    borderDownColor:"#FF5C7A",
+    priceLineVisible:false,
+    lastValueVisible:true,
+    priceFormat:{
+      type:"price",
+      precision,
+      minMove:Math.pow(10,-precision)
+    }
+  });
+
+    volumeSeries=chart.addSeries(L.HistogramSeries,{
+      priceFormat:{type:"volume"},
+      priceScaleId:"",
+      lastValueVisible:false,
+      priceLineVisible:false
+    });
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins:{top:.82,bottom:0}
+    });
+
+    /* TW-DEX-03J — Flat Candle Visibility Polish
+       Flat candles remain numerically flat; a point-only LineSeries gives them a small
+       visible body marker without fabricating OHLC movement or changing price values. */
+    if(L.LineSeries){
+      flatVisibilitySeries=chart.addSeries(L.LineSeries,{
+        color:"#4CF4D6",
+        lineVisible:false,
+        pointMarkersVisible:true,
+        pointMarkersRadius:2.4,
+        crosshairMarkerVisible:false,
+        priceLineVisible:false,
+        lastValueVisible:false,
+        priceFormat:{
+          type:"price",
+          precision,
+          minMove:Math.pow(10,-precision)
+        }
+      });
+    }
+
+    diagnosticState.seriesCreated=true;
+  }catch(error){
+    diagnosticState.lastError="addSeries: "+String(error?.message||error);
+    reportDiagnostic("error");
+    if(fallbackSvg) fallbackSvg.hidden=false;
+    panel.dataset.lightweightActive="0";
+    try{chart.remove();}catch(_error){}
+    return;
+  }
+
+  let currentPriceLine=null;
+  if(hasCurrentObservedPrice){
+    try{
+      currentPriceLine=candleSeries.createPriceLine({
+        price:currentObservedPrice,
+        color:"#4CF4D6",
+        lineWidth:1,
+        lineStyle:L.LineStyle.Dashed,
+        axisLabelVisible:true,
+        title:""
+      });
+    }catch(error){
+      diagnosticState.lastError="createPriceLine: "+String(error?.message||error);
+      reportDiagnostic("error");
+    }
+  }
+
+  function tradeTimestampSeconds(value){
+    const ms=Date.parse(String(value||""));
+    return Number.isFinite(ms)?Math.floor(ms/1000):null;
+  }
+
+  function candleBucket(timestamp,timeframe){
+    const seconds=TIMEFRAME_SECONDS[timeframe]||60;
+    return Math.floor(Number(timestamp)/seconds)*seconds;
+  }
+
+  function updateTradeMarkers(rows){
+    if(typeof L.createSeriesMarkers!=="function") return;
+    const candles=normalizeRows(datasets[state.timeframe]);
+    const candleTimes=new Set(candles.map(row=>row.time));
+    const buckets=new Map();
+
+    (Array.isArray(rows)?rows:[]).slice(0,30).forEach(item=>{
+      if(!item||typeof item!=="object") return;
+      const ts=tradeTimestampSeconds(item.timestamp);
+      const side=String(item.side||"").toUpperCase();
+      if(!Number.isFinite(ts)||!["BUY","SELL"].includes(side)) return;
+      const bucket=candleBucket(ts,state.timeframe);
+      if(!candleTimes.has(bucket)) return;
+      const key=side+":"+bucket;
+      const current=buckets.get(key)||{side,time:bucket,count:0};
+      current.count+=1;
+      buckets.set(key,current);
+    });
+
+    const markers=[...buckets.values()]
+      .sort((a,b)=>a.time-b.time)
+      .map(item=>({
+        time:item.time,
+        position:item.side==="BUY"?"belowBar":"aboveBar",
+        color:item.side==="BUY"?"#31D89C":"#FF5C7A",
+        shape:item.side==="BUY"?"arrowUp":"arrowDown",
+        text:item.count>1?String(item.count):"",
+        size:item.count>2?1.05:.75
+      }));
+
+    if(!markerPlugin){
+      markerPlugin=L.createSeriesMarkers(candleSeries,markers,{autoScale:false});
+    }else{
+      markerPlugin.setMarkers(markers);
+    }
+  }
+
+  function render(fit=false){
+    buttons.forEach(button=>{
+      button.classList.toggle("active",button.dataset.candleTimeframe===state.timeframe);
+    });
+
+    const rawRows=Array.isArray(datasets[state.timeframe])?datasets[state.timeframe]:[];
+    const rows=normalizeRows(rawRows);
+    diagnosticState.timeframe=state.timeframe;
+    diagnosticState.rawRows=rawRows.length;
+    diagnosticState.sanitizedRows=rows.length;
+    diagnosticState.firstTime=rows.length?rows[0].time:null;
+    diagnosticState.lastTime=rows.length?rows[rows.length-1].time:null;
+    diagnosticState.firstOhlc=rows.length?JSON.stringify({
+      o:rows[0].open,h:rows[0].high,l:rows[0].low,c:rows[0].close
+    }):null;
+    diagnosticState.lastOhlc=rows.length?JSON.stringify({
+      o:rows[rows.length-1].open,h:rows[rows.length-1].high,l:rows[rows.length-1].low,c:rows[rows.length-1].close
+    }):null;
+    diagnosticState.setDataOk=false;
+    diagnosticState.lastError="";
+
+    if(!rows.length){
+      try{
+        candleSeries.setData([]);
+        volumeSeries.setData([]);
+        if(flatVisibilitySeries) flatVisibilitySeries.setData([]);
+        diagnosticState.setDataOk=true;
+      }catch(error){
+        diagnosticState.lastError="setData(empty): "+String(error?.message||error);
+      }
+      if(empty){
+        empty.textContent="No renderable exact-pool candles for this timeframe.";
+        empty.hidden=false;
+      }
+      updateOHLC(null);
+      updateTradeMarkers(tradeOverlayRows);
+      reportDiagnostic(diagnosticState.lastError?"error":"");
+      return;
+    }
+
+    if(empty) empty.hidden=true;
+
+    try{
+      candleSeries.setData(rows.map(row=>({
+        time:row.time,open:row.open,high:row.high,low:row.low,close:row.close
+      })));
+      volumeSeries.setData(rows.map(row=>({
+        time:row.time,
+        value:row.volume,
+        color:row.close>=row.open?"rgba(49,216,156,.34)":"rgba(255,92,122,.34)"
+      })));
+      if(flatVisibilitySeries){
+        flatVisibilitySeries.setData(
+          rows
+            .filter(row=>row.visualFlat)
+            .map(row=>({time:row.time,value:row.close}))
+        );
+      }
+      diagnosticState.setDataOk=true;
+    }catch(error){
+      diagnosticState.lastError="setData: "+String(error?.message||error);
+      reportDiagnostic("error");
+      if(fallbackSvg) fallbackSvg.hidden=false;
+      return;
+    }
+
+    const latest=rows[rows.length-1];
+    updateOHLC(latest);
+    updateTradeMarkers(tradeOverlayRows);
+
+    try{
+      if(fit) chart.timeScale().fitContent();
+    }catch(error){
+      diagnosticState.lastError="fitContent: "+String(error?.message||error);
+    }
+    reportDiagnostic(diagnosticState.lastError?"error":"ok");
+  }
+
+  chart.subscribeCrosshairMove(param=>{
+    if(!param||!param.time){
+      const rows=normalizeRows(datasets[state.timeframe]);
+      updateOHLC(rows.length?rows[rows.length-1]:null);
+      return;
+    }
+    const row=param.seriesData?.get(candleSeries);
+    if(row&&Number.isFinite(Number(row.open))) updateOHLC(row);
+  });
+
+  async function pollLive(force=false){
+    if(!liveUrl||state.liveInFlight) return;
+    if(document.hidden&&!force) return;
+    state.liveInFlight=true;
+    try{
+      const response=await fetch(
+        liveUrl+"?timeframe="+encodeURIComponent(state.timeframe),
+        {
+          method:"GET",
+          credentials:"same-origin",
+          headers:{"Accept":"application/json"},
+          cache:"no-store"
+        }
+      );
+      if(!response.ok) throw new Error("live candle unavailable");
+      const payload=await response.json();
+      const incoming=Array.isArray(payload.candles)?payload.candles:[];
+      if(payload.timeframe===state.timeframe&&incoming.length){
+        datasets[state.timeframe]=incoming;
+        render(false);
+      }
+      setLiveState(true);
+    }catch(error){
+      setLiveState(false);
+    }finally{
+      state.liveInFlight=false;
+    }
+  }
+
+  buttons.forEach(button=>{
+    button.addEventListener("click",()=>{
+      state.timeframe=button.dataset.candleTimeframe;
+      render(true);
+      pollLive(true);
+    });
+  });
+
+  resetButton?.addEventListener("click",()=>{
+    chart.priceScale("right").applyOptions({autoScale:true});
+    chart.timeScale().fitContent();
+  });
+
+  window.addEventListener("dexsato:transactions-updated",event=>{
+    const rows=event?.detail?.transactions;
+    tradeOverlayRows=Array.isArray(rows)?rows:[];
+    updateTradeMarkers(tradeOverlayRows);
+  });
+
+  render(true);
+  window.setTimeout(()=>pollLive(true),1200);
+  window.setInterval(()=>pollLive(false),10000);
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden) pollLive(true);
+  });
+})();
+</script>
+
+<script>
+/* TW-DEX-03F.5 — Post Runtime Script Probe */
+/* TW-DEX-03F.6 — Runtime Script Inspection */
+(function(){
+  var n=document.querySelector("[data-static-bootstrap-diagnostic]");
+  if(n) n.textContent+=" | AFTER LW";
+
+  try{
+    var scripts=[].slice.call(document.scripts||[]);
+    var runtimeScript=scripts.find(function(script){
+      return String(script.textContent||"").indexOf(
+        "TW-DEX-03D — TradingView Lightweight Charts Integration"
+      )!==-1;
+    });
+
+    if(!runtimeScript){
+      if(n) n.textContent+=" | LW SCRIPT MISSING";
+      return;
+    }
+
+    var source=String(runtimeScript.textContent||"");
+    var type=String(runtimeScript.type||"classic");
+    var hasEntry=source.indexOf("LW ENTRY")!==-1;
+    if(n){
+      n.textContent+=" | LW SCRIPT FOUND";
+      n.textContent+=" | TYPE "+type;
+      n.textContent+=" | LEN "+source.length;
+      n.textContent+=" | ENTRY "+(hasEntry?"YES":"NO");
+    }
+  }catch(error){
+    if(window.__dexsatoLwErrorTrap){
+      window.__dexsatoLwErrorTrap("LW INSPECT",error&&error.message||error);
+    }
+  }
+})();
+</script>
+
+<script>
 /* CHART_V21_INTERACTIVE_TRADING_CHART */
 (function(){
   const panel=document.querySelector("[data-candlestick-panel]");
   if(!panel) return;
+  if(panel.dataset.lightweightActive==="1") return;
 
   const svg=panel.querySelector("[data-candlestick-svg]");
   const empty=panel.querySelector("[data-candlestick-empty]");
@@ -3251,4 +3967,3 @@ __CANDLESTICK_CHART_PANEL__
         )
         html = html.replace(badge, badge + archive_notice, 1)
     return html
-
