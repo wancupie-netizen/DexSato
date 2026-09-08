@@ -1936,6 +1936,108 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
   background:#0E141C!important;
 }
 
+/* TW-DEX-07B — Header Connect Wallet
+   Header-only presentation. Existing Jupiter wallet control remains the source action. */
+.tw-dex-topbar .tw-header-wallet-v07b{
+  appearance:none;
+  min-height:38px;
+  padding:9px 16px;
+  border:1px solid #4CF4D6;
+  border-radius:8px;
+  background:#4CF4D6;
+  color:#080B10;
+  font:800 11px/1.2 var(--ui);
+  letter-spacing:.01em;
+  cursor:pointer;
+}
+.tw-dex-topbar .tw-header-wallet-v07b:hover{
+  filter:brightness(.96);
+}
+.tw-dex-topbar .tw-header-wallet-v07b:focus-visible{
+  outline:2px solid #E7EDF4;
+  outline-offset:2px;
+}
+
+/* TW-DEX-07C — Header Search & Gas Indicator
+   Header-only presentation. Search and gas are intentionally non-operational placeholders for now. */
+.tw-dex-topbar{
+  gap:18px;
+}
+.tw-header-tools-v07c{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  flex:1 1 auto;
+  min-width:0;
+}
+.tw-header-search-v07c{
+  position:relative;
+  display:flex;
+  align-items:center;
+  width:min(520px,46vw);
+  min-width:220px;
+  height:38px;
+  border:1px solid #1D2733;
+  border-radius:6px;
+  background:#10171F;
+}
+.tw-header-search-icon-v07c{
+  flex:0 0 auto;
+  margin-left:11px;
+  color:#45505F;
+  font:700 11px/1 var(--mono);
+  pointer-events:none;
+}
+.tw-header-search-v07c input{
+  width:100%;
+  min-width:0;
+  height:100%;
+  padding:8px 11px 8px 8px;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:#E7EDF4;
+  font:500 10px/1.3 var(--mono);
+}
+.tw-header-search-v07c input::placeholder{
+  color:#45505F;
+  opacity:1;
+}
+.tw-header-search-v07c:focus-within{
+  border-color:#2A3847;
+}
+.tw-header-gas-v07c{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-height:38px;
+  padding:8px 11px;
+  border:1px solid #1D2733;
+  border-radius:6px;
+  background:#0E141C;
+  color:#7C8CA0;
+  font:700 9px/1.2 var(--mono);
+  white-space:nowrap;
+}
+.tw-header-gas-v07c i{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#4CF4D6;
+  box-shadow:0 0 0 3px rgba(76,244,214,.06);
+}
+@media(max-width:900px){
+  .tw-header-search-v07c{width:min(390px,42vw);min-width:180px}
+}
+@media(max-width:700px){
+  .tw-header-tools-v07c{gap:7px}
+  .tw-header-search-v07c{display:none}
+}
+@media(max-width:520px){
+  .tw-header-gas-v07c{display:none}
+}
+
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
 .token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
@@ -2603,7 +2705,7 @@ a.tw-market-dex:hover{color:#4CF4D6!important}
   </nav>
 </aside>
 <div class="tw-dex-stage">
-<header class="topbar tw-dex-topbar"><div class="brand tw-dex-brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
+<header class="topbar tw-dex-topbar"><div class="brand tw-dex-brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></div><div class="tw-header-tools-v07c"><label class="tw-header-search-v07c"><span class="sr-only">Search token, pair or contract</span><span class="tw-header-search-icon-v07c" aria-hidden="true">&#9906;</span><input type="search" placeholder="Search token, pair or contract" aria-label="Search token, pair or contract" data-header-search-v07c></label><div class="tw-header-gas-v07c" aria-label="Gas status"><i aria-hidden="true"></i><span>Gas · --</span></div><button class="tw-header-wallet-v07b" type="button" data-header-connect-wallet>Connect Wallet</button></div></header>
 <main class="shell tw-dex-content"><div class="tw-dex-workspace-title"><h1>TOKEN WORKSPACE</h1><span>SOLANA · EXACT POOL</span></div>
 <div class="token-workspace-v26" data-token-workspace-v26>
 <aside class="workspace-rail-v26 workspace-left-v26" aria-label="Coin navigation">__COIN_LIST_PANEL__</aside>
@@ -2660,6 +2762,15 @@ __QUALIFICATION_PANEL__
   options.forEach(button=>{
     button.addEventListener("click",()=>applyTheme(button.dataset.themeOption));
   });
+})();
+</script>
+<script>
+/* TW_DEX_07B_HEADER_WALLET_BRIDGE */
+(function(){
+  const headerButton=document.querySelector("[data-header-connect-wallet]");
+  const jupiterButton=document.querySelector(".jupiter-v27 [data-connect-wallet]");
+  if(!headerButton||!jupiterButton)return;
+  headerButton.addEventListener("click",()=>jupiterButton.click());
 })();
 </script>
 <script>
