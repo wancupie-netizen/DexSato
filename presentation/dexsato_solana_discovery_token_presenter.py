@@ -489,7 +489,7 @@ def _token_observation_panel(detail: dict[str, Any]) -> str:
     )
 
     return ('<section class="workspace-rail-card token-observation-v28" data-token-observation>'
-            '<div class="workspace-rail-head"><h2>Token Intelligence</h2><small>Observed data only</small></div>'
+            '<div class="workspace-rail-head"><h2>Token Intelligence</h2></div>'
             f'<div class="token-observation-rows">{"".join(rendered)}</div>'
             '<p class="token-observation-note">Route availability is not a safety guarantee.</p></section>')
 
@@ -2344,6 +2344,16 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
   .tw-dex-side{display:none!important}
 }
 
+/* TW-DEX-08E — Token Intelligence Value Color
+   Presentation-only: default observation values use the existing positive cyan-green;
+   explicit negative values retain the existing red tone. */
+.workspace-right-v26>.token-observation-v28 .token-observation-value{
+  color:#4CF4D6!important;
+}
+.workspace-right-v26>.token-observation-v28 .token-observation-value.down{
+  color:#FF5C7A!important;
+}
+
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
 .token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
@@ -3055,7 +3065,7 @@ __TOKEN_OBSERVATION_PANEL__
 __QUALIFICATION_PANEL__
 <section class="card market-snapshot-v26"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div></section>
 </aside></div>
-<footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>Market observations, indicative quotes and transaction results are distinct.</span></footer></main></div></div><script src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-04" defer></script><script>
+</main></div></div><script src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-04" defer></script><script>
 (function(){
   const options=[...document.querySelectorAll("[data-theme-option]")];
   function applyTheme(theme){
