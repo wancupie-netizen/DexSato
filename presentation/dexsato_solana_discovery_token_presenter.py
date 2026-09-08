@@ -2196,6 +2196,16 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
   font:700 7px/1.2 var(--mono)!important;
 }
 
+/* TW-DEX-08A — Chart Diagnostics Cleanup
+   Presentation-only: preserve diagnostic markup, probes, runtime state and error capture;
+   hide both chart diagnostic overlays in the production workspace UI. */
+.candlestick-stage [data-static-bootstrap-diagnostic],
+.candlestick-stage [data-lw-runtime-diagnostic]{
+  display:none!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
 .token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
