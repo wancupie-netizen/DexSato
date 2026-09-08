@@ -556,6 +556,8 @@ def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str
         '</div>'
         '<label class="coin-list-search"><span class="sr-only">Search coin list</span>'
         '<input type="search" placeholder="Search token or pair" data-coin-list-search></label>'
+        '<div class="token-list-columns-v08b" aria-hidden="true">'
+        '<span>Token</span><span>Price</span><span>24h</span></div>'
         f'<div class="coin-list-rows" data-coin-list-rows>{body}</div></section>'
     )
 
@@ -2204,6 +2206,63 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
   display:none!important;
   visibility:hidden!important;
   pointer-events:none!important;
+}
+
+/* TW-DEX-08B — Static Token List Layout
+   UI-only: no internal token-list scrolling, no numbering, current feed count/order preserved. */
+.workspace-left-v26>.token-list-v07a .token-list-columns-v08b{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  align-items:center;
+  gap:12px;
+  padding:0 14px 7px 57px;
+  background:#0E141C;
+  color:#45505F;
+  font:700 8px/1.2 var(--mono);
+  letter-spacing:.045em;
+}
+.workspace-left-v26>.token-list-v07a .token-list-columns-v08b span:nth-child(2),
+.workspace-left-v26>.token-list-v07a .token-list-columns-v08b span:nth-child(3){
+  text-align:right;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-rows{
+  max-height:none!important;
+  height:auto!important;
+  overflow:visible!important;
+  scrollbar-gutter:auto!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-rows::-webkit-scrollbar{
+  display:none!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-row{
+  grid-template-columns:34px minmax(0,1fr) auto auto!important;
+  gap:9px!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-identity{
+  display:contents;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-identity strong{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  align-self:center;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-identity small{
+  align-self:center;
+  text-align:right;
+  white-space:nowrap;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-change{
+  align-self:center;
+  text-align:right;
+  white-space:nowrap;
+}
+@media(max-width:1180px){
+  .workspace-left-v26>.token-list-v07a .coin-list-rows{
+    max-height:none!important;
+    overflow:visible!important;
+  }
 }
 
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
