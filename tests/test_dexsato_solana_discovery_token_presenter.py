@@ -62,43 +62,43 @@ def test_renders_exact_token_workspace_and_chart():
 
 def test_renders_controlled_non_custodial_jupiter_swap_and_discloses_risk():
     html = render_solana_discovery_token_page(DETAIL)
-    assert "Jupiter swap" in html
-    assert "Swap SOL for TEST" in html
+    assert "Trade TEST" in html
+    assert 'data-trade-side="buy" aria-pressed="true">Buy' in html
+    assert 'data-trade-side="sell" aria-pressed="false">Sell' in html
     assert "NON-CUSTODIAL" in html
     assert "Connect wallet" in html
-    assert "Get Jupiter quote" in html
+    assert "Get buy quote" in html
     assert "Before you continue" in html
     assert "I reviewed the quote and risks." in html
-    assert "Review transaction" in html
+    assert "Review buy" in html
     assert 'data-confirmation-summary hidden' in html
     assert 'data-swap-risk-ack' in html
     assert 'data-execute-swap disabled' in html
     assert 'data-token-symbol="TEST"' in html
-    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=phase03d" defer' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-04" defer' in html
     assert "Fees are shown in the quote and order review before wallet approval." in html
     assert "Pool verification is not token verification" in html
     assert "never holds your funds" in html
     assert "You approve every transaction in your wallet" in html
     assert html.index("Risk context") < html.index("Current qualification")
-    assert html.index("Jupiter swap") < html.index("Risk context")
-    assert 'class="card jupiter jupiter-v27" data-jupiter-sandbox' in html
+    assert html.index("Trade TEST") < html.index("Risk context")
+    assert 'class="card jupiter jupiter-v27 trade-v04" data-jupiter-sandbox' in html
 
 
 def test_archive_observation_keeps_user_directed_swap_controls_with_context():
     html = render_solana_discovery_token_page({**DETAIL, "currently_qualified": False})
 
-    assert "Jupiter swap" in html
-    assert "Swap SOL for TEST" in html
+    assert "Trade TEST" in html
     assert "Previously discovered" in html
     assert "This token was previously discovered by DexSato." in html
     assert "Check the latest market data and quote before you continue." in html
     assert "Not evaluated in this scan" in html
     assert "No current scan assessment was recorded for this archived observation." in html
     assert "This qualification status is analysis context, not a trading restriction." not in html
-    assert '<section class="card jupiter jupiter-v27" data-jupiter-sandbox' in html
+    assert '<section class="card jupiter jupiter-v27 trade-v04" data-jupiter-sandbox' in html
     assert "Connect wallet" in html
-    assert "Get Jupiter quote" in html
-    assert "Review transaction" in html
+    assert "Get buy quote" in html
+    assert "Review buy" in html
 
 
 def test_renders_recorded_current_qualification_reason_and_labels_history():
@@ -174,7 +174,7 @@ def test_token_workspace_v26a_renders_three_column_shell_without_fake_timeline()
     assert 'class="workspace-rail-v26 workspace-right-v26"' in html
     assert html.index("Token Observation") < html.index("Coin List")
     assert html.index("Coin List") < html.index("TEST / SOL")
-    assert html.index("Jupiter swap") < html.index("Market Snapshot")
+    assert html.index("Trade TEST") < html.index("Market Snapshot")
     assert "Coin Timeline" not in html
     assert "Recent Events" not in html
     assert "Pool detected" not in html
@@ -236,7 +236,7 @@ def test_jupiter_v27_renders_readable_quote_preview_fields():
         / "static" / "js" / "dexsato_solana_discovery_swap.js"
     ).read_text(encoding="utf-8")
 
-    assert 'title.textContent = "Quote preview"' in script
+    assert '"Sell" : "Buy") + " quote preview"' in script
     assert '"Expected receive"' in script
     assert '"Minimum receive"' in script
     assert '"Price impact"' in script
@@ -245,7 +245,7 @@ def test_jupiter_v27_renders_readable_quote_preview_fields():
     assert 'fresh.textContent = "● Updated just now"' in script
     assert "payload.minimum_received_raw" in script
     assert "payload.minimum_received_ui" in script
-    assert '"Token decimals"' in script
+    assert '"Output decimals"' in script
     assert "payload.output_decimals_source" in script
     assert "payload.slippage_bps" in script
 
@@ -262,11 +262,11 @@ def test_jupiter_v27_requires_confirmation_summary_before_wallet_signing():
     signing = script.index("walletProvider.signTransaction(unsigned)")
     assert review < confirmation < early_return < signing
     assert 'heading.textContent = "Confirmation summary"' in script
-    assert 'swapButton.textContent = "Confirm in wallet"' in script
-    assert 'swapButton.textContent = "Review transaction"' in script
+    assert 'swapButton.textContent = "Confirm " + payload.side + " in wallet"' in script
+    assert 'swapButton.textContent = "Review " + side' in script
 
 
-def test_jupiter_v271_compacts_header_centers_pay_amount_and_marks_connected_wallet():
+def test_tw_dex_04_uses_approved_trade_panel_and_marks_connected_wallet():
     html = render_solana_discovery_token_page(DETAIL)
     script = (
         Path(__file__).resolve().parents[1]
@@ -274,11 +274,12 @@ def test_jupiter_v271_compacts_header_centers_pay_amount_and_marks_connected_wal
     ).read_text(encoding="utf-8")
 
     assert "TOKEN_WORKSPACE_V271_JUPITER_COMPACT_HEADER" in html
-    assert 'class="swap-leg-v27 swap-pay-v27"' in html
-    assert 'class="solana-mark-v27"' in html
-    assert '<path fill="#9945ff"' in html
-    assert ".swap-pay-v27{text-align:center" in html
-    assert ".wallet-bar-v27{padding:7px 8px;min-height:42px}" in html
+    assert "TW-DEX-04 — two-way Jupiter execution panel" in html
+    assert 'class="trade-switch-v04"' in html
+    assert 'class="trade-amount-v04"' in html
+    assert 'class="trade-receive-v04"' in html
+    assert 'data-route-summary' in html
+    assert '.trade-v04[data-side="sell"]{--trade-accent:var(--red)}' in html
     assert ".wallet-state.connected{color:var(--green)}" in html
     assert 'walletState.classList.add("connected")' in script
     assert 'walletAddress.slice(0, 4) + "…"' in script
@@ -293,7 +294,7 @@ def test_jupiter_v272_resets_confirmation_and_focuses_amount_after_balance_failu
 
     assert "TOKEN_WORKSPACE_V272_QUOTE_FAILURE_STATE" in html
     assert 'data-swap-input-error hidden role="alert"' in html
-    assert 'const insufficientBalance = /insufficient sol balance/i.test(message);' in script
+    assert 'const insufficientBalance = /insufficient (sol|token) balance/i.test(message);' in script
     assert "clearConfirmation();" in script
     assert "acknowledgement.checked = false;" in script
     assert "setInputError(message);" in script
@@ -419,8 +420,8 @@ def test_token_workspace_v2_decision_layout_is_ui_only():
     assert "dexsato-evidence-strip" in html
     assert "decision-grid-v2" in html
     assert "Not independently verified" in html
-    assert "Swap SOL for EX" in html
-    assert "Get Jupiter quote" in html
+    assert "Trade EX" in html
+    assert "Get buy quote" in html
 
 
 def test_token_header_v22_uses_trader_standard_timeframes():

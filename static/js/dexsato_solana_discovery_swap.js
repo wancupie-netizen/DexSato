@@ -16,8 +16,16 @@
     const confirmationSummary = sandbox.querySelector("[data-confirmation-summary]");
     const swapButton = sandbox.querySelector("[data-execute-swap]");
     const swapResult = sandbox.querySelector("[data-swap-result]");
+    const sideButtons = Array.from(document.querySelectorAll("[data-trade-side]"));
+    const payCoin = sandbox.querySelector("[data-pay-coin]");
+    const receiveCoin = sandbox.querySelector("[data-receive-coin]");
+    const balanceLabel = sandbox.querySelector("[data-balance-label]");
+    const routeSummary = sandbox.querySelector("[data-route-summary]");
+    const amountNote = sandbox.querySelector("[data-amount-note]");
+    const amountPresets = Array.from(document.querySelectorAll("[data-amount-preset]"));
     const tokenAddress = sandbox.dataset.tokenAddress;
     const tokenSymbol = sandbox.dataset.tokenSymbol || "token";
+    const wrappedSolMint = "So11111111111111111111111111111111111111112";
     const sellRouteStatus = document.querySelector("[data-sell-route-status]");
     const apiBase = "/api/discovery/solana/" + encodeURIComponent(tokenAddress);
     let walletProvider = null;
@@ -29,6 +37,7 @@
     let confirmationOpen = false;
     let busy = false;
     let web3Promise = null;
+    let side = "buy";
 
     document.querySelectorAll("[data-copy-address]").forEach(function (button) {
         button.addEventListener("click", async function () {
@@ -61,11 +70,13 @@
     function updateSwapAvailability() {
         swapButton.disabled = busy || !walletAddress || !currentQuote
             || !acknowledgement.checked
-            || !sameAmount(currentQuote.input_amount_sol, amount.value)
+            || currentQuote.side !== side
+            || !sameAmount(currentQuote.input_amount_ui, amount.value)
             || currentWalletAddress() !== walletAddress
             || currentQuote.fee_disclosure.execution_ready !== true;
         amount.disabled = busy;
         acknowledgement.disabled = busy;
+        sideButtons.forEach(function (button) { button.disabled = busy; });
     }
 
     function clearPreparedState() {
@@ -78,7 +89,7 @@
         confirmationOpen = false;
         confirmationSummary.hidden = true;
         confirmationSummary.replaceChildren();
-        swapButton.textContent = "Review transaction";
+        swapButton.textContent = "Review " + side;
     }
 
     function setInputError(message) {
@@ -93,6 +104,8 @@
         clearPreparedState();
         clearConfirmation();
         receiveAmount.textContent = "—";
+        quoteResult.className = "quote-result quote-result-v27";
+        quoteResult.replaceChildren();
         setInputError("");
         acknowledgement.checked = false;
         updateSwapAvailability();
@@ -117,19 +130,28 @@
         container.appendChild(cell);
     }
 
+    function outputSymbol(payload) {
+        return payload.output_mint === wrappedSolMint ? "SOL" : tokenSymbol;
+    }
+
+    function inputSymbol(payload) {
+        return payload.input_mint === wrappedSolMint ? "SOL" : tokenSymbol;
+    }
+
     function tokenOutput(payload) {
+        const symbol = outputSymbol(payload);
         if (payload.output_amount_ui) {
             const ui = Number(payload.output_amount_ui);
             return (Number.isFinite(ui)
                 ? new Intl.NumberFormat(undefined, {maximumFractionDigits: 8}).format(ui)
-                : payload.output_amount_ui) + " " + tokenSymbol;
+                : payload.output_amount_ui) + " " + symbol;
         }
         const raw = present(payload.output_amount_raw, "Unavailable");
-        return raw.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + " raw token units";
+        return raw.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + " raw " + symbol + " units";
     }
 
     function compactOutput(payload) {
-        if (payload.output_amount_ui) return tokenOutput(payload).replace(" " + tokenSymbol, "");
+        if (payload.output_amount_ui) return tokenOutput(payload).replace(" " + outputSymbol(payload), "");
         const raw = Number(payload.output_amount_raw);
         return Number.isFinite(raw)
             ? new Intl.NumberFormat(undefined, {notation: "compact", maximumFractionDigits: 2}).format(raw)
@@ -138,11 +160,12 @@
     }
 
     function minimumOutput(payload) {
+        const symbol = outputSymbol(payload);
         if (payload.minimum_received_ui) {
             const ui = Number(payload.minimum_received_ui);
             return (Number.isFinite(ui)
                 ? new Intl.NumberFormat(undefined, {maximumFractionDigits: 8}).format(ui)
-                : payload.minimum_received_ui) + " " + tokenSymbol;
+                : payload.minimum_received_ui) + " " + symbol;
         }
         const minimum = Number(payload.minimum_received_raw);
         const raw = Number(payload.output_amount_raw);
@@ -150,11 +173,11 @@
         if (payload.output_amount_ui && minimum > 0 && Number.isFinite(minimum)
                 && Number.isFinite(raw) && raw > 0 && Number.isFinite(ui)) {
             return new Intl.NumberFormat(undefined, {maximumFractionDigits: 8})
-                .format(minimum * (ui / raw)) + " " + tokenSymbol;
+                .format(minimum * (ui / raw)) + " " + symbol;
         }
         if (minimum > 0 && Number.isFinite(minimum)) {
             return String(payload.minimum_received_raw).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                + " raw token units";
+                + " raw " + symbol + " units";
         }
         return "Unavailable";
     }
@@ -190,6 +213,7 @@
         const controlledOneShot = fee.execution_ready === true
             && fee.activation_scope === "ONE_SHOT_TAP"
             && fee.integrator_fee_bps === 50
+            && payload.side === "buy"
             && payload.output_mint === "ADcF26nFGKMuRZ7va5361H2PCHCDRi2FmeJBkX3Spump"
             && payload.input_amount_lamports === "1000000";
         return fee.integrator_fee_bps >= 50 && fee.integrator_fee_bps <= 255
@@ -230,7 +254,7 @@
         const header = document.createElement("div");
         header.className = "quote-preview-head-v27";
         const title = document.createElement("strong");
-        title.textContent = "Quote preview";
+        title.textContent = (payload.side === "sell" ? "Sell" : "Buy") + " quote preview";
         const fresh = document.createElement("span");
         fresh.className = "quote-fresh-v27";
         fresh.textContent = "● Updated just now";
@@ -239,7 +263,7 @@
         summary.className = "quote-summary-v27";
         addSummaryRow(summary, "Expected receive", tokenOutput(payload));
         addSummaryRow(summary, "Minimum receive", minimumOutput(payload));
-        addSummaryRow(summary, "Token decimals", payload.output_decimals == null
+        addSummaryRow(summary, "Output decimals", payload.output_decimals == null
             ? "Unavailable · raw fallback"
             : String(payload.output_decimals) + " · "
                 + present(payload.output_decimals_source, "verified mint"));
@@ -250,6 +274,13 @@
         addSummaryRow(summary, "Route", present(payload.router, "Jupiter"));
         quoteResult.append(header, summary);
         receiveAmount.textContent = compactOutput(payload);
+        if (routeSummary) {
+            routeSummary.textContent = inputSymbol(payload) + " → "
+                + present(payload.router, "Jupiter") + " → " + outputSymbol(payload);
+        }
+        amountPresets.forEach(function (button) {
+            button.textContent = side === "buy" ? button.dataset.buyValue : button.dataset.sellValue;
+        });
     }
 
     function renderConfirmation(payload) {
@@ -260,10 +291,10 @@
         note.textContent = "Check these details before opening your wallet.";
         const list = document.createElement("div");
         list.className = "confirmation-list-v27";
-        addSummaryRow(list, "You pay", amount.value + " SOL", "confirmation-row-v27");
+        addSummaryRow(list, "You pay", amount.value + " " + inputSymbol(payload), "confirmation-row-v27");
         addSummaryRow(list, "Expected receive", tokenOutput(payload), "confirmation-row-v27");
         addSummaryRow(list, "Minimum receive", minimumOutput(payload), "confirmation-row-v27");
-        addSummaryRow(list, "Token decimals", payload.output_decimals == null
+        addSummaryRow(list, "Output decimals", payload.output_decimals == null
             ? "Unavailable · raw fallback"
             : String(payload.output_decimals) + " · "
                 + present(payload.output_decimals_source, "verified mint"), "confirmation-row-v27");
@@ -274,7 +305,7 @@
         confirmationSummary.append(heading, note, list);
         confirmationSummary.hidden = false;
         confirmationOpen = true;
-        swapButton.textContent = "Confirm in wallet";
+        swapButton.textContent = "Confirm " + payload.side + " in wallet";
     }
 
     async function requestJson(url, options) {
@@ -333,6 +364,49 @@
         return web3Promise;
     }
 
+    function applySide(next, resetAmount) {
+        if (busy || (next !== "buy" && next !== "sell")) return;
+        side = next;
+        sandbox.dataset.side = side;
+        sideButtons.forEach(function (button) {
+            button.setAttribute("aria-pressed", String(button.dataset.tradeSide === side));
+        });
+        if (payCoin) payCoin.textContent = side === "buy" ? "◎ SOL" : tokenSymbol;
+        if (receiveCoin) receiveCoin.textContent = side === "buy" ? tokenSymbol : "◎ SOL";
+        if (balanceLabel) {
+            balanceLabel.textContent = side === "buy"
+                ? "SOL balance checked at order"
+                : tokenSymbol + " balance checked at order";
+        }
+        if (amountNote) {
+            amountNote.textContent = side === "buy"
+                ? "Enter an amount between 0.001 and 100 SOL"
+                : "Enter the exact token amount to sell";
+        }
+        if (routeSummary) {
+            routeSummary.textContent = side === "buy"
+                ? "SOL → Jupiter → " + tokenSymbol
+                : tokenSymbol + " → Jupiter → SOL";
+        }
+        if (resetAmount !== false) amount.value = side === "buy" ? "0.1" : "1";
+        quoteButton.textContent = "Get " + side + " quote";
+        clearQuote();
+    }
+
+    sideButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+            applySide(button.dataset.tradeSide, true);
+        });
+    });
+
+    amountPresets.forEach(function (button) {
+        button.addEventListener("click", function () {
+            amount.value = side === "buy" ? button.dataset.buyValue : button.dataset.sellValue;
+            clearQuote();
+            amount.focus();
+        });
+    });
+
     async function relaySignedOrder(pending) {
         if (Date.parse(pending.expires_at) <= Date.now()) {
             clearPreparedState();
@@ -355,6 +429,10 @@
         clearPreparedState();
         if (result.status !== "SWAP_CONFIRMED") {
             throw new Error(present(result.error, "Jupiter could not settle the swap."));
+        }
+        if (result.side !== pending.side || result.input_mint !== pending.input_mint
+                || result.output_mint !== pending.output_mint) {
+            throw new Error("The settlement result did not match the wallet-approved trade.");
         }
         swapResult.className = "quote-result visible swap-success";
         swapResult.replaceChildren();
@@ -429,17 +507,22 @@
         setResult(quoteResult, "Requesting an indicative Jupiter quote…");
         try {
             const payload = await requestJson(
-                apiBase + "/jupiter-quote?amount_sol=" + encodeURIComponent(amount.value),
+                apiBase + "/jupiter-quote?side=" + encodeURIComponent(side)
+                    + "&amount=" + encodeURIComponent(amount.value),
                 {headers: {accept: "application/json"}}
             );
             if (revision !== quoteRevision) return;
-            if (payload.output_mint !== tokenAddress || !sameAmount(payload.input_amount_sol, amount.value)
+            const expectedInputMint = side === "buy" ? wrappedSolMint : tokenAddress;
+            const expectedOutputMint = side === "buy" ? tokenAddress : wrappedSolMint;
+            if (payload.side !== side || payload.token_mint !== tokenAddress
+                || payload.input_mint !== expectedInputMint || payload.output_mint !== expectedOutputMint
+                || !sameAmount(payload.input_amount_ui, amount.value)
                 || !validFeeDisclosure(payload)) {
                 throw new Error("The returned quote did not match the approved DexSato policy.");
             }
             currentQuote = payload;
             renderQuote(payload);
-            if (sellRouteStatus) {
+            if (sellRouteStatus && side === "sell") {
                 sellRouteStatus.textContent = "Verified · just now";
                 sellRouteStatus.classList.add("verified");
             }
@@ -448,7 +531,7 @@
             setResult(quoteResult, present(error.message, "Jupiter quote is unavailable."), "quote-error");
         } finally {
             quoteButton.disabled = false;
-            quoteButton.textContent = "Get Jupiter quote";
+            quoteButton.textContent = "Get " + side + " quote";
             updateSwapAvailability();
         }
     });
@@ -489,7 +572,8 @@
                     method: "POST",
                     headers: {"content-type": "application/json", accept: "application/json"},
                     body: JSON.stringify({
-                        amount_sol: amount.value,
+                        amount: amount.value,
+                        side: side,
                         wallet_address: walletAddress,
                         risk_acknowledged: acknowledgement.checked
                     })
@@ -498,8 +582,12 @@
                     throw new Error("The trade changed. Request a new quote and review it again.");
                 }
             }
-            if (order.wallet_address !== walletAddress || order.output_mint !== tokenAddress
-                || !sameAmount(order.input_amount_sol, amount.value)
+            const expectedInputMint = side === "buy" ? wrappedSolMint : tokenAddress;
+            const expectedOutputMint = side === "buy" ? tokenAddress : wrappedSolMint;
+            if (order.wallet_address !== walletAddress || order.side !== side
+                || order.token_mint !== tokenAddress
+                || order.input_mint !== expectedInputMint || order.output_mint !== expectedOutputMint
+                || !sameAmount(order.input_amount_ui, amount.value)
                 || !sameFeePolicy(currentQuote, order) || order.fee_disclosure.execution_ready !== true) {
                 throw new Error("The prepared order did not match the reviewed token, wallet, or amount.");
             }
@@ -531,12 +619,15 @@
                 request_id: order.request_id,
                 wallet_address: walletAddress,
                 expires_at: order.expires_at,
+                side: order.side,
+                input_mint: order.input_mint,
+                output_mint: order.output_mint,
                 signed_transaction: base64Transaction(signed.serialize())
             };
             await relaySignedOrder(pendingSignedOrder);
         } catch (error) {
             const message = present(error.message, "Jupiter swap could not be completed.");
-            const insufficientBalance = /insufficient sol balance/i.test(message);
+            const insufficientBalance = /insufficient (sol|token) balance/i.test(message);
             if (error.status === 400 || error.status === 410) {
                 clearPreparedState();
                 clearConfirmation();
@@ -557,5 +648,5 @@
         }
     });
 
-    updateSwapAvailability();
+    applySide("buy", false);
 })();

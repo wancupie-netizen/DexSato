@@ -27,6 +27,7 @@ from application.jupiter_quote_service import (
     JupiterQuoteNotConfigured,
     JupiterQuoteUnavailable,
     _amount_lamports,
+    _amount_token_units,
     _label,
     _number,
     _platform_fee,
@@ -34,6 +35,10 @@ from application.jupiter_quote_service import (
     _fee_policy,
     _fee_evidence,
     _fee_disclosure,
+    _raw_to_ui,
+    _token_decimals,
+    _trade_direction,
+    SOL_DECIMALS,
 )
 from application.jupiter_fee_policy import FeeEvidence, FeePolicyConfigurationError, require_fee_execution_ready
 from application.jupiter_one_shot_swap_gate import (
@@ -71,6 +76,10 @@ DEFAULT_ALLOWED_SWAP_PROGRAMS = frozenset(
 @dataclass(slots=True)
 class _PendingOrder:
     token_address: str
+    side: str
+    input_mint: str
+    output_mint: str
+    input_amount_raw: str
     wallet_address: str
     expires_at: datetime
     message_digest: bytes
@@ -351,13 +360,15 @@ def _prune_orders(current: datetime, wallet_address: str) -> None:
         )
 
 
-def _order_error_message(payload: dict[str, Any]) -> str | None:
+def _order_error_message(payload: dict[str, Any], side: str) -> str | None:
     """Map known Jupiter order failures to safe, actionable D6.1 UX messages."""
     raw = str(payload.get("errorMessage") or payload.get("error") or "").strip()
     if not raw:
         return None
     normalized = raw.casefold()
     if "insufficient funds" in normalized or "insufficient balance" in normalized:
+        if side == "sell":
+            return "Insufficient token balance. Reduce the sell amount or check the connected wallet."
         return "Insufficient SOL balance. Reduce the swap amount or add SOL to your connected wallet."
     return "Jupiter could not prepare this swap transaction."
 
@@ -367,19 +378,37 @@ def prepare_jupiter_swap(
     amount_sol: Any,
     wallet_address: str,
     *,
+    side: str = "buy",
     risk_acknowledged: bool = False,
     api_key: str | None = None,
     feed: dict[str, Any] | None = None,
     request_get: Callable[..., Any] = requests.get,
+    request_post: Callable[..., Any] = requests.post,
+    rpc_url: str | None = None,
     now: Callable[[], datetime] = _utcnow,
 ) -> dict[str, Any]:
     """Request an unsigned Jupiter transaction for one explicitly approved wallet."""
     if risk_acknowledged is not True:
         raise JupiterSwapRejected("Mainnet swap risk must be explicitly acknowledged.")
-    output_mint = _observed_token(token_address, feed)
+    token_mint = _observed_token(token_address, feed)
+    direction = _trade_direction(side)
     wallet = str(wallet_address or "").strip()
     wallet_bytes = _base58_bytes(wallet)
-    amount, lamports = _amount_lamports(amount_sol)
+    if direction == "buy":
+        amount, input_raw = _amount_lamports(amount_sol)
+        input_mint = WRAPPED_SOL_MINT
+        output_mint = token_mint
+        input_decimals = SOL_DECIMALS
+        input_decimals_source = "Solana protocol"
+    else:
+        input_decimals, input_decimals_source = _token_decimals(
+            token_mint, None, rpc_url=rpc_url, request_post=request_post,
+        )
+        if input_decimals is None:
+            raise JupiterQuoteUnavailable("Token decimals are unavailable for a sell order.")
+        amount, input_raw = _amount_token_units(amount_sol, input_decimals)
+        input_mint = token_mint
+        output_mint = WRAPPED_SOL_MINT
     resolved_key = _api_key(api_key)
 
     fee_policy = _fee_policy()
@@ -391,7 +420,7 @@ def prepare_jupiter_swap(
         if fee_policy.enabled and one_shot_mode=="true":
             gate_path=os.getenv("DEXSATO_JUPITER_ONE_SHOT_GATE_PATH","").strip()
             if not gate_path:raise GateRejected("ONE_SHOT_GATE_PATH_REQUIRED")
-            gate=require_one_shot_armed(gate_path,output_mint,wallet,lamports,fee_policy,now())
+            gate=require_one_shot_armed(gate_path,output_mint,wallet,input_raw,fee_policy,now())
         else:require_fee_execution_ready(fee_policy)
     except (FeePolicyConfigurationError,GateRejected) as error:
         raise JupiterQuoteNotConfigured("Fee-enabled swap execution is not activated for this exact one-shot order.") from error
@@ -402,8 +431,8 @@ def prepare_jupiter_swap(
     try:
         response = request_get(
             JUPITER_ORDER_URL,
-            params={"inputMint": WRAPPED_SOL_MINT, "outputMint": output_mint,
-                    "amount": str(lamports), "taker": wallet,
+            params={"inputMint": input_mint, "outputMint": output_mint,
+                    "amount": str(input_raw), "taker": wallet,
                     **fee_policy.request_parameters()},
             headers={"x-api-key": resolved_key, "accept": "application/json"},
             timeout=12,
@@ -415,16 +444,18 @@ def prepare_jupiter_swap(
 
     if not isinstance(payload, dict):
         raise JupiterQuoteUnavailable("Jupiter could not prepare this swap transaction.")
-    provider_error = _order_error_message(payload)
+    provider_error = _order_error_message(payload, direction)
     if provider_error is not None:
         raise JupiterQuoteUnavailable(provider_error)
-    fee_evidence = _fee_evidence(fee_policy, payload, output_mint)
-    fee_disclosure = _fee_disclosure(fee_evidence, payload, lamports, output_mint)
-    if str(payload.get("inputMint") or "") != WRAPPED_SOL_MINT:
-        raise JupiterSwapRejected("Jupiter swap input mint did not match SOL.")
+    fee_evidence = _fee_evidence(fee_policy, payload, input_mint, output_mint)
+    fee_disclosure = _fee_disclosure(
+        fee_evidence, payload, input_raw, input_mint, output_mint,
+    )
+    if str(payload.get("inputMint") or "") != input_mint:
+        raise JupiterSwapRejected("Jupiter swap input mint did not match the approved trade side.")
     if str(payload.get("outputMint") or "") != output_mint:
         raise JupiterSwapRejected("Jupiter swap output mint did not match the qualified token.")
-    if str(payload.get("inAmount") or "") != str(lamports):
+    if str(payload.get("inAmount") or "") != str(input_raw):
         raise JupiterSwapRejected("Jupiter swap input amount did not match the approved amount.")
     if str(payload.get("taker") or "") != wallet:
         raise JupiterSwapRejected("Jupiter swap wallet did not match the connected wallet.")
@@ -439,7 +470,7 @@ def prepare_jupiter_swap(
         static_accounts,
         instructions,
         wallet_bytes,
-        lamports,
+        input_raw if direction == "buy" else 0,
     )
     if signatures[wallet_index] != bytes(64):
         raise JupiterSwapRejected("Jupiter unexpectedly returned an already-signed wallet transaction.")
@@ -451,7 +482,11 @@ def prepare_jupiter_swap(
     last_height = payload.get("lastValidBlockHeight")
     last_height_text = str(last_height) if last_height is not None else None
     pending = _PendingOrder(
-        token_address=output_mint,
+        token_address=token_mint,
+        side=direction,
+        input_mint=input_mint,
+        output_mint=output_mint,
+        input_amount_raw=str(input_raw),
         wallet_address=wallet,
         expires_at=expires_at,
         message_digest=hashlib.sha256(message).digest(),
@@ -472,17 +507,39 @@ def prepare_jupiter_swap(
         _pending_orders[request_id] = pending
 
     platform_fee = _platform_fee(payload)
+    if output_mint == WRAPPED_SOL_MINT:
+        output_decimals, output_decimals_source = SOL_DECIMALS, "Solana protocol"
+    else:
+        try:
+            output_decimals = int(payload.get("outputDecimals"))
+            if not 0 <= output_decimals <= 18:
+                raise ValueError
+            output_decimals_source = "Jupiter"
+        except (TypeError, ValueError):
+            output_decimals, output_decimals_source = None, None
+    output_raw = str(payload.get("outAmount") or "")
+    minimum_raw = str(payload.get("otherAmountThreshold") or "") or None
     return {
         "status": "WALLET_APPROVAL_REQUIRED",
         "request_id": request_id,
         "unsigned_transaction": unsigned,
         "wallet_address": wallet,
-        "input_mint": WRAPPED_SOL_MINT,
+        "side": direction,
+        "token_mint": token_mint,
+        "input_mint": input_mint,
         "output_mint": output_mint,
-        "input_amount_sol": format(amount.normalize(), "f"),
-        "input_amount_lamports": str(lamports),
-        "output_amount_raw": str(payload.get("outAmount") or ""),
-        "minimum_received_raw": str(payload.get("otherAmountThreshold") or "") or None,
+        "input_amount_ui": format(amount.normalize(), "f"),
+        "input_amount_raw": str(input_raw),
+        "input_decimals": input_decimals,
+        "input_decimals_source": input_decimals_source,
+        "input_amount_sol": format(amount.normalize(), "f") if direction == "buy" else None,
+        "input_amount_lamports": str(input_raw) if direction == "buy" else None,
+        "output_amount_raw": output_raw,
+        "output_amount_ui": _raw_to_ui(output_raw, output_decimals),
+        "output_decimals": output_decimals,
+        "output_decimals_source": output_decimals_source,
+        "minimum_received_raw": minimum_raw,
+        "minimum_received_ui": _raw_to_ui(minimum_raw, output_decimals),
         "router": _label(payload.get("router"), "Jupiter"),
         "price_impact_pct": _number(payload.get("priceImpact"))
                             if payload.get("priceImpact") is not None
@@ -589,6 +646,9 @@ def execute_jupiter_swap(
         return {
             "status": "SWAP_CONFIRMED",
             "request_id": order_id,
+            "side": pending.side,
+            "input_mint": pending.input_mint,
+            "output_mint": pending.output_mint,
             "signature": signature,
             "slot": str(payload.get("slot") or "") or None,
             "input_amount_raw": str(payload.get("inputAmountResult")
@@ -607,8 +667,8 @@ def execute_jupiter_swap(
     return {
         "status": "SWAP_FAILED",
         "request_id": order_id,
+        "side": pending.side,
         "error": str(payload.get("error") or "Jupiter could not settle this transaction.")[:240],
         "code": payload.get("code") if isinstance(payload.get("code"), int) else None,
         **pending.fee_evidence.execution_fields(),
     }
-

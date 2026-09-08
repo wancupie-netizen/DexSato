@@ -299,8 +299,10 @@ def solana_discovery_transactions(token_address: str) -> dict[str, object]:
 def solana_discovery_jupiter_quote(
     token_address: str,
     amount_sol: str = "0.1",
+    amount: str | None = None,
+    side: str = "buy",
 ) -> dict[str, object]:
-    """Return a quote-only Jupiter order for one observed discovery token."""
+    """Return a quote-only Jupiter order for a bounded buy or sell."""
     from application.jupiter_quote_service import (
         JupiterQuoteNotConfigured,
         JupiterQuoteUnavailable,
@@ -308,7 +310,11 @@ def solana_discovery_jupiter_quote(
     )
 
     try:
-        return fetch_jupiter_quote(token_address, amount_sol)
+        return fetch_jupiter_quote(
+            token_address,
+            amount if amount is not None else amount_sol,
+            side=side,
+        )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except JupiterQuoteNotConfigured as error:
@@ -349,14 +355,15 @@ async def solana_discovery_jupiter_order(
 
     payload = await _jupiter_swap_body(
         request,
-        {"amount_sol", "wallet_address", "risk_acknowledged"},
+        {"amount", "amount_sol", "side", "wallet_address", "risk_acknowledged"},
     )
     try:
         return await run_in_threadpool(
             prepare_jupiter_swap,
             token_address,
-            payload.get("amount_sol"),
+            payload.get("amount") if payload.get("amount") is not None else payload.get("amount_sol"),
             str(payload.get("wallet_address") or ""),
+            side=str(payload.get("side") or "buy"),
             risk_acknowledged=payload.get("risk_acknowledged") is True,
         )
     except JupiterSwapExpired as error:

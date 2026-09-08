@@ -6,7 +6,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 function fixture(bps = 0) {
-    return {output_mint:'TOKEN', input_amount_sol:'0.1', input_amount_lamports:'100000000',
+    return {side:'buy',token_mint:'TOKEN',input_mint:'So11111111111111111111111111111111111111112',
+        output_mint:'TOKEN',input_amount_ui:'0.1',input_amount_raw:'100000000',
+        input_amount_sol:'0.1', input_amount_lamports:'100000000',
         output_amount_ui:'2.5', output_decimals:6, minimum_received_ui:'2.4',
         dexsato_integrator_fee_bps:bps, dexsato_fee_policy_id:'a'.repeat(64),
         dexsato_referral_account:bps ? '5q9Rk7oLhpxyoUstjKqbJxV3xnAi7Zucqsuw6NCzzNQQ' : null,
@@ -21,7 +23,8 @@ function fixture(bps = 0) {
 
 function armedTapFixture() {
     const value=fixture(50);
-    value.output_mint='ADcF26nFGKMuRZ7va5361H2PCHCDRi2FmeJBkX3Spump';
+    value.token_mint='ADcF26nFGKMuRZ7va5361H2PCHCDRi2FmeJBkX3Spump';
+    value.output_mint=value.token_mint;
     value.input_amount_sol='0.001';
     value.input_amount_lamports='1000000';
     value.fee_disclosure.execution_ready=true;
@@ -29,22 +32,36 @@ function armedTapFixture() {
     return value;
 }
 
-function boot(payload = fixture()) {
+function sellFixture() {
+    const value=fixture();
+    value.side='sell';value.input_mint='TOKEN';
+    value.output_mint='So11111111111111111111111111111111111111112';
+    value.input_amount_ui='1.5';value.input_amount_raw='1500000';
+    value.input_amount_sol=null;value.input_amount_lamports=null;
+    value.output_amount_ui='0.123';value.minimum_received_ui='0.12';
+    return value;
+}
+
+function boot(payload = fixture(), executeChanges = {}) {
     class Element {
         constructor() {this.children=[];this.events={};this.value='0.1';this.checked=false;this.disabled=false;
-            this.dataset={tokenAddress:'TOKEN',tokenSymbol:'TEST'};this.classList={add(){},remove(){}};}
+            this.dataset={tokenAddress:'TOKEN',tokenSymbol:'TEST'};this.attributes={};
+            this.classList={add(){},remove(){},toggle(){}};}
         append(...items){this.children.push(...items);}
         appendChild(item){this.children.push(item);}
         replaceChildren(){this.children=[];}
         addEventListener(name,cb){this.events[name]=cb;}
+        setAttribute(name,value){this.attributes[name]=String(value);}
         focus(){} select(){}
     }
     const elements = new Map();
     const el = selector => {if(!elements.has(selector))elements.set(selector,new Element());return elements.get(selector);};
     el('[data-jupiter-sandbox]').querySelector=el;
-    el('[data-jupiter-sandbox]').dataset.tokenAddress=payload.output_mint;
-    el('[data-quote-amount]').value=payload.input_amount_sol;
-    const document={querySelector:el,querySelectorAll:()=>[],createElement:()=>new Element(),head:new Element()};
+    el('[data-jupiter-sandbox]').dataset.tokenAddress=payload.token_mint;
+    el('[data-quote-amount]').value=payload.input_amount_ui;
+    const buyTab=el('[data-trade-side="buy"]');buyTab.dataset.tradeSide='buy';
+    const sellTab=el('[data-trade-side="sell"]');sellTab.dataset.tradeSide='sell';
+    const document={querySelector:el,querySelectorAll:selector=>selector==='[data-trade-side]'?[buyTab,sellTab]:[],createElement:()=>new Element(),head:new Element()};
     let signed=0, prepared=0;
     const wallet={publicKey:'WALLET', connect:async()=>({publicKey:'WALLET'}),on(){},
         signTransaction:async()=>{signed++;return {serialize:()=>new Uint8Array([1])};}};
@@ -55,7 +72,9 @@ function boot(payload = fixture()) {
         fetch:async url=>({ok:true,json:async()=>{
             if(url.includes('jupiter-order')){prepared++;return {...payload, output_amount_ui:'2.3',
                 wallet_address:'WALLET',unsigned_transaction:'AQ==',request_id:'order',expires_at:new Date(Date.now()+60000).toISOString()};}
-            if(url.includes('jupiter-execute'))return {status:'SWAP_CONFIRMED',signature:'test'};
+            if(url.includes('jupiter-execute'))return {status:'SWAP_CONFIRMED',signature:'test',
+                side:payload.side,input_mint:payload.input_mint,output_mint:payload.output_mint,
+                ...executeChanges};
             return payload;
         }})};
     const source=fs.readFileSync(path.join(__dirname,'../static/js/dexsato_solana_discovery_swap.js'),'utf8');
@@ -117,6 +136,29 @@ test('actual prepared order must be reviewed on a separate click before signing'
     assert.ok(JSON.stringify(b.el('[data-confirmation-summary]').children).includes('2.3'));
     await b.click('[data-execute-swap]');
     assert.deepEqual(b.counts(),{signed:1,prepared:1});
+});
+
+test('sell side is bound through quote order review and wallet signing',async()=>{
+    const b=boot(sellFixture());
+    b.el('[data-trade-side="sell"]').events.click();
+    b.el('[data-quote-amount]').value='1.5';
+    await b.click('[data-connect-wallet]');await b.click('[data-get-quote]');
+    b.el('[data-swap-risk-ack]').checked=true;b.el('[data-swap-risk-ack]').events.change();
+    assert.equal(b.el('[data-execute-swap]').disabled,false);
+    await b.click('[data-execute-swap]');
+    await b.click('[data-execute-swap]');
+    assert.deepEqual(b.counts(),{signed:0,prepared:1});
+    await b.click('[data-execute-swap]');
+    assert.deepEqual(b.counts(),{signed:1,prepared:1});
+});
+
+test('settlement result must match the wallet-approved trade direction and mints',async()=>{
+    const b=boot(fixture(),{side:'sell'});
+    await b.click('[data-connect-wallet]');await b.click('[data-get-quote]');
+    b.el('[data-swap-risk-ack]').checked=true;b.el('[data-swap-risk-ack]').events.change();
+    await b.click('[data-execute-swap]');await b.click('[data-execute-swap]');
+    await b.click('[data-execute-swap]');
+    assert.ok(b.el('[data-swap-result]').className.includes('quote-error'));
 });
 
 test('amount change discards prepared order and prevents signing',async()=>{

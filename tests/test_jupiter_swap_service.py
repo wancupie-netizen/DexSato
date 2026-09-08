@@ -108,6 +108,35 @@ def _prepare(payload=None, **changes):
     )
 
 
+def _prepare_sell(payload=None, **changes):
+    sell_order = _order(
+        request_id="sell-order-1",
+        inputMint=TOKEN,
+        outputMint=WRAPPED_SOL_MINT,
+        inAmount="1500000",
+        outAmount="123000000",
+        otherAmountThreshold="120000000",
+        outputDecimals=9,
+    )
+    rpc = Mock(return_value=_response({
+        "jsonrpc": "2.0",
+        "result": {"value": {"amount": "1", "decimals": 6}},
+    }))
+    return prepare_jupiter_swap(
+        TOKEN,
+        "1.5",
+        WALLET,
+        side="sell",
+        risk_acknowledged=True,
+        api_key="server-secret",
+        feed=FEED,
+        request_get=Mock(return_value=_response(payload or sell_order)),
+        request_post=rpc,
+        now=lambda: NOW,
+        **changes,
+    )
+
+
 def test_prepares_unsigned_order_bound_to_observed_token_amount_and_wallet():
     _pending_orders.clear()
     request_get = Mock(return_value=_response(_order()))
@@ -133,6 +162,27 @@ def test_prepares_unsigned_order_bound_to_observed_token_amount_and_wallet():
     }
     assert "referralFee" not in call.kwargs["params"]
     assert call.kwargs["headers"]["x-api-key"] == "server-secret"
+
+
+def test_prepares_sell_order_bound_to_direction_token_units_and_wallet():
+    _pending_orders.clear()
+
+    order = _prepare_sell()
+
+    assert order["status"] == "WALLET_APPROVAL_REQUIRED"
+    assert order["side"] == "sell"
+    assert order["token_mint"] == TOKEN
+    assert order["input_mint"] == TOKEN
+    assert order["output_mint"] == WRAPPED_SOL_MINT
+    assert order["input_amount_ui"] == "1.5"
+    assert order["input_amount_raw"] == "1500000"
+    assert order["input_decimals"] == 6
+    assert order["output_amount_ui"] == "0.123"
+    pending = _pending_orders[order["request_id"]]
+    assert pending.side == "sell"
+    assert pending.input_mint == TOKEN
+    assert pending.output_mint == WRAPPED_SOL_MINT
+    assert pending.input_amount_raw == "1500000"
 
 
 def test_requires_explicit_risk_acknowledgement_before_requesting_order():
@@ -374,9 +424,50 @@ def test_provider_failure_is_reported_without_exposing_secrets():
     )
     assert result == {
         "status": "SWAP_FAILED", "request_id": order["request_id"],
+        "side": "buy",
         "error": "Slippage tolerance exceeded", "code": 6001,
         "dexsato_integrator_fee_bps": 0,
     }
+
+
+def test_executes_sell_only_from_the_bound_pending_order():
+    _pending_orders.clear()
+    order = _prepare_sell()
+    signed = _transaction(bytes([9]) * 64)
+    request_post = Mock(return_value=_response({
+        "status": "Success",
+        "signature": "8" * 88,
+        "inputAmountResult": "1500000",
+        "outputAmountResult": "122000000",
+    }))
+
+    result = execute_jupiter_swap(
+        TOKEN, order["request_id"], WALLET, signed,
+        api_key="server-secret", feed=FEED, request_post=request_post,
+        now=lambda: NOW + timedelta(seconds=10),
+    )
+
+    assert result["status"] == "SWAP_CONFIRMED"
+    assert result["side"] == "sell"
+    assert result["input_mint"] == TOKEN
+    assert result["output_mint"] == WRAPPED_SOL_MINT
+    assert result["input_amount_raw"] == "1500000"
+    assert result["output_amount_raw"] == "122000000"
+
+
+def test_sell_transaction_rejects_any_native_sol_transfer_from_wallet():
+    wallet = _base58_bytes(WALLET)
+    static_accounts = [wallet, _base58_bytes(SYSTEM_PROGRAM), _base58_bytes(JUPITER_V6_PROGRAM)]
+    transfer = (2).to_bytes(4, "little") + (1).to_bytes(8, "little")
+    instructions = [
+        _CompiledInstruction(1, (0, 1), transfer),
+        _CompiledInstruction(2, (0,), b"\x01"),
+    ]
+
+    with pytest.raises(JupiterSwapRejected, match="exceeds"):
+        _validate_transaction_policy(
+            [wallet], static_accounts, instructions, wallet, 0,
+        )
 
 
 def test_rejects_a_second_submission_while_the_same_transaction_is_in_flight():

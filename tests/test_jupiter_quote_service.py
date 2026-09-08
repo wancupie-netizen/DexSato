@@ -66,6 +66,56 @@ def test_returns_quote_without_taker_or_transaction_material():
     assert call.kwargs["headers"]["x-api-key"] == "server-secret"
 
 
+def test_returns_sell_quote_with_token_input_units_and_sol_output():
+    request_post = Mock(return_value=_response({
+        "jsonrpc": "2.0",
+        "result": {"value": {"amount": "1", "decimals": 6}},
+    }))
+    request_get = Mock(return_value=_response({
+        "inputMint": TOKEN,
+        "outputMint": WRAPPED_SOL_MINT,
+        "inAmount": "1500000",
+        "outAmount": "123000000",
+        "otherAmountThreshold": "120000000",
+        "router": "metis",
+        "transaction": None,
+    }))
+
+    quote = fetch_jupiter_quote(
+        TOKEN, "1.5", side="sell", api_key="server-secret", feed=FEED,
+        request_get=request_get, request_post=request_post,
+    )
+
+    assert quote["side"] == "sell"
+    assert quote["token_mint"] == TOKEN
+    assert quote["input_mint"] == TOKEN
+    assert quote["output_mint"] == WRAPPED_SOL_MINT
+    assert quote["input_amount_ui"] == "1.5"
+    assert quote["input_amount_raw"] == "1500000"
+    assert quote["input_decimals"] == 6
+    assert quote["output_amount_ui"] == "0.123"
+    assert quote["minimum_received_ui"] == "0.12"
+    assert quote["input_amount_sol"] is None
+    assert request_get.call_args.kwargs["params"] == {
+        "inputMint": TOKEN,
+        "outputMint": WRAPPED_SOL_MINT,
+        "amount": "1500000",
+    }
+
+
+def test_sell_quote_fails_closed_when_token_decimals_are_unavailable():
+    request_get = Mock()
+    request_post = Mock(side_effect=RuntimeError("rpc unavailable"))
+
+    with pytest.raises(JupiterQuoteUnavailable, match="decimals"):
+        fetch_jupiter_quote(
+            TOKEN, "1", side="sell", api_key="key", feed=FEED,
+            request_get=request_get, request_post=request_post,
+        )
+
+    request_get.assert_not_called()
+
+
 def test_resolves_missing_output_decimals_from_solana_mint():
     request_get = Mock(return_value=_response({
         "outputMint": TOKEN,

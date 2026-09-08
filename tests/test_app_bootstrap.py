@@ -246,7 +246,23 @@ def test_should_return_quote_only_jupiter_sandbox(mock_quote):
     result = solana_discovery_jupiter_quote("11111111111111111111111111111111", "0.1")
 
     assert result["quote_only"] is True
-    mock_quote.assert_called_once_with("11111111111111111111111111111111", "0.1")
+    mock_quote.assert_called_once_with(
+        "11111111111111111111111111111111", "0.1", side="buy",
+    )
+
+
+@patch("application.jupiter_quote_service.fetch_jupiter_quote")
+def test_should_bind_sell_side_and_token_amount_to_jupiter_quote(mock_quote):
+    mock_quote.return_value = {"status": "QUOTE_READY", "side": "sell"}
+
+    result = solana_discovery_jupiter_quote(
+        "11111111111111111111111111111111", amount="125.5", side="sell",
+    )
+
+    assert result["side"] == "sell"
+    mock_quote.assert_called_once_with(
+        "11111111111111111111111111111111", "125.5", side="sell",
+    )
 
 
 @patch("application.jupiter_swap_service.prepare_jupiter_swap")
@@ -264,6 +280,33 @@ def test_should_prepare_unsigned_swap_only_after_explicit_risk_acknowledgement(m
     assert result["status"] == "WALLET_APPROVAL_REQUIRED"
     mock_prepare.assert_called_once_with(
         "22222222222222222222222222222222", "0.1", "11111111111111111111111111111111",
+        side="buy",
+        risk_acknowledged=True,
+    )
+
+
+@patch("application.jupiter_swap_service.prepare_jupiter_swap")
+def test_should_bind_sell_side_and_token_amount_to_unsigned_order(mock_prepare):
+    mock_prepare.return_value = {
+        "status": "WALLET_APPROVAL_REQUIRED", "request_id": "sell-order", "side": "sell",
+    }
+    request = Mock()
+    request.json = AsyncMock(return_value={
+        "amount": "125.5",
+        "side": "sell",
+        "wallet_address": "11111111111111111111111111111111",
+        "risk_acknowledged": True,
+    })
+
+    result = asyncio.run(
+        solana_discovery_jupiter_order("22222222222222222222222222222222", request)
+    )
+
+    assert result["side"] == "sell"
+    mock_prepare.assert_called_once_with(
+        "22222222222222222222222222222222", "125.5",
+        "11111111111111111111111111111111",
+        side="sell",
         risk_acknowledged=True,
     )
 
