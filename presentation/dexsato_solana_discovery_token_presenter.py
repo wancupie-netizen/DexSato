@@ -408,10 +408,6 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
     return (
         '<section class="transactions-panel" data-transactions-panel '
         f'data-transactions-url="{transactions_url}">'
-        '<div class="transactions-head">'
-        '<h2>Transactions</h2>'
-        '<span class="transactions-state" data-transactions-state>Loading</span>'
-        '</div>'
         '<div class="recent-flow-label"><span>Recent Flow</span><small>30 latest exact-pool trades</small></div>'
         '<div class="transactions-flow" data-transactions-flow aria-label="Recent transaction flow">'
         '<div class="transactions-flow-item buy"><span>Buy volume</span>'
@@ -428,6 +424,12 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
         '<b class="flow-largest-tone" data-flow-largest>--</b>'
         '<small class="flow-largest-tone" data-flow-largest-side>--</small></div>'
         '</div>'
+        '<div class="transactions-detail-grid">'
+        '<section class="recent-trades-card" aria-label="Recent exact-pool trades">'
+        '<div class="transactions-head">'
+        '<h2>Recent Trades</h2>'
+        '<span class="transactions-state" data-transactions-state>Loading</span>'
+        '</div>'
         '<div class="transactions-table-wrap">'
         '<table class="transactions-table">'
         '<thead><tr>'
@@ -438,11 +440,12 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
         '<tr class="transactions-placeholder">'
         '<td colspan="7">Loading recent exact-pool transactions...</td>'
         '</tr>'
-        '</tbody></table></div>'
+        '</tbody></table></div></section>'
         '<section class="market-activity" data-market-activity aria-label="Multi-timeframe exact-pool market activity">'
-        '<div class="market-activity-head"><div><span>Market Activity</span><small>Exact-pool broader participation</small></div><small data-market-activity-source>Loading aggregate</small></div>'
-        '<div class="market-activity-wrap"><table class="market-activity-table"><thead><tr><th>Metric</th><th>5M</th><th>15M</th><th>30M</th><th>1H</th><th>6H</th><th>24H</th></tr></thead>'
-        '<tbody data-market-activity-body><tr><td colspan="7">Loading exact-pool activity...</td></tr></tbody></table></div></section>'
+        '<div class="market-activity-head"><span>Market Activity</span><small data-market-activity-source>Loading aggregate</small></div>'
+        '<div class="market-activity-wrap"><table class="market-activity-table"><thead><tr><th>Window</th><th>Buy</th><th>Sell</th><th>Trades</th><th>Volume</th></tr></thead>'
+        '<tbody data-market-activity-body><tr><td colspan="5">Loading exact-pool activity...</td></tr></tbody></table></div></section>'
+        '</div>'
         '</section>'
     )
 
@@ -1381,6 +1384,33 @@ html[data-theme="intel"] .transactions-head{border-bottom-color:#28313b}
 html[data-theme="intel"] .transactions-table th{background:#121820}
 html[data-theme="intel"] .transactions-table th,html[data-theme="intel"] .transactions-table td{border-bottom-color:#222b35}
 @media(max-width:700px){.transactions-table-wrap{max-height:none}}
+
+/* TW-DEX-05 — Flow, Recent Trades and Market Activity presentation. */
+.transactions-panel{display:grid;gap:12px;margin-top:14px;border:0;background:transparent;overflow:visible}
+.recent-flow-label{display:flex;align-items:end;justify-content:space-between;gap:10px;padding:0 2px;background:transparent;border:0}.recent-flow-label span{font-size:11px}.recent-flow-label small{margin:0;text-align:right}
+.transactions-flow{grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;border:0;background:transparent}
+.transactions-flow-item{min-height:86px;padding:13px 14px;border:1px solid #2a3948!important;border-radius:10px;background:linear-gradient(155deg,#111b25,#0d151e);box-shadow:0 8px 22px rgba(0,0,0,.12)}
+.transactions-flow-item span{font-weight:750}.transactions-flow-item b{margin-top:7px;font:800 16px/1.15 var(--mono);letter-spacing:-.015em}.transactions-flow-item small{margin-top:6px;font-weight:700}.transactions-flow-meter{margin-top:9px;height:3px}
+.transactions-detail-grid{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(340px,.88fr);gap:10px;align-items:start}
+.recent-trades-card,.market-activity{min-width:0;overflow:hidden;border:1px solid #2a3948;border-radius:11px;background:var(--panel);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.transactions-head,.market-activity-head{min-height:48px;padding:0 14px;border-bottom:1px solid var(--line)}.transactions-head h2,.market-activity-head span{font:800 13px/1.2 var(--mono);letter-spacing:.045em;text-transform:uppercase}.market-activity-head>small{margin:0;text-align:right;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.transactions-state{display:inline-flex;align-items:center;gap:5px;font-weight:800}.transactions-state:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.transactions-table{min-width:640px}.transactions-table th,.transactions-table td{padding:10px 11px}.transactions-table td{font-weight:650}.transactions-table th:nth-child(6),.transactions-table td:nth-child(6){display:none}.transactions-table th:first-child,.transactions-table td:first-child{width:16%}.transactions-table th:nth-child(2),.transactions-table td:nth-child(2){width:13%}.transactions-table th:nth-child(3),.transactions-table td:nth-child(3){width:20%}.transactions-table th:nth-child(4),.transactions-table td:nth-child(4){width:22%}.transactions-table th:nth-child(5),.transactions-table td:nth-child(5){width:17%}.transactions-table th:nth-child(7),.transactions-table td:nth-child(7){width:12%}.transactions-table tbody tr:hover{background:rgba(76,244,214,.025)}
+.market-activity{border-top:1px solid #2a3948}.market-activity-table{min-width:470px}.market-activity-table th,.market-activity-table td{padding:11px 12px;font-weight:700}.market-activity-table th:first-child,.market-activity-table td:first-child{width:20%}.market-activity-table td.activity-buys{color:var(--green)}.market-activity-table td.activity-sells{color:var(--red)}.market-activity-table td.activity-volume{font-weight:800}
+html[data-theme="intel"] .transactions-panel,html[data-theme="intel"] .transactions-flow{background:transparent}html[data-theme="intel"] .recent-trades-card,html[data-theme="intel"] .market-activity{border-color:#303a45;background:#0f141a}
+@media(max-width:980px){.transactions-detail-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.transactions-flow{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.transactions-flow-item:nth-child(-n+2){border-bottom:1px solid #2a3948}.recent-flow-label{align-items:flex-start;flex-direction:column}.recent-flow-label small{text-align:left}.recent-trades-card,.market-activity{border-radius:10px}}
+
+/* TW-DEX-05A — Market Activity visual polish. */
+.market-activity{border-color:#1d2733;background:#0e141c}
+.market-activity-head{border-bottom-color:#1d2733}.market-activity-head span{color:#e7edf4;font-weight:800}.market-activity-head>small{color:#7c8ca0;font-weight:750}
+.market-activity-wrap{overflow-x:hidden}
+.market-activity-table{width:100%;min-width:0;background:#10171f}
+.market-activity-table th,.market-activity-table td{padding:11px 10px;border-right:0!important;border-bottom:0!important;background:transparent!important;font-weight:750}
+.market-activity-table th{color:#45505f;font-weight:800}.market-activity-table td{color:#e7edf4}.market-activity-table td:first-child{color:#7c8ca0;font-weight:800}.market-activity-table td.activity-buys{color:#4cf4d6}.market-activity-table td.activity-sells{color:#ff5c7a}.market-activity-table td.activity-total,.market-activity-table td.activity-volume{color:#e7edf4;font-weight:800}
+.market-activity-table tbody tr:hover{background:rgba(76,244,214,.035)}
+html[data-theme="intel"] .market-activity{border-color:#1d2733;background:#0e141c}html[data-theme="intel"] .market-activity-table{background:#10171f}
+@media(max-width:700px){.market-activity-table{min-width:0}.market-activity-head{align-items:center;flex-direction:row}}
 
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
@@ -3549,7 +3579,7 @@ __CANDLESTICK_CHART_PANEL__
   /* TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI */
   const marketActivityBody=panel.querySelector("[data-market-activity-body]");
   const marketActivitySource=panel.querySelector("[data-market-activity-source]");
-  const MARKET_ACTIVITY_WINDOWS=["m5","m15","m30","h1","h6","h24"];
+  const MARKET_ACTIVITY_WINDOWS=[["m5","5M"],["m15","15M"],["m30","30M"],["h1","1H"],["h6","6H"],["h24","24H"]];
 
   /* TRANSACTIONS_FEED_V15_FLOW_INTELLIGENCE */
   const flowBuyVolume=panel.querySelector("[data-flow-buy-volume]");
@@ -3669,9 +3699,9 @@ __CANDLESTICK_CHART_PANEL__
   function renderMarketActivity(activity){
     if(!marketActivityBody)return;
     const windows=activity&&typeof activity==="object"&&activity.windows&&typeof activity.windows==="object"?activity.windows:{};
-    const specs=[["Buys","buys","activity-buys",activityNumber],["Sells","sells","activity-sells",activityNumber],["Buyers","buyers","activity-buyers",activityNumber],["Sellers","sellers","activity-sellers",activityNumber],["Total Tx","total_transactions","activity-total",activityNumber],["Buy %","buy_percent","activity-buy-percent",activityPercent],["Total Volume","volume_usd","activity-volume",activityUsd]];
+    const specs=[["buys","activity-buys",activityNumber],["sells","activity-sells",activityNumber],["total_transactions","activity-total",activityNumber],["volume_usd","activity-volume",activityUsd]];
     marketActivityBody.replaceChildren();
-    specs.forEach(([label,key,cls,formatter])=>{const tr=document.createElement("tr");tr.className=cls;tr.append(textCell(label));MARKET_ACTIVITY_WINDOWS.forEach(tf=>{const row=windows[tf];const value=row&&typeof row==="object"?row[key]:null;const td=textCell(formatter(value));if(value===null||value===undefined||!Number.isFinite(Number(value)))td.classList.add("activity-unavailable");tr.append(td);});marketActivityBody.append(tr);});
+    MARKET_ACTIVITY_WINDOWS.forEach(([key,label])=>{const row=windows[key];const tr=document.createElement("tr");tr.className="activity-window";tr.append(textCell(label));specs.forEach(([field,cls,formatter])=>{const value=row&&typeof row==="object"?row[field]:null;const td=textCell(formatter(value));td.classList.add(cls);if(value===null||value===undefined||!Number.isFinite(Number(value)))td.classList.add("activity-unavailable");tr.append(td);});marketActivityBody.append(tr);});
     if(marketActivitySource)marketActivitySource.textContent=Object.keys(windows).length?"Exact-pool aggregate":"Aggregate unavailable";
   }
 

@@ -755,7 +755,7 @@ def test_transactions_feed_v121_robust_ui_mount():
     assert "TRANSACTIONS_FEED_V121_ROBUST_UI_MOUNT" in html
     assert 'data-transactions-panel' in html
     assert 'data-transactions-url="/api/discovery/solana/TokenAddress123456789/transactions"' in html
-    assert "<h2>Transactions</h2>" in html
+    assert "<h2>Recent Trades</h2>" in html
     assert "<th>Time</th>" in html
     assert "<th>Type</th>" in html
     assert "<th>Price USD</th>" in html
@@ -1182,12 +1182,12 @@ def test_chart_v24_preserves_v23_trade_mapping_and_live_wiring():
 def test_transactions_v16b_renders_market_activity_ui():
     html=render_solana_discovery_token_page(DETAIL)
     assert "TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI" in html
-    assert "Market Activity" in html and "Exact-pool broader participation" in html
+    assert "Market Activity" in html and "Exact-pool broader participation" not in html
     assert "Exact-pool aggregate" in html
     assert "GeckoTerminal" not in html
     assert "30 latest exact-pool trades" in html
-    assert '["Buyers","buyers"' in html
-    assert '["Total Volume","volume_usd"' in html
+    assert '["buys","activity-buys",activityNumber]' in html
+    assert '["volume_usd","activity-volume",activityUsd]' in html
     assert 'renderMarketActivity(payload.market_activity);' in html
 
 
@@ -1198,3 +1198,42 @@ def test_transactions_v26b_places_readable_market_activity_summary_after_trades(
     assert '.market-activity-head span{display:block;color:var(--text);font:750 12px/1.25 var(--mono)' in html
     assert '.market-activity-table th,.market-activity-table td{padding:10px 12px' in html
     assert 'font:12px/1.35 var(--mono)' in html
+
+
+def test_tw_dex_05_renders_rounded_flow_trades_and_activity_layout_without_new_data():
+    html=render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-DEX-05 — Flow, Recent Trades and Market Activity presentation" in html
+    assert 'class="transactions-flow-item buy"' in html
+    assert 'class="transactions-flow-item sell"' in html
+    assert 'class="transactions-flow-item net"' in html
+    assert 'class="transactions-flow-item largest"' in html
+    assert 'class="transactions-detail-grid"' in html
+    assert 'class="recent-trades-card"' in html
+    assert "<h2>Recent Trades</h2>" in html
+    assert "<th>Window</th><th>Buy</th><th>Sell</th><th>Trades</th><th>Volume</th>" in html
+    assert 'const MARKET_ACTIVITY_WINDOWS=[["m5","5M"],["m15","15M"],["m30","30M"],["h1","1H"],["h6","6H"],["h24","24H"]]' in html
+    assert 'const specs=[["buys","activity-buys",activityNumber],["sells","activity-sells",activityNumber],["total_transactions","activity-total",activityNumber],["volume_usd","activity-volume",activityUsd]]' in html
+    assert ".recent-trades-card,.market-activity{min-width:0;overflow:hidden;border:1px solid #2a3948;border-radius:11px" in html
+    assert "font:800 16px/1.15 var(--mono)" in html
+    assert ".transactions-table th:nth-child(6),.transactions-table td:nth-child(6){display:none}" in html
+    assert "netFlow:buyVolume-sellVolume" in html
+    assert "const POLL_INTERVAL_MS=5000;" in html
+
+
+def test_tw_dex_05a_polishes_market_activity_without_changing_data_contract():
+    html=render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-DEX-05A — Market Activity visual polish" in html
+    assert "Exact-pool broader participation" not in html
+    assert '.market-activity{border-color:#1d2733;background:#0e141c}' in html
+    assert '.market-activity-wrap{overflow-x:hidden}' in html
+    assert '.market-activity-table{width:100%;min-width:0;background:#10171f}' in html
+    assert 'border-right:0!important;border-bottom:0!important' in html
+    assert '.market-activity-table td.activity-buys{color:#4cf4d6}' in html
+    assert '.market-activity-table td.activity-sells{color:#ff5c7a}' in html
+    assert '.market-activity-table td.activity-total,.market-activity-table td.activity-volume{color:#e7edf4;font-weight:800}' in html
+    assert 'const MARKET_ACTIVITY_WINDOWS=[["m5","5M"],["m15","15M"],["m30","30M"],["h1","1H"],["h6","6H"],["h24","24H"]]' in html
+    assert 'const specs=[["buys","activity-buys",activityNumber],["sells","activity-sells",activityNumber],["total_transactions","activity-total",activityNumber],["volume_usd","activity-volume",activityUsd]]' in html
+    assert 'renderMarketActivity(payload.market_activity);' in html
+    assert "const POLL_INTERVAL_MS=5000;" in html
