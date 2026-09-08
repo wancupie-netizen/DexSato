@@ -208,29 +208,37 @@ def _info_link(label: str, url: str, css_class: str) -> str:
 
 
 def _token_overview_card(detail: dict[str, Any]) -> str:
+    """Render the production token data in the TW-DEX compact market header."""
     symbol = escape(str(detail.get("symbol") or "Unknown"))
     quote = escape(str(detail.get("quote_symbol") or "SOL"))
     name = escape(str(detail.get("name") or "Unknown token"))
 
     token_raw = str(detail.get("token_address") or "")
-    contract_short = escape(_compact_contract(token_raw))
     token_attr = escape(token_raw, quote=True)
+    contract_short = escape(_compact_contract(token_raw)) if token_raw else "Unavailable"
 
-    price = _usd(detail.get("price_usd"))
+    pair_raw = str(detail.get("pair_address") or "")
+    pair_attr = escape(pair_raw, quote=True)
+    pair_short = escape(_compact_contract(pair_raw)) if pair_raw else "Unavailable"
+
+    price = escape(_usd(detail.get("price_usd")))
     change_text, change_tone = _change_percent(detail.get("change_24h"))
     if change_text == "&#8212;":
         change_text = "Unavailable"
 
+    liquidity = escape(_usd(detail.get("liquidity_usd")))
+    volume_24h = escape(_usd(detail.get("volume_24h_usd")))
     dex = escape(_dex_display(detail.get("dex_id")))
 
     age_value = _pair_age_display(detail)
-    if age_value == "Age unavailable":
-        age_text = "Age unavailable"
-    else:
-        age_text = f"{age_value} old"
-    age_text = escape(age_text)
+    age_text = escape(age_value if age_value != "Age unavailable" else "Unavailable")
 
     source_url = _external_link(detail.get("source_url"))
+    dex_html = (
+        f'<a class="tw-market-dex" href="{escape(source_url, quote=True)}" '
+        f'target="_blank" rel="noopener noreferrer">{dex}</a>'
+        if source_url else f'<span class="tw-market-dex">{dex}</span>'
+    )
 
     image_url = _external_link(detail.get("token_image_url"))
     if image_url:
@@ -243,62 +251,57 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
         avatar = f'<span class="token-avatar-fallback" aria-hidden="true">{initial}</span>'
 
     status = str(detail.get("quote_status") or "STORED").upper()
-    status_html = (
-        '<span class="token-live"><i></i>LIVE</span>'
-        if status == "LIVE"
-        else '<span class="token-live stored"><i></i>STORED</span>'
+    status_label = "LIVE" if status == "LIVE" else "STORED"
+    status_class = "" if status == "LIVE" else " stored"
+
+    token_copy = (
+        f'<button class="copy-address tw-market-copy" type="button" '
+        f'data-copy-address="{token_attr}" aria-label="Copy token contract">Copy</button>'
+        if token_raw else ""
     )
-
-    if source_url:
-        dex_html = (
-            f'<a class="token-dex" href="{escape(source_url, quote=True)}" '
-            f'target="_blank" rel="noopener noreferrer">{dex}</a>'
-        )
-    else:
-        dex_html = f'<span class="token-dex">{dex}</span>'
-
-    website = _info_link("Website", str(detail.get("website_url") or ""), "website")
-    telegram = _info_link("Telegram", str(detail.get("telegram_url") or ""), "telegram")
-    twitter = _info_link("Twitter", str(detail.get("twitter_url") or ""), "twitter")
-
-    social_links = [link for link in (website, telegram, twitter) if link]
-    social_html = ""
-    if social_links:
-        social_html = (
-            '<span class="token-meta-sep social-sep">&#8226;</span>'
-            + '<span class="token-social-links">'
-            + '<span class="token-meta-sep social-inner-sep">&#8226;</span>'.join(social_links)
-            + '</span>'
-        )
+    pair_copy = (
+        f'<button class="copy-address tw-market-copy" type="button" '
+        f'data-copy-address="{pair_attr}" aria-label="Copy pair address">Copy</button>'
+        if pair_raw else ""
+    )
 
     return (
-        '<section class="token-overview-card" aria-label="Token market overview">'
-        '<div class="token-overview-main">'
-        f'<div class="token-avatar">{avatar}</div>'
-        '<div class="token-overview-heading">'
+        '<section class="token-overview-card tw-market-header" aria-label="Token market overview">'
+        '<div class="tw-market-top">'
+        '<div class="tw-market-identity">'
+        f'<div class="token-avatar tw-market-avatar">{avatar}</div>'
+        '<div class="tw-market-identity-copy">'
         f'<h1>{symbol} / {quote}</h1>'
-        '<div class="token-price-row">'
-        f'<strong>{escape(price)}</strong>'
-        f'<span class="token-change {escape(change_tone)}">{change_text}</span>'
+        f'<span>{name} · {dex} exact pool</span>'
         '</div></div>'
-        '<div class="token-overview-actions">'
-        f'{status_html}'
-        f'<button class="token-watch" type="button" data-watch-token="{token_attr}" '
-        f'aria-label="Watch {symbol}"><span aria-hidden="true">&#9734;</span> Watch</button>'
-        '</div></div>'
-        '<div class="token-meta-row">'
-        f'{dex_html}<span class="token-meta-sep">&#8226;</span>'
-        f'<span class="token-age"><svg class="token-age-leaf" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M20.7 3.3C14.6 3.6 9.4 5.7 6.5 9.1c-2.2 2.6-2.8 5.6-1.7 8.2 3.5-4.5 7.6-7.2 12.8-8.9-4.5 2.1-8 5-10.8 8.9 2.7.4 5.4-.7 7.4-3.1 2.6-3.1 3.7-7.8 3.5-10.9z"/></svg> {age_text}</span>'
-        '<span class="token-meta-sep">&#8226;</span>'
-        f'<span class="token-contract">Contract <code title="{token_attr}">{contract_short}</code></span>'
-        f'<button class="copy-address token-copy" type="button" data-copy-address="{token_attr}">Copy</button>'
-        f'{social_html}'
+        '<div class="tw-market-price">'
+        '<span>PRICE · USD</span>'
+        f'<strong>{price}</strong>'
+        f'<b class="token-change {escape(change_tone)}">{change_text} · 24H</b>'
+        '</div>'
+        '<div class="tw-market-kpi"><span>DEX VENUE</span>'
+        f'<strong>{dex_html}</strong></div>'
+        '<div class="tw-market-kpi"><span>AGE</span>'
+        f'<strong>{age_text}</strong></div>'
+        '<div class="tw-market-kpi"><span>LIQUIDITY</span>'
+        f'<strong>{liquidity}</strong></div>'
+        '<div class="tw-market-kpi"><span>VOLUME · 24H</span>'
+        f'<strong>{volume_24h}</strong></div>'
+        '</div>'
+        '<div class="tw-market-meta">'
+        '<div class="tw-market-meta-cell"><span>CONTRACT</span><div>'
+        f'<code title="{token_attr}">{contract_short}</code>{token_copy}</div></div>'
+        '<div class="tw-market-meta-cell"><span>PAIR ADDRESS</span><div>'
+        f'<code title="{pair_attr}">{pair_short}</code>{pair_copy}</div></div>'
+        '<div class="tw-market-meta-cell"><span>STATUS</span>'
+        f'<strong class="tw-market-status{status_class}"><i></i>{status_label}</strong></div>'
+        '<div class="tw-market-meta-cell tw-market-watch-cell"><span>ACTION</span>'
+        f'<button class="token-watch tw-market-watch" type="button" data-watch-token="{token_attr}" '
+        f'aria-label="Watch {symbol}"><span aria-hidden="true">&#9734;</span> Watch</button></div>'
         '</div>'
         f'{_trader_timeframe_strip(detail)}'
-        '<span class="token-name-context">' + name + '</span>'
         '</section>'
     )
-
 
 # TOKEN_WORKSPACE_V24_NAMEERROR_HOTFIX
 # TOKEN_WORKSPACE_V24_SINGLE_TF_STRIP
@@ -337,10 +340,17 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
 
     token_address = escape(str(detail.get("token_address") or ""), quote=True)
     live_url = f"/api/discovery/solana/{token_address}/candles"
+    current_price_value = detail.get("price_usd")
+    try:
+        current_price = float(current_price_value)
+        current_price_attr = str(current_price) if current_price > 0 else ""
+    except (TypeError, ValueError):
+        current_price_attr = ""
 
     return (
         '<section class="candlestick-panel" data-candlestick-panel '
-        f'data-live-candle-url="{live_url}">'
+        f'data-live-candle-url="{live_url}" '
+        f'data-current-price-usd="{escape(current_price_attr, quote=True)}">'
         '<div class="candle-toolbar">'
         '<div class="candle-timeframe-tabs" role="group" aria-label="Candlestick timeframe">'
         + buttons
@@ -1412,7 +1422,530 @@ html[data-theme="intel"] .coin-list-search input{border-color:#303a45;background
 /* TOKEN_OBSERVATION_V28_LEFT_RAIL */
 .token-observation-v28{padding:17px}.token-observation-v28 .workspace-rail-head{padding:0 0 12px}.token-observation-rows{border-top:1px solid var(--line)}.token-observation-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}.token-observation-row span{color:var(--muted);font-size:11px}.token-observation-value{text-align:right;font:650 12px/1.35 var(--mono)}.token-observation-value.up,.token-observation-value.verified{color:var(--green)}.token-observation-value.down{color:var(--red)}.token-observation-note{margin:13px 0 0;padding:10px 11px;border-left:2px solid var(--amber);background:rgba(255,148,24,.055);color:var(--muted);font-size:10px;line-height:1.45}
 
-</style></head><body><main class="shell"><header class="topbar"><div class="brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><strong>Solana Discovery</strong></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
+
+/* TW-DEX-01 — Shell & Workspace Grid
+   Presentation-only. Existing token, chart, transaction, qualification and Jupiter hooks remain unchanged. */
+.tw-dex-app{
+  min-height:100vh;
+  display:grid;
+  grid-template-columns:144px minmax(0,1fr);
+  background:
+    linear-gradient(rgba(76,244,214,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(76,244,214,.025) 1px,transparent 1px),
+    #080B10;
+  background-size:42px 42px;
+}
+.tw-dex-side{
+  position:sticky;top:0;height:100vh;min-width:0;
+  display:flex;flex-direction:column;
+  padding:14px 12px;
+  border-right:1px solid #1D2733;
+  background:#0B1118;
+  z-index:20;
+}
+.tw-dex-side-brand{
+  min-height:48px;display:flex;align-items:center;gap:10px;
+  padding:0 4px 12px;border-bottom:1px solid #1D2733;
+  color:#E7EDF4;text-decoration:none;
+}
+.tw-dex-side-brand img{width:30px;height:30px;object-fit:contain;flex:0 0 30px}
+.tw-dex-side-brand span{min-width:0;display:block}
+.tw-dex-side-brand strong{
+  display:block;font-family:"Space Grotesk","Segoe UI",sans-serif;
+  font-size:16px;font-weight:700;line-height:1;letter-spacing:-.02em;
+}
+.tw-dex-side-brand small{
+  display:block;margin-top:4px;color:#45505F;
+  font-family:"JetBrains Mono","Cascadia Mono",monospace;
+  font-size:7px;line-height:1;letter-spacing:.12em;white-space:nowrap;
+}
+.tw-dex-side-nav{display:grid;gap:6px;margin-top:18px}
+.tw-dex-side-nav a,.tw-dex-side-nav span{
+  display:block;padding:10px 9px;border-left:2px solid transparent;
+  color:#7C8CA0;font-family:"Space Grotesk","Segoe UI",sans-serif;
+  font-size:11px;font-weight:600;text-decoration:none;
+}
+.tw-dex-side-nav .active{
+  color:#4CF4D6;border-left-color:#4CF4D6;
+  background:linear-gradient(90deg,rgba(76,244,214,.08),transparent);
+}
+.tw-dex-side-bottom{display:grid;gap:4px;margin-top:auto}
+.tw-dex-side-bottom span{
+  display:block;padding:8px 9px;color:#45505F;
+  font-family:"JetBrains Mono","Cascadia Mono",monospace;font-size:9px;
+}
+.tw-dex-stage{min-width:0;display:grid;grid-template-rows:64px minmax(0,1fr)}
+.tw-dex-topbar{
+  position:sticky;top:0;z-index:19;
+  min-height:64px;padding:0 20px;border-bottom:1px solid #1D2733;
+  background:rgba(8,11,16,.94);backdrop-filter:blur(12px);
+}
+.tw-dex-topbar .tw-dex-brand{gap:10px}
+.tw-dex-topbar .tw-dex-brand>img{display:none}
+.tw-dex-topbar .tw-dex-brand>span{display:flex;align-items:baseline;gap:9px}
+.tw-dex-topbar .tw-dex-brand strong{
+  font-family:"Space Grotesk","Segoe UI",sans-serif;font-size:18px;font-weight:700;letter-spacing:-.02em;
+}
+.tw-dex-topbar .tw-dex-brand small{
+  color:#45505F;font-family:"JetBrains Mono","Cascadia Mono",monospace;
+  font-size:8px;letter-spacing:.12em;
+}
+.tw-dex-content{
+  width:100%!important;max-width:none!important;margin:0!important;
+  padding:14px!important;min-width:0;
+}
+.tw-dex-workspace-title{
+  min-height:31px;display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin:0 0 10px;padding:0 2px;
+}
+.tw-dex-workspace-title h1{
+  margin:0;color:#E7EDF4;font-family:"Space Grotesk","Segoe UI",sans-serif;
+  font-size:18px;font-weight:700;line-height:1.1;letter-spacing:-.02em;
+}
+.tw-dex-workspace-title span{
+  color:#7C8CA0;font-family:"JetBrains Mono","Cascadia Mono",monospace;
+  font-size:9px;letter-spacing:.06em;
+}
+/* Keep the production three-zone workspace, but size it to the approved DEX mockup proportions. */
+.tw-dex-content .token-workspace-v26{
+  display:grid!important;
+  grid-template-columns:230px minmax(0,1fr) 340px!important;
+  gap:10px!important;align-items:start!important;margin-top:0!important;
+}
+.tw-dex-content .workspace-rail-v26{gap:10px!important;top:78px}
+.tw-dex-content .workspace-main-v26{min-width:0}
+.tw-dex-content .workspace-left-v26{grid-column:1}
+.tw-dex-content .workspace-main-v26{grid-column:2}
+.tw-dex-content .workspace-right-v26{grid-column:3}
+
+@media(max-width:1450px){
+  .tw-dex-app{grid-template-columns:116px minmax(0,1fr)}
+  .tw-dex-side-brand span{display:none}
+  .tw-dex-side-nav a,.tw-dex-side-nav span{padding-left:7px;padding-right:5px;font-size:10px}
+  .tw-dex-content .token-workspace-v26{grid-template-columns:210px minmax(0,1fr) 320px!important}
+}
+@media(max-width:1180px){
+  .tw-dex-content .token-workspace-v26{grid-template-columns:minmax(0,1fr) minmax(290px,340px)!important}
+  .tw-dex-content .workspace-main-v26{grid-column:1!important;grid-row:1!important}
+  .tw-dex-content .workspace-right-v26{grid-column:2!important;grid-row:1!important;position:static!important}
+  .tw-dex-content .workspace-left-v26{
+    grid-column:1/-1!important;grid-row:2!important;position:static!important;
+    grid-template-columns:1fr 1fr!important;
+  }
+}
+@media(max-width:820px){
+  .tw-dex-app{display:block}
+  .tw-dex-side{display:none}
+  .tw-dex-stage{display:block}
+  .tw-dex-topbar{min-height:60px;padding:0 10px}
+  .tw-dex-topbar .tw-dex-brand small{display:none}
+  .tw-dex-content{padding:10px!important}
+  .tw-dex-content .token-workspace-v26{grid-template-columns:1fr!important}
+  .tw-dex-content .workspace-main-v26{grid-column:1!important;grid-row:1!important}
+  .tw-dex-content .workspace-left-v26{grid-column:1!important;grid-row:2!important;grid-template-columns:1fr 1fr!important}
+  .tw-dex-content .workspace-right-v26{grid-column:1!important;grid-row:3!important;grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:620px){
+  .tw-dex-workspace-title span{font-size:8px}
+  .tw-dex-content .workspace-left-v26,.tw-dex-content .workspace-right-v26{grid-template-columns:1fr!important}
+}
+
+
+/* TW-DEX-02 — Compact Market Header
+   Presentation/data mapping only. Existing production data sources and hooks are preserved. */
+.tw-market-header{
+  margin:0!important;padding:0!important;border:1px solid #1D2733!important;
+  border-radius:0!important;background:#0E141C!important;overflow:hidden;
+}
+.tw-market-top{
+  display:grid;grid-template-columns:minmax(220px,1.2fr) minmax(170px,.85fr)
+  repeat(4,minmax(88px,.55fr));min-height:92px;
+}
+.tw-market-top>div{min-width:0;padding:15px 14px;border-right:1px solid #1D2733}
+.tw-market-top>div:last-child{border-right:0}
+.tw-market-identity{display:flex;align-items:center;gap:12px}
+.tw-market-avatar{
+  width:50px!important;height:50px!important;flex:0 0 50px;border:1px solid #2A3847!important;
+  border-radius:50%!important;background:#0B1118!important;
+}
+.tw-market-avatar .token-avatar-fallback{font:700 20px/1 "Space Grotesk","Segoe UI",sans-serif}
+.tw-market-identity-copy{min-width:0}
+.tw-market-identity-copy h1{
+  margin:0;color:#E7EDF4;font-family:"Space Grotesk","Segoe UI",sans-serif;
+  font-size:22px;font-weight:700;line-height:1.05;letter-spacing:-.025em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tw-market-identity-copy>span{
+  display:block;margin-top:6px;color:#7C8CA0;
+  font-family:"JetBrains Mono","Cascadia Mono",monospace;font-size:9px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tw-market-price>span,.tw-market-kpi>span,.tw-market-meta-cell>span{
+  display:block;color:#45505F;font-family:"JetBrains Mono","Cascadia Mono",monospace;
+  font-size:8px;font-weight:600;line-height:1.2;letter-spacing:.08em;text-transform:uppercase;
+}
+.tw-market-price strong{
+  display:block;margin-top:7px;color:#E7EDF4;
+  font-family:"Space Grotesk","Segoe UI",sans-serif;font-size:22px;font-weight:700;line-height:1.1;
+  font-variant-numeric:tabular-nums;
+}
+.tw-market-price .token-change{
+  display:block;margin-top:7px;padding:0;border:0!important;background:transparent!important;
+  font-family:"JetBrains Mono","Cascadia Mono",monospace;font-size:10px;font-weight:700;line-height:1.2;
+}
+.tw-market-price .token-change.up{color:#31D89C}
+.tw-market-price .token-change.down{color:#FF5C7A}
+.tw-market-price .token-change.flat,.tw-market-price .token-change.unavailable{color:#7C8CA0}
+.tw-market-kpi strong{
+  display:block;margin-top:9px;color:#E7EDF4;font-family:"Space Grotesk","Segoe UI",sans-serif;
+  font-size:12px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tw-market-dex{color:#E7EDF4!important;text-decoration:none!important}
+a.tw-market-dex:hover{color:#4CF4D6!important}
+.tw-market-meta{
+  display:grid;grid-template-columns:minmax(170px,1.25fr) minmax(170px,1.25fr) minmax(100px,.6fr) minmax(100px,.55fr);
+  border-top:1px solid #1D2733;
+}
+.tw-market-meta-cell{min-width:0;padding:9px 11px;border-right:1px solid #1D2733}
+.tw-market-meta-cell:last-child{border-right:0}
+.tw-market-meta-cell>div{display:flex;align-items:center;gap:7px;min-width:0;margin-top:4px}
+.tw-market-meta-cell code{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:#C9D5E2;font-family:"JetBrains Mono","Cascadia Mono",monospace;font-size:9px;
+}
+.tw-market-copy{
+  flex:0 0 auto;margin:0!important;padding:3px 5px!important;border:1px solid #2A3847!important;
+  border-radius:2px!important;color:#4CF4D6!important;font:600 7px/1.2 "JetBrains Mono","Cascadia Mono",monospace!important;
+}
+.tw-market-status{
+  display:inline-flex;align-items:center;gap:6px;margin-top:5px;color:#31D89C;
+  font-family:"JetBrains Mono","Cascadia Mono",monospace;font-size:9px;font-weight:700;
+}
+.tw-market-status i{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+.tw-market-status.stored{color:#7C8CA0}
+.tw-market-watch{
+  min-height:0!important;margin-top:4px;padding:3px 6px!important;border:1px solid #2A3847!important;
+  border-radius:2px!important;background:transparent!important;color:#7C8CA0!important;
+  font:600 8px/1.2 "JetBrains Mono","Cascadia Mono",monospace!important;
+}
+.tw-market-watch.active{color:#F4B95F!important;border-color:rgba(244,185,95,.45)!important}
+.tw-market-header .trader-tf-strip{
+  width:100%!important;max-width:none!important;margin:0!important;
+  grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  border:0!important;border-top:1px solid #1D2733!important;border-radius:0!important;
+  background:#0B1118!important;
+}
+.tw-market-header .trader-tf-cell{
+  padding:8px 10px!important;border-right:1px solid #1D2733!important;
+}
+.tw-market-header .trader-tf-cell:last-child{border-right:0!important}
+.tw-market-header .trader-tf-cell span{
+  color:#45505F!important;font-family:"JetBrains Mono","Cascadia Mono",monospace!important;
+  font-size:8px!important;font-weight:600!important;letter-spacing:.06em!important;
+}
+.tw-market-header .trader-tf-value{
+  margin-top:4px!important;font-family:"JetBrains Mono","Cascadia Mono",monospace!important;
+  font-size:10px!important;font-weight:700!important;letter-spacing:0!important;
+}
+.tw-market-header .trader-tf-value.up{color:#31D89C!important}
+.tw-market-header .trader-tf-value.down{color:#FF5C7A!important}
+.tw-market-header .trader-tf-value.unavailable{color:#7C8CA0!important}
+
+@media(max-width:1450px){
+  .tw-market-top{grid-template-columns:minmax(210px,1.2fr) minmax(155px,.85fr) repeat(2,minmax(84px,.55fr))}
+  .tw-market-top>.tw-market-kpi:nth-last-child(-n+2){display:none}
+  .tw-market-meta{grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) 92px 90px}
+}
+@media(max-width:1180px){
+  .tw-market-top{grid-template-columns:minmax(210px,1.15fr) minmax(150px,.85fr) repeat(2,minmax(82px,.55fr))}
+}
+@media(max-width:820px){
+  .tw-market-top{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+  .tw-market-top>.tw-market-kpi{display:none!important}
+  .tw-market-meta{grid-template-columns:1fr 1fr}
+  .tw-market-meta-cell:nth-child(2){border-right:0}
+  .tw-market-meta-cell:nth-child(-n+2){border-bottom:1px solid #1D2733}
+  .tw-market-header .trader-tf-strip{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .tw-market-header .trader-tf-cell:nth-child(3){border-right:0!important}
+  .tw-market-header .trader-tf-cell:nth-child(-n+3){border-bottom:1px solid #1D2733!important}
+}
+@media(max-width:520px){
+  .tw-market-top{grid-template-columns:1fr}
+  .tw-market-top>div{border-right:0;border-bottom:1px solid #1D2733}
+  .tw-market-price strong{font-size:20px}
+  .tw-market-meta{grid-template-columns:1fr}
+  .tw-market-meta-cell{border-right:0!important;border-bottom:1px solid #1D2733}
+  .tw-market-meta-cell:last-child{border-bottom:0}
+}
+
+
+/* TW-DEX-02A — Market Header Round + Weight Polish
+   CSS-only. No data, behavior, engine, API, chart, transaction or Jupiter changes. */
+.tw-market-header{
+  border-radius:10px!important;
+  overflow:hidden!important;
+}
+.tw-market-identity-copy h1{
+  font-weight:700!important;
+}
+.tw-market-price>span,
+.tw-market-kpi>span,
+.tw-market-meta-cell>span{
+  font-weight:700!important;
+}
+.tw-market-price strong{
+  font-weight:700!important;
+}
+.tw-market-price .token-change{
+  font-weight:700!important;
+}
+.tw-market-kpi strong{
+  font-weight:700!important;
+}
+.tw-market-meta-cell code{
+  font-weight:600!important;
+}
+.tw-market-status{
+  font-weight:700!important;
+}
+.tw-market-watch{
+  font-weight:700!important;
+}
+.tw-market-header .trader-tf-cell span{
+  font-weight:700!important;
+}
+.tw-market-header .trader-tf-value{
+  font-weight:700!important;
+}
+
+
+/* TW-DEX-03 — Chart Terminal
+   CSS-only presentation pass. Candle data, live API, interactions and JS hooks remain unchanged. */
+.tw-dex-content .candlestick-panel{
+  margin-top:10px!important;
+  border:1px solid #1D2733!important;
+  border-radius:10px!important;
+  background:#0E141C!important;
+  overflow:hidden!important;
+  box-shadow:none!important;
+}
+.tw-dex-content .candle-toolbar{
+  min-height:46px!important;
+  gap:10px!important;
+  border-bottom:1px solid #1D2733!important;
+  background:#0E141C!important;
+}
+.tw-dex-content .candle-timeframe-tabs{
+  gap:3px!important;
+  padding:7px 9px!important;
+  background:transparent!important;
+}
+.tw-dex-content .candle-tf-button{
+  min-width:42px!important;
+  height:30px!important;
+  padding:0 9px!important;
+  border:1px solid transparent!important;
+  border-radius:4px!important;
+  background:transparent!important;
+  color:#7C8CA0!important;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+  font-size:9px!important;
+  font-weight:700!important;
+  letter-spacing:.02em!important;
+}
+.tw-dex-content .candle-tf-button:hover{
+  color:#E7EDF4!important;
+  background:#10171F!important;
+  border-color:#1D2733!important;
+}
+.tw-dex-content .candle-tf-button.active{
+  color:#4CF4D6!important;
+  background:rgba(76,244,214,.055)!important;
+  border-color:#4CF4D6!important;
+}
+.tw-dex-content .candle-toolbar-actions{
+  gap:9px!important;
+  padding:7px 10px 7px 0!important;
+}
+.tw-dex-content .candle-ohlc{
+  gap:7px 10px!important;
+  color:#7C8CA0!important;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+  font-size:8px!important;
+  font-weight:700!important;
+  letter-spacing:.01em!important;
+}
+.tw-dex-content .candle-ohlc span{
+  color:#7C8CA0!important;
+}
+.tw-dex-content .candle-ohlc b{
+  color:#E7EDF4!important;
+  font-weight:700!important;
+}
+.tw-dex-content .candle-live-state{
+  color:#4CF4D6!important;
+  border-color:rgba(76,244,214,.34)!important;
+  background:rgba(76,244,214,.045)!important;
+  border-radius:3px!important;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+  font-size:8px!important;
+  font-weight:700!important;
+  letter-spacing:.05em!important;
+}
+.tw-dex-content .candle-live-state i{
+  background:#4CF4D6!important;
+  box-shadow:0 0 8px rgba(76,244,214,.65)!important;
+}
+.tw-dex-content .candle-reset{
+  height:30px!important;
+  padding:0 9px!important;
+  border:1px solid #2A3847!important;
+  border-radius:4px!important;
+  background:transparent!important;
+  color:#7C8CA0!important;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+  font-size:8px!important;
+  font-weight:700!important;
+}
+.tw-dex-content .candle-reset:hover{
+  color:#E7EDF4!important;
+  background:#10171F!important;
+}
+.tw-dex-content .candlestick-stage{
+  min-height:450px!important;
+  padding:0!important;
+  background:
+    linear-gradient(rgba(124,140,160,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(124,140,160,.045) 1px,transparent 1px),
+    #0A1118!important;
+  background-size:100% 54px,86px 100%!important;
+}
+.tw-dex-content .candlestick-chart{
+  display:block!important;
+  width:100%!important;
+  height:450px!important;
+  background:transparent!important;
+  cursor:crosshair!important;
+}
+.tw-dex-content .candlestick-grid{
+  stroke:#1D2733!important;
+  stroke-opacity:.88!important;
+  stroke-width:1!important;
+}
+.tw-dex-content .candlestick-axis-line{
+  stroke:#2A3847!important;
+  stroke-opacity:.75!important;
+}
+.tw-dex-content .candlestick-axis,
+.tw-dex-content .candlestick-axis-label,
+.tw-dex-content .candlestick-time-label{
+  fill:#7C8CA0!important;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+  font-size:9px!important;
+  font-weight:600!important;
+}
+.tw-dex-content .candlestick-up{
+  stroke:#31D89C!important;
+  fill:#31D89C!important;
+}
+.tw-dex-content .candlestick-down{
+  stroke:#FF5C7A!important;
+  fill:#FF5C7A!important;
+}
+.tw-dex-content .candlestick-wick{
+  stroke-width:1.25!important;
+}
+.tw-dex-content .candlestick-body{
+  shape-rendering:geometricPrecision;
+}
+.tw-dex-content .candlestick-volume{
+  opacity:.46!important;
+}
+.tw-dex-content .candlestick-price-line{
+  stroke:#4CF4D6!important;
+  stroke-width:1!important;
+  stroke-dasharray:4 3!important;
+}
+.tw-dex-content .candlestick-price-tag{
+  fill:#4CF4D6!important;
+}
+.tw-dex-content .candlestick-price-tag-text{
+  fill:#06110F!important;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+  font-size:9px!important;
+  font-weight:700!important;
+}
+.tw-dex-content .candlestick-crosshair{
+  stroke:#7C8CA0!important;
+  stroke-opacity:.72!important;
+  stroke-width:1!important;
+  stroke-dasharray:3 4!important;
+}
+.tw-dex-content .candlestick-cross-label{
+  fill:#10171F!important;
+  stroke:#2A3847!important;
+}
+.tw-dex-content .candlestick-cross-label-text{
+  fill:#E7EDF4!important;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+  font-size:9px!important;
+  font-weight:700!important;
+}
+.tw-dex-content .candlestick-empty{
+  inset:0!important;
+  color:#7C8CA0!important;
+  background:#0A1118!important;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,monospace!important;
+  font-size:10px!important;
+}
+@media(max-width:1180px){
+  .tw-dex-content .candle-ohlc{gap:6px!important;font-size:7.5px!important}
+  .tw-dex-content .candle-tf-button{min-width:38px!important;padding:0 7px!important}
+}
+@media(max-width:820px){
+  .tw-dex-content .candle-toolbar{
+    display:block!important;
+    min-height:0!important;
+  }
+  .tw-dex-content .candle-timeframe-tabs{
+    overflow-x:auto!important;
+    border-bottom:1px solid #1D2733!important;
+  }
+  .tw-dex-content .candle-toolbar-actions{
+    justify-content:space-between!important;
+    padding:7px 9px!important;
+  }
+  .tw-dex-content .candle-ohlc{
+    overflow-x:auto!important;
+    flex-wrap:nowrap!important;
+    justify-content:flex-start!important;
+  }
+  .tw-dex-content .candlestick-stage{min-height:340px!important}
+  .tw-dex-content .candlestick-chart{height:340px!important}
+}
+@media(max-width:520px){
+  .tw-dex-content .candle-ohlc{display:none!important}
+  .tw-dex-content .candle-toolbar-actions{justify-content:flex-end!important}
+  .tw-dex-content .candlestick-stage{min-height:300px!important}
+  .tw-dex-content .candlestick-chart{height:300px!important}
+}
+
+</style></head><body><div class="tw-dex-app">
+<aside class="tw-dex-side" aria-label="DexSato navigation">
+  <a class="tw-dex-side-brand" href="/" aria-label="DexSato home"><img src="/static/branding/dexsato-mark.png" alt=""><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></a>
+  <nav class="tw-dex-side-nav" aria-label="Market navigation">
+    <a href="/discovery/solana">Solana</a>
+    <a href="/">Major Assets</a>
+    <span>Watchlist</span>
+    <span class="active" aria-current="page">Token Workspace</span>
+  </nav>
+  <nav class="tw-dex-side-bottom" aria-label="Secondary navigation">
+    <span>Wallet Profile</span><span>Documentation</span><span>Disclaimer</span>
+  </nav>
+</aside>
+<div class="tw-dex-stage">
+<header class="topbar tw-dex-topbar"><div class="brand tw-dex-brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></div><div class="theme-controls"><a class="back" href="/discovery/solana">&larr; Discovery Feed</a><div class="theme-switcher" role="group" aria-label="Theme"><button class="theme-option" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Dark" aria-pressed="false">&#9790;</button><button class="theme-option" type="button" data-theme-option="intel" aria-label="Use market intelligence theme" title="Market Intelligence" aria-pressed="false">MI</button><button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain light theme" title="Light" aria-pressed="false">&#9728;</button></div></div></header>
+<main class="shell tw-dex-content"><div class="tw-dex-workspace-title"><h1>TOKEN WORKSPACE</h1><span>SOLANA · EXACT POOL</span></div>
 <div class="token-workspace-v26" data-token-workspace-v26>
 <aside class="workspace-rail-v26 workspace-left-v26" aria-label="Token observation and coin navigation">__TOKEN_OBSERVATION_PANEL____COIN_LIST_PANEL__</aside>
 <section class="workspace-main-v26" aria-label="Selected token market evidence">
@@ -1425,7 +1958,7 @@ __CANDLESTICK_CHART_PANEL__
 <section class="card jupiter jupiter-v27" data-jupiter-sandbox data-token-address="__TOKEN__" data-token-symbol="__SYMBOL__"><span class="eyebrow">Jupiter swap</span><h3>Swap SOL for __SYMBOL__</h3><span class="badge">NON-CUSTODIAL</span><div class="wallet-bar-v27"><div class="wallet-state" data-wallet-state>Wallet not connected</div><button class="sandbox-button" type="button" data-connect-wallet>Connect wallet</button></div><div class="sandbox-form"><div class="swap-entry-v27"><label class="swap-leg-v27 swap-pay-v27" for="jupiter-amount"><span class="swap-leg-head-v27"><span>You pay</span><span class="token-pill-v27"><svg class="solana-mark-v27" viewBox="0 0 24 18" aria-hidden="true"><path fill="#9945ff" d="M5 1h17l-4 4H1z"/><path fill="#14f195" d="M6 7h17l-4 4H2z"/><path fill="#00d1ff" d="M5 13h17l-4 4H1z"/></svg>SOL</span></span><input class="swap-amount-v27" id="jupiter-amount" data-quote-amount inputmode="decimal" type="number" min="0.001" max="100" step="0.001" value="0.1"><small class="swap-leg-note-v27">Enter an amount between 0.001 and 100 SOL</small><span class="swap-input-error-v272" data-swap-input-error hidden role="alert"></span></label><div class="swap-leg-v27"><span class="swap-leg-head-v27"><span>You receive</span><span class="token-pill-v27">__SYMBOL__</span></span><b class="swap-receive-v27" data-receive-amount>—</b><small class="swap-leg-note-v27">Estimated after quote</small></div></div><button class="sandbox-button primary" type="button" data-get-quote>Get Jupiter quote</button></div><div class="quote-result quote-result-v27" data-quote-result aria-live="polite"></div><div class="swap-warning-v27"><strong>Before you continue</strong>Price and liquidity can change before wallet approval.</div><label class="swap-consent"><input type="checkbox" data-swap-risk-ack>I reviewed the quote and risks.</label><section class="swap-confirmation-v27" data-confirmation-summary hidden aria-live="polite"></section><button class="sandbox-button primary" type="button" data-execute-swap disabled>Review transaction</button><div class="quote-result" data-swap-result aria-live="polite"></div><p class="wallet-safety-v27"><i aria-hidden="true">&#10003;</i><span>You approve every transaction in your wallet. DexSato never holds your funds. Fees are shown in the quote and order review before wallet approval.</span></p></section>
 <section class="card market-snapshot-v26"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div><section class="qualification"><span class="eyebrow">Qualification evidence</span><h3>Checks passed for this feed</h3><div class="check">Solana token identity</div><div class="check">Exact token and pool match</div><div class="check">Observed liquidity threshold</div><div class="check">Observed 24h activity</div><div class="check">Fresh collector data</div><div class="source">Collector updated __UPDATED__</div></section></section>
 </aside></div>
-<footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>Market observations, indicative quotes and transaction results are distinct.</span></footer></main><script src="/static/js/dexsato_solana_discovery_swap.js?v=phase03d" defer></script><script>
+<footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>Market observations, indicative quotes and transaction results are distinct.</span></footer></main></div></div><script src="/static/js/dexsato_solana_discovery_swap.js?v=phase03d" defer></script><script>
 (function(){
   const options=[...document.querySelectorAll("[data-theme-option]")];
   function applyTheme(theme){
@@ -1703,6 +2236,8 @@ __CANDLESTICK_CHART_PANEL__
   const resetButton=panel.querySelector("[data-candle-reset]");
   const liveState=panel.querySelector("[data-candle-live-state]");
   const liveUrl=panel.dataset.liveCandleUrl||"";
+  const currentObservedPrice=Number(panel.dataset.currentPriceUsd||"");
+  const hasCurrentObservedPrice=Number.isFinite(currentObservedPrice)&&currentObservedPrice>0;
   const ohlc={
     open:panel.querySelector("[data-ohlc-open]"),
     high:panel.querySelector("[data-ohlc-high]"),
@@ -1971,23 +2506,67 @@ __CANDLESTICK_CHART_PANEL__
     const volumeTop=315,volumeBottom=380;
     const timeY=408;
 
-    const values=[];
+    /* TW-DEX-03A — Chart Price Scale Guard
+       Protect the visual Y-axis from malformed/extreme OHLC points without mutating source candles. */
+    const finitePositive=value=>{
+      const n=Number(value);
+      return Number.isFinite(n)&&n>0?n:null;
+    };
+    const median=items=>{
+      if(!items.length) return null;
+      const sorted=[...items].sort((a,b)=>a-b);
+      const middle=Math.floor(sorted.length/2);
+      return sorted.length%2 ? sorted[middle] : (sorted[middle-1]+sorted[middle])/2;
+    };
+
+    const closeValues=visible
+      .map(row=>finitePositive(row.close))
+      .filter(value=>value!==null);
+    /* TW-DEX-03C — Cross-Timeframe Current Price Anchor
+       Use the production observed token price as the canonical visual anchor for every
+       timeframe. Fall back to newest valid candle close only when current price is absent. */
+    const latestClose=[...visible].reverse()
+      .map(row=>finitePositive(row.close))
+      .find(value=>value!==null);
+    const fallbackAnchor=latestClose!==undefined ? latestClose : median(closeValues);
+    const anchor=hasCurrentObservedPrice ? currentObservedPrice : fallbackAnchor;
+
+    const allValues=[];
     visible.forEach(row=>{
       [row.high,row.low,row.open,row.close].forEach(value=>{
-        const n=Number(value);
-        if(Number.isFinite(n)) values.push(n);
+        const n=finitePositive(value);
+        if(n!==null) allValues.push(n);
       });
     });
-    if(!values.length){
+    if(!allValues.length&&!(anchor!==null&&anchor!==undefined&&anchor>0)){
       empty.hidden=false;
       updateOHLC(null);
       state.geometry=null;
       return;
     }
 
-    let low=Math.min(...values),high=Math.max(...values),spread=high-low;
+    let scaleValues=allValues;
+    let scaleGuardLow=null,scaleGuardHigh=null;
+    if(anchor!==null&&anchor!==undefined&&anchor>0){
+      scaleGuardLow=anchor/100;
+      scaleGuardHigh=anchor*100;
+      const guarded=allValues.filter(value=>value>=scaleGuardLow&&value<=scaleGuardHigh);
+      if(guarded.length>=4){
+        scaleValues=guarded;
+      }else if(hasCurrentObservedPrice){
+        /* No compatible candle evidence in this timeframe: keep the axis honest around
+           current production price instead of falling back to stale/malformed history. */
+        scaleValues=[anchor*.99,anchor,anchor*1.01];
+      }else{
+        scaleGuardLow=null;
+        scaleGuardHigh=null;
+      }
+    }
+
+    let low=Math.min(...scaleValues),high=Math.max(...scaleValues),spread=high-low;
+    const renderLow=scaleGuardLow,renderHigh=scaleGuardHigh;
     if(!spread){
-      spread=Math.max(Math.abs(high)*0.02,1e-9);
+      spread=Math.max(Math.abs(high)*0.02,1e-12);
       low-=spread/2; high+=spread/2;
     }else{
       const pad=spread*.08; low-=pad; high+=pad; spread=high-low;
@@ -2013,6 +2592,9 @@ __CANDLESTICK_CHART_PANEL__
     visible.forEach((row,index)=>{
       const open=Number(row.open),close=Number(row.close),highValue=Number(row.high),lowValue=Number(row.low),volume=Number(row.volume)||0;
       if(![open,close,highValue,lowValue].every(Number.isFinite)) return;
+      if([open,close,highValue,lowValue].some(value=>value<=0)) return;
+      if(renderLow!==null&&renderHigh!==null&&
+         [open,close,highValue,lowValue].some(value=>value<renderLow||value>renderHigh)) return;
       const x=left+slot*(index+.5),up=close>=open,cls=up?"candlestick-up":"candlestick-down";
       const yOpen=y(open),yClose=y(close),yHigh=y(highValue),yLow=y(lowValue);
 
@@ -2035,12 +2617,16 @@ __CANDLESTICK_CHART_PANEL__
     });
 
     const last=visible[visible.length-1],lastPrice=Number(last.close);
-    if(Number.isFinite(lastPrice)){
-      const py=y(lastPrice);
+    const displayPrice=hasCurrentObservedPrice ? currentObservedPrice : lastPrice;
+    const displayPriceInScale=
+      Number.isFinite(displayPrice)&&displayPrice>0&&
+      (renderLow===null||renderHigh===null||(displayPrice>=renderLow&&displayPrice<=renderHigh));
+    if(displayPriceInScale){
+      const py=y(displayPrice);
       svg.append(make("line",{x1:left,y1:py,x2:priceRight,y2:py,class:"candlestick-price-line"}));
       svg.append(make("rect",{x:905,y:py-10,width:72,height:20,rx:3,class:"candlestick-price-tag"}));
       const text=make("text",{x:941,y:py+4,"text-anchor":"middle",class:"candlestick-price-tag-text"});
-      text.textContent=formatPrice(lastPrice); svg.append(text);
+      text.textContent=formatPrice(displayPrice); svg.append(text);
     }
 
     updateOHLC(last);
