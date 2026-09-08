@@ -2038,6 +2038,12 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
   .tw-header-gas-v07c{display:none}
 }
 
+/* TW-DEX-07D — Workspace Title Removal
+   UI-only: remove the redundant workspace title row above the terminal grid. */
+.tw-dex-content{
+  padding-top:14px!important;
+}
+
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
 .token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
@@ -2706,8 +2712,7 @@ a.tw-market-dex:hover{color:#4CF4D6!important}
 </aside>
 <div class="tw-dex-stage">
 <header class="topbar tw-dex-topbar"><div class="brand tw-dex-brand"><img src="/static/branding/dexsato-logo.png" alt="DexSato"><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></div><div class="tw-header-tools-v07c"><label class="tw-header-search-v07c"><span class="sr-only">Search token, pair or contract</span><span class="tw-header-search-icon-v07c" aria-hidden="true">&#9906;</span><input type="search" placeholder="Search token, pair or contract" aria-label="Search token, pair or contract" data-header-search-v07c></label><div class="tw-header-gas-v07c" aria-label="Gas status"><i aria-hidden="true"></i><span>Gas · --</span></div><button class="tw-header-wallet-v07b" type="button" data-header-connect-wallet>Connect Wallet</button></div></header>
-<main class="shell tw-dex-content"><div class="tw-dex-workspace-title"><h1>TOKEN WORKSPACE</h1><span>SOLANA · EXACT POOL</span></div>
-<div class="token-workspace-v26" data-token-workspace-v26>
+<main class="shell tw-dex-content"><div class="token-workspace-v26" data-token-workspace-v26>
 <aside class="workspace-rail-v26 workspace-left-v26" aria-label="Coin navigation">__COIN_LIST_PANEL__</aside>
 <section class="workspace-main-v26" aria-label="Selected token market evidence">
 __TOKEN_OVERVIEW_CARD__
