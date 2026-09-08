@@ -1428,9 +1428,10 @@ html[data-theme="intel"] .coin-list-search input{border-color:#303a45;background
 /* TOKEN_WORKSPACE_V272_QUOTE_FAILURE_STATE */
 .swap-input-error-v272{display:block;margin:8px auto 0;padding:7px 8px;border-radius:4px;background:rgba(255,95,120,.07);color:var(--red);font:650 10px/1.4 var(--ui);text-align:left}.swap-input-error-v272[hidden]{display:none}
 /* TW-DEX-04 — two-way Jupiter execution panel, adapted from the approved mockup. */
-.trade-v04{--trade-accent:var(--green);display:grid;gap:12px;padding:16px!important;background:linear-gradient(155deg,#14202a,#0e151e 45%)!important;border-color:#2c3c49!important;box-shadow:0 12px 36px rgba(0,0,0,.2)}
+/* TW-DEX-04A — rounded trade-card polish. */
+.trade-v04{--trade-accent:var(--green);display:grid;gap:12px;padding:16px!important;border-radius:11px!important;overflow:hidden;background:linear-gradient(155deg,#14202a,#0e151e 45%)!important;border-color:#2c3c49!important;box-shadow:0 12px 36px rgba(0,0,0,.2)}
 .trade-v04[data-side="sell"]{--trade-accent:var(--red)}
-.trade-head-v04{display:flex;align-items:center;justify-content:space-between;gap:10px}.trade-head-v04 h3{margin:0!important;font-size:17px!important}.trade-head-v04 .badge{margin:0;padding:5px 7px;border-radius:5px;background:#16322f;border-color:#254c45;color:var(--cyan);font-size:8px}
+.trade-head-v04{display:flex;align-items:center;justify-content:space-between;gap:10px}.trade-head-v04 h3{margin:0!important;font-size:17px!important}.trade-head-v04 .trade-network-v04{display:inline-flex;align-items:center;gap:5px;margin:0;padding:5px 8px;border:1px solid #254c45;border-radius:5px;background:#16322f;color:var(--cyan);font:700 8px/1 var(--mono);letter-spacing:.02em}.trade-network-v04 i{width:5px;height:5px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 2px rgba(76,244,214,.08)}
 .trade-switch-v04{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:4px;border:1px solid var(--line);border-radius:9px;background:#080e15}.trade-switch-v04 button{height:39px;border:0;border-radius:6px;background:transparent;color:var(--muted);font:700 13px var(--ui);cursor:pointer}.trade-switch-v04 button[aria-pressed="true"]{background:var(--trade-accent);color:#07120f}.trade-switch-v04 button:disabled{cursor:wait;opacity:.65}
 .trade-orderline-v04{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-size:10px}.trade-orderline-v04 strong{padding-bottom:6px;border-bottom:2px solid var(--trade-accent);color:var(--text);font-weight:650}.trade-orderline-v04 span:last-child{font-size:9px}
 .trade-v04 .wallet-bar-v27{margin:0;padding:8px 9px;background:#090f17}
@@ -1441,7 +1442,6 @@ html[data-theme="intel"] .coin-list-search input{border-color:#303a45;background
 @media(max-width:820px){.trade-v04{padding:15px!important}.trade-amount-row-v04 input{font-size:25px}}
 /* PHASE02_P0D2_ARCHIVE_SWAP_GATING */
 .jupiter-archive-gate{display:grid;gap:11px}.jupiter-archive-gate h3{margin:0!important}.jupiter-archive-gate .badge{justify-self:start}.archive-swap-message{margin:2px 0 0;padding:12px;border:1px solid var(--line);border-left:2px solid var(--amber);border-radius:5px;background:var(--panel2);color:var(--muted);font-size:12px;line-height:1.55}.archive-swap-message strong{display:block;margin-bottom:4px;color:var(--text);font-size:13px}.archive-swap-action{display:block;width:100%;padding:10px 12px;border:1px solid var(--amber);border-radius:5px;color:var(--amber);font:700 12px var(--ui);text-align:center;text-decoration:none}.archive-swap-action:hover{background:rgba(255,148,24,.06)}
-.archive-trade-notice{padding:10px 11px;border:1px solid rgba(255,148,24,.35);border-left:2px solid var(--amber);border-radius:5px;background:rgba(255,148,24,.05);color:var(--muted);font-size:10px;line-height:1.5}.archive-trade-notice strong{display:block;margin-bottom:3px;color:var(--amber);font-size:11px}
 /* PHASE02_P0D3_QUALIFICATION_REASON_TRANSPARENCY */
 .qualification-vp0d3 h3{margin:5px 0 6px}.qualification-reason{margin:0 0 13px;padding:11px;border-left:2px solid var(--amber);background:var(--panel2);color:var(--muted);font-size:11px;line-height:1.55}.qualification-vp0d3.qualified .qualification-reason{border-left-color:var(--green)}.qualification-history-label{display:block;margin-top:4px;color:var(--muted)}
 /* TOKEN_OBSERVATION_V28_LEFT_RAIL */
@@ -2061,7 +2061,7 @@ __CANDLESTICK_CHART_PANEL__
 </section>
 <aside class="workspace-rail-v26 workspace-right-v26" aria-label="Execution sandbox and market snapshot">
 <section class="card jupiter jupiter-v27 trade-v04" data-jupiter-sandbox data-token-address="__TOKEN__" data-token-symbol="__SYMBOL__" data-side="buy">
-  <div class="trade-head-v04"><h3>Trade __SYMBOL__</h3><span class="badge">NON-CUSTODIAL</span></div>
+  <div class="trade-head-v04"><h3>Trade __SYMBOL__</h3><span class="trade-network-v04"><i aria-hidden="true"></i>Solana</span></div>
   <div class="trade-switch-v04" role="group" aria-label="Trade direction"><button type="button" data-trade-side="buy" aria-pressed="true">Buy</button><button type="button" data-trade-side="sell" aria-pressed="false">Sell</button></div>
   <div class="wallet-bar-v27"><div class="wallet-state" data-wallet-state>Wallet not connected</div><button class="sandbox-button" type="button" data-connect-wallet>Connect wallet</button></div>
   <div class="trade-orderline-v04"><strong>Market swap</strong><span>Slippage · managed by Jupiter</span></div>
@@ -3987,12 +3987,4 @@ __CANDLESTICK_CHART_PANEL__
     qualification_pair_end = html.index('</section></section>', qualification_start)
     qualification_end = qualification_pair_end + len('</section>')
     html = html[:qualification_start] + qualification_panel + html[qualification_end:]
-    if detail.get("currently_qualified") is not True:
-        badge = '<span class="badge">NON-CUSTODIAL</span>'
-        archive_notice = (
-            '<div class="archive-trade-notice"><strong>Previously discovered</strong>'
-            'This token was previously discovered by DexSato. '
-            'Check the latest market data and quote before you continue.</div>'
-        )
-        html = html.replace(badge, badge + archive_notice, 1)
     return html

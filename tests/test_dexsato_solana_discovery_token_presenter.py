@@ -60,12 +60,13 @@ def test_renders_exact_token_workspace_and_chart():
     assert 'src="/static/branding/dexsato-logo.png"' in html
     assert 'data-copy-address="TokenAddress123456789"' in html
 
-def test_renders_controlled_non_custodial_jupiter_swap_and_discloses_risk():
+def test_renders_controlled_jupiter_swap_with_solana_badge_and_discloses_risk():
     html = render_solana_discovery_token_page(DETAIL)
     assert "Trade TEST" in html
     assert 'data-trade-side="buy" aria-pressed="true">Buy' in html
     assert 'data-trade-side="sell" aria-pressed="false">Sell' in html
-    assert "NON-CUSTODIAL" in html
+    assert '<span class="trade-network-v04"><i aria-hidden="true"></i>Solana</span>' in html
+    assert "NON-CUSTODIAL" not in html
     assert "Connect wallet" in html
     assert "Get buy quote" in html
     assert "Before you continue" in html
@@ -89,9 +90,10 @@ def test_archive_observation_keeps_user_directed_swap_controls_with_context():
     html = render_solana_discovery_token_page({**DETAIL, "currently_qualified": False})
 
     assert "Trade TEST" in html
-    assert "Previously discovered" in html
-    assert "This token was previously discovered by DexSato." in html
-    assert "Check the latest market data and quote before you continue." in html
+    assert '<span class="trade-network-v04"><i aria-hidden="true"></i>Solana</span>' in html
+    assert "Previously discovered" not in html
+    assert "This token was previously discovered by DexSato." not in html
+    assert "Check the latest market data and quote before you continue." not in html
     assert "Not evaluated in this scan" in html
     assert "No current scan assessment was recorded for this archived observation." in html
     assert "This qualification status is analysis context, not a trading restriction." not in html
@@ -275,11 +277,13 @@ def test_tw_dex_04_uses_approved_trade_panel_and_marks_connected_wallet():
 
     assert "TOKEN_WORKSPACE_V271_JUPITER_COMPACT_HEADER" in html
     assert "TW-DEX-04 — two-way Jupiter execution panel" in html
+    assert "TW-DEX-04A — rounded trade-card polish" in html
     assert 'class="trade-switch-v04"' in html
     assert 'class="trade-amount-v04"' in html
     assert 'class="trade-receive-v04"' in html
     assert 'data-route-summary' in html
     assert '.trade-v04[data-side="sell"]{--trade-accent:var(--red)}' in html
+    assert "border-radius:11px!important;overflow:hidden" in html
     assert ".wallet-state.connected{color:var(--green)}" in html
     assert 'walletState.classList.add("connected")' in script
     assert 'walletAddress.slice(0, 4) + "…"' in script
