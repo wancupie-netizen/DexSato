@@ -2265,6 +2265,85 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
   }
 }
 
+/* TW-DEX-08C — Compact Icon Sidebar
+   Presentation-only navigation polish. Existing routes remain unchanged. */
+.tw-dex-app{
+  grid-template-columns:76px minmax(0,1fr)!important;
+}
+.tw-dex-side{
+  width:76px!important;
+  padding:12px 10px!important;
+  align-items:center;
+}
+.tw-dex-side-brand{
+  width:100%;
+  min-height:52px!important;
+  justify-content:center!important;
+  padding:0 0 12px!important;
+}
+.tw-dex-side-brand img{
+  width:34px!important;
+  height:34px!important;
+  flex-basis:34px!important;
+}
+.tw-dex-side-brand span{
+  display:none!important;
+}
+.tw-dex-side-nav-v08c{
+  width:100%;
+  display:grid!important;
+  gap:10px!important;
+  margin-top:18px!important;
+  justify-items:center;
+}
+.tw-dex-side-nav-v08c .tw-side-icon-v08c{
+  position:relative;
+  display:grid!important;
+  place-items:center;
+  width:42px;
+  height:42px;
+  padding:0!important;
+  border:0!important;
+  border-radius:8px;
+  background:transparent!important;
+  color:#45505F!important;
+  text-decoration:none;
+  cursor:pointer;
+}
+.tw-dex-side-nav-v08c .tw-side-icon-v08c:hover{
+  color:#7C8CA0!important;
+  background:rgba(76,244,214,.035)!important;
+}
+.tw-dex-side-nav-v08c .tw-side-icon-v08c.active{
+  color:#4CF4D6!important;
+  background:rgba(76,244,214,.055)!important;
+  box-shadow:none!important;
+}
+.tw-dex-side-nav-v08c .tw-side-icon-v08c svg{
+  width:22px;
+  height:22px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.55;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.tw-dex-side-nav-v08c .tw-side-solana-v08c{
+  fill:currentColor!important;
+  stroke:none!important;
+}
+.tw-dex-side-bottom{
+  width:100%;
+  justify-items:center;
+}
+.tw-dex-side-bottom span{
+  display:none!important;
+}
+@media(max-width:820px){
+  .tw-dex-app{display:block!important}
+  .tw-dex-side{display:none!important}
+}
+
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
 .token-workspace-v26{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(290px,330px);gap:14px;align-items:start;margin-top:14px}
@@ -2921,11 +3000,23 @@ a.tw-market-dex:hover{color:#4CF4D6!important}
 </head><body><div class="tw-dex-app">
 <aside class="tw-dex-side" aria-label="DexSato navigation">
   <a class="tw-dex-side-brand" href="/" aria-label="DexSato home"><img src="/static/branding/dexsato-mark.png" alt=""><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></a>
-  <nav class="tw-dex-side-nav" aria-label="Market navigation">
-    <a href="/discovery/solana">Solana</a>
-    <a href="/">Major Assets</a>
-    <span>Watchlist</span>
-    <span class="active" aria-current="page">Token Workspace</span>
+  <nav class="tw-dex-side-nav tw-dex-side-nav-v08c" aria-label="Market navigation">
+    <a class="tw-side-icon-v08c active" href="/discovery/solana" aria-label="Solana" title="Solana">
+      <svg class="tw-side-solana-v08c" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M5.2 5.2h12.9l-2.7 2.7H2.5l2.7-2.7Zm0 5.45h12.9l2.7 2.7H7.9l-2.7-2.7Zm0 5.45h12.9l-2.7 2.7H2.5l2.7-2.7Z"/>
+      </svg>
+    </a>
+    <a class="tw-side-icon-v08c" href="/" aria-label="Major Assets" title="Major Assets">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="8"></circle>
+        <path d="M4 12h16M12 4c2.2 2.2 3.3 4.9 3.3 8S14.2 17.8 12 20M12 4C9.8 6.2 8.7 8.9 8.7 12S9.8 17.8 12 20"></path>
+      </svg>
+    </a>
+    <span class="tw-side-icon-v08c" role="button" tabindex="0" aria-label="Watchlist" title="Watchlist">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m12 4 2.35 4.76 5.25.76-3.8 3.7.9 5.23L12 16l-4.7 2.45.9-5.23-3.8-3.7 5.25-.76L12 4Z"></path>
+      </svg>
+    </span>
   </nav>
   <nav class="tw-dex-side-bottom" aria-label="Secondary navigation">
     <span>Wallet Profile</span><span>Documentation</span><span>Disclaimer</span>
