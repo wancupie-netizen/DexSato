@@ -1314,8 +1314,9 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     .dex-connect-wallet.is-busy{opacity:.72;cursor:wait}
     .dex-connect-wallet.is-error{background:var(--panel2);color:var(--risk);border:1px solid var(--risk)}
 
+    /* DISCOVERY-LIVE-01B — Full-width Discovery content */
     .shell{
-      width:min(1540px,100%);margin:0;padding:92px 28px 38px;
+      width:100%;max-width:none;margin:0;padding:92px 28px 38px;
       font-family:"JetBrains Mono",monospace
     }
     h1,h2,h3,.status-pill strong,.metric strong,.token-cell strong,
