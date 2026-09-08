@@ -461,6 +461,9 @@ def _token_observation_panel(detail: dict[str, Any]) -> str:
         ("Sell route verified", "Unavailable", "sell-route"),
         ("Liquidity", _usd(detail.get("liquidity_usd")), ""),
         ("24h change", change, change_tone),
+        ("Observed price", _usd(detail.get("price_usd")), ""),
+        ("Market cap / FDV", _usd(detail.get("market_cap")), ""),
+        ("Pair age", str(detail.get("pair_age") or "Unavailable"), ""),
     )
     rendered = []
     for label, value, tone in rows:
@@ -1711,6 +1714,112 @@ html[data-theme="intel"] .workspace-right-v26>.token-observation-v28,
 html[data-theme="intel"] .workspace-right-v26>.qualification-vp0d3{
   border-color:#1D2733!important;
   background:#0E141C!important;
+}
+
+/* TW-DEX-06C — Market Snapshot Consolidation
+   UI-only: preserve Market Snapshot markup/data, hide the card for now. */
+.workspace-right-v26>.market-snapshot-v26{
+  display:none!important;
+}
+
+/* TW-DEX-06D — Card Divider & Qualification Alignment
+   UI-only polish: keep rounded outer cards, remove internal dividers,
+   align Qualification typography with Token Intelligence, move checks right. */
+/* TW-DEX-06E — Qualification Visual Polish
+   Qualification-only refinement. TOKEN INTELLIGENCE intentionally untouched. */
+.workspace-right-v26>.qualification-vp0d3{
+  background:#0E141C!important;
+}
+.workspace-right-v26>.qualification-vp0d3>.eyebrow{
+  padding:14px 15px 10px!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .qualification-history-label{
+  display:block;
+  padding:10px 14px 7px!important;
+  color:#7C8CA0!important;
+  font:700 10px/1.35 var(--mono)!important;
+  letter-spacing:.035em!important;
+  text-transform:uppercase;
+}
+.workspace-right-v26>.qualification-vp0d3 .check{
+  position:relative;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  min-height:31px;
+  margin:0!important;
+  padding:7px 32px 7px 14px!important;
+  color:#7C8CA0!important;
+  font:650 10px/1.4 var(--mono)!important;
+  letter-spacing:.01em!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .check:before{
+  position:absolute!important;
+  left:auto!important;
+  right:14px!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  margin:0!important;
+  color:#4CF4D6!important;
+  font-size:11px!important;
+  line-height:1!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .source{
+  margin:8px 14px 0!important;
+  padding:7px 0 12px!important;
+  color:#7C8CA0!important;
+  font:500 10px/1.5 var(--mono)!important;
+  letter-spacing:.005em!important;
+}
+
+
+/* TOKEN INTELLIGENCE: remove internal separator lines only. */
+.workspace-right-v26>.token-observation-v28 .workspace-rail-head{
+  border-bottom:0!important;
+}
+.workspace-right-v26>.token-observation-v28 .token-observation-row{
+  border-bottom:0!important;
+}
+.workspace-right-v26>.token-observation-v28 .token-observation-note{
+  border-top:0!important;
+}
+
+/* QUALIFICATION: remove internal separator lines only. */
+.workspace-right-v26>.qualification-vp0d3>.eyebrow,
+.workspace-right-v26>.qualification-vp0d3 .qualification-history-label,
+.workspace-right-v26>.qualification-vp0d3 .check,
+.workspace-right-v26>.qualification-vp0d3 .source{
+  border-top:0!important;
+  border-bottom:0!important;
+}
+
+/* Match Token Intelligence text hierarchy. */
+.workspace-right-v26>.qualification-vp0d3 .qualification-history-label{
+  color:#45505F!important;
+  font:700 10px/1.35 var(--mono)!important;
+  letter-spacing:.025em!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .check{
+  position:relative;
+  margin:0!important;
+  padding:9px 34px 9px 14px!important;
+  color:#45505F!important;
+  font:700 10px/1.35 var(--mono)!important;
+  letter-spacing:.025em!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .check:before{
+  left:auto!important;
+  right:14px!important;
+  top:50%!important;
+  transform:translateY(-50%);
+  margin:0!important;
+  color:#4CF4D6!important;
+}
+.workspace-right-v26>.qualification-vp0d3 .source{
+  margin:5px 14px 0!important;
+  padding:8px 0 12px!important;
+  color:#7C8CA0!important;
+  font:500 10px/1.45 var(--mono)!important;
 }
 
 /* TW-DEX-06B — Qualification Status Cleanup
