@@ -1222,37 +1222,56 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
       color:var(--text);
       font-family:"JetBrains Mono",monospace;
     }
-    .dex-app-shell{display:grid;grid-template-columns:144px minmax(0,1fr);min-height:100vh}
+    /* DISCOVERY-LIVE-01A — Compact Sidebar aligned to Token Workspace */
+    .dex-app-shell{display:grid;grid-template-columns:76px minmax(0,1fr);min-height:100vh}
     .dex-side-rail{
       position:sticky;top:0;height:100vh;z-index:40;
-      display:flex;flex-direction:column;gap:18px;
-      padding:18px 14px;border-right:1px solid var(--line);
+      display:flex;flex-direction:column;align-items:center;gap:0;
+      width:76px;padding:12px 10px;border-right:1px solid var(--line);
       background:#0E141C;font-family:"Space Grotesk",sans-serif
     }
-    .dex-rail-logo{width:38px;height:38px;display:grid;place-items:center;margin-left:2px}
+    .dex-rail-logo{
+      width:100%;min-height:52px;display:grid;place-items:center;
+      padding:0 0 12px;margin:0
+    }
     .dex-rail-logo img{width:34px;height:34px;object-fit:contain}
-    .dex-market-nav,.dex-main-nav,.dex-utility-nav{display:flex;flex-direction:column;gap:2px}
-    .dex-main-nav{margin-top:8px}
-    .dex-side-item{
-      min-height:36px;display:flex;align-items:center;gap:10px;
-      padding:0 10px;color:var(--muted);font-size:13px;font-weight:600;
-      text-decoration:none;border:0;background:transparent
+    .dex-market-nav,.dex-main-nav{
+      width:100%;display:grid;gap:10px;margin:0;justify-items:center
     }
-    .dex-side-item svg{width:17px;height:17px;flex:0 0 auto}
-    .dex-side-item:hover{color:var(--cyan)}
-    .dex-side-item.active{position:relative;color:var(--cyan)}
-    .dex-side-item.active:before{
-      content:"";position:absolute;left:-14px;top:50%;width:2px;height:18px;
-      transform:translateY(-50%);background:var(--cyan);
-      box-shadow:0 0 7px rgba(76,244,214,.45)
+    .dex-market-nav{margin-top:18px}
+    .dex-main-nav{margin-top:10px}
+    .dex-side-item.dex-side-icon{
+      position:relative;display:grid;place-items:center;
+      width:42px;height:42px;min-height:42px;padding:0;
+      border:0;border-radius:8px;background:transparent;
+      color:#45505F;text-decoration:none;cursor:pointer
     }
-    .dex-side-item[aria-disabled="true"]{cursor:default}
+    .dex-side-item.dex-side-icon:hover{
+      color:#7C8CA0;background:rgba(76,244,214,.035)
+    }
+    .dex-side-item.dex-side-icon.active{
+      color:#4CF4D6;background:rgba(76,244,214,.055);box-shadow:none
+    }
+    .dex-side-item.dex-side-icon.active:before{display:none}
+    .dex-side-item.dex-side-icon svg{
+      width:22px;height:22px;fill:none;stroke:currentColor;
+      stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round
+    }
+    .dex-side-item.dex-side-icon .dex-solana-icon{fill:currentColor;stroke:none}
     .dex-rail-spacer{flex:1}
-    .dex-utility-nav{padding-top:8px}
-    .dex-utility-nav .dex-side-item{min-height:32px;color:var(--faint);font-size:12px;font-weight:500}
+    .dex-utility-nav{
+      width:100%;display:flex;flex-direction:column;align-items:center;
+      gap:7px;padding:8px 0 2px
+    }
+    .dex-utility-nav .dex-side-item{
+      width:56px;min-height:26px;display:flex;align-items:center;justify-content:center;
+      padding:0;color:var(--faint);font-size:9px;font-weight:500;
+      line-height:1.15;text-align:center;text-decoration:none;border:0;background:transparent
+    }
+    .dex-utility-nav .dex-side-item:hover{color:var(--muted)}
     .dex-app-main{min-width:0}
     .dex-topbar{
-      position:fixed;top:0;left:144px;right:0;height:64px;z-index:35;
+      position:fixed;top:0;left:76px;right:0;height:64px;z-index:35;
       display:flex;align-items:center;gap:24px;padding:0 28px;
       border-bottom:1px solid var(--line);
       background:rgba(8,11,16,.86);backdrop-filter:blur(8px)
@@ -1791,13 +1810,23 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
   <aside class="dex-side-rail" aria-label="DexSato navigation">
     <a class="dex-rail-logo" href="/" aria-label="DexSato"><img src="/static/branding/dexsato-mark.png" alt=""></a>
     <nav class="dex-market-nav" aria-label="Market scope">
-      <a class="dex-side-item active" href="/discovery/solana" aria-current="page">Solana</a>
-      <a class="dex-side-item" href="/">Major Assets</a>
+      <a class="dex-side-item dex-side-icon active" href="/discovery/solana" aria-current="page" aria-label="Solana" title="Solana">
+        <svg class="dex-solana-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M5.2 5.2h12.9l-2.7 2.7H2.5l2.7-2.7Zm0 5.45h12.9l2.7 2.7H7.9l-2.7-2.7Zm0 5.45h12.9l-2.7 2.7H2.5l2.7-2.7Z"/>
+        </svg>
+      </a>
+      <a class="dex-side-item dex-side-icon" href="/" aria-label="Major Assets" title="Major Assets">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="8"></circle>
+          <path d="M4 12h16M12 4c2.2 2.2 3.3 4.9 3.3 8S14.2 17.8 12 20M12 4C9.8 6.2 8.7 8.9 8.7 12S9.8 17.8 12 20"></path>
+        </svg>
+      </a>
     </nav>
     <nav class="dex-main-nav" aria-label="Main navigation">
-      <span class="dex-side-item" aria-disabled="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6z"/></svg>
-        <span>Watchlist</span>
+      <span class="dex-side-item dex-side-icon" role="button" tabindex="0" aria-label="Watchlist" title="Watchlist">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="m12 4 2.35 4.76 5.25.76-3.8 3.7.9 5.23L12 16l-4.7 2.45.9-5.23-3.8-3.7 5.25-.76L12 4Z"></path>
+        </svg>
       </span>
     </nav>
     <div class="dex-rail-spacer"></div>
