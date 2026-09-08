@@ -528,9 +528,14 @@ def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str
         '<div class="coin-list-empty">No discovery tokens are available.</div>'
     )
     return (
-        '<section class="workspace-rail-card coin-list" data-coin-list>'
-        '<div class="workspace-rail-head"><h2>Coin List</h2>'
-        '<a href="/discovery/solana">Open feed</a></div>'
+        '<section class="workspace-rail-card coin-list token-list-v07a" data-coin-list>'
+        '<div class="workspace-rail-head token-list-head-v07a"><h2>Token List</h2>'
+        '<span class="token-list-chain-v07a">SOLANA</span></div>'
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Token list views">'
+        '<button type="button" class="token-list-tab-v07a active" role="tab" aria-selected="true">Trending</button>'
+        '<button type="button" class="token-list-tab-v07a" role="tab" aria-selected="false">Fresh</button>'
+        '<button type="button" class="token-list-tab-v07a" role="tab" aria-selected="false">Watchlist</button>'
+        '</div>'
         '<label class="coin-list-search"><span class="sr-only">Search coin list</span>'
         '<input type="search" placeholder="Search token or pair" data-coin-list-search></label>'
         f'<div class="coin-list-rows" data-coin-list-rows>{body}</div></section>'
@@ -1834,6 +1839,102 @@ html[data-theme="intel"] .workspace-right-v26>.qualification-vp0d3{
 }
 
 
+
+/* TW-DEX-07A — Token List Tabs & Header
+   UI-only. Existing discovery feed, current-token-first ordering, links and search behavior remain unchanged. */
+.workspace-left-v26>.token-list-v07a{
+  border:1px solid #1D2733!important;
+  border-radius:10px!important;
+  overflow:hidden;
+  background:#0E141C!important;
+}
+.workspace-left-v26>.token-list-v07a .token-list-head-v07a{
+  padding:14px 14px 8px!important;
+  border-bottom:0!important;
+  align-items:center;
+  background:#0E141C!important;
+}
+.workspace-left-v26>.token-list-v07a .token-list-head-v07a h2{
+  color:#E7EDF4!important;
+  font:800 12px/1.25 var(--mono)!important;
+  letter-spacing:.055em!important;
+  text-transform:none!important;
+}
+.token-list-chain-v07a{
+  color:#7C8CA0;
+  font:700 10px/1.25 var(--mono);
+  letter-spacing:.055em;
+}
+.token-list-tabs-v07a{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:0 14px 10px;
+  background:#0E141C;
+}
+.token-list-tab-v07a{
+  appearance:none;
+  min-height:27px;
+  padding:5px 10px;
+  border:1px solid #1D2733;
+  border-radius:4px;
+  background:#10171F;
+  color:#7C8CA0;
+  font:700 9px/1.2 var(--mono);
+  letter-spacing:.025em;
+  cursor:default;
+}
+.token-list-tab-v07a.active{
+  border-color:#4CF4D6;
+  background:rgba(76,244,214,.055);
+  color:#4CF4D6;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-search{
+  padding:0 14px 10px!important;
+  background:#0E141C;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-search input{
+  border:1px solid #1D2733!important;
+  border-radius:6px!important;
+  background:#10171F!important;
+  color:#E7EDF4!important;
+  font:500 10px/1.35 var(--mono)!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-search input::placeholder{
+  color:#45505F;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-rows{
+  background:#10171F;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-row{
+  border-top:1px solid #1D2733!important;
+  background:#10171F;
+  color:#E7EDF4!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-row:hover{
+  background:rgba(76,244,214,.035)!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-row.active{
+  background:rgba(76,244,214,.045)!important;
+  box-shadow:inset 2px 0 #4CF4D6!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-avatar{
+  border-color:#1D2733!important;
+  background:#0E141C!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-identity strong{
+  color:#E7EDF4!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-identity small{
+  color:#7C8CA0!important;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-change.up{color:#4CF4D6!important}
+.workspace-left-v26>.token-list-v07a .coin-list-change.down{color:#FF5C7A!important}
+.workspace-left-v26>.token-list-v07a .coin-list-change.unavailable{color:#7C8CA0!important}
+html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
+  border-color:#1D2733!important;
+  background:#0E141C!important;
+}
 
 /* TOKEN_WORKSPACE_V26A_THREE_COLUMN_SHELL */
 .shell{width:min(1780px,calc(100% - 24px))}
