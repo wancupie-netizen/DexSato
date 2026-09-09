@@ -1182,7 +1182,66 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     }
     @media(max-width:1180px){.workspace{grid-template-columns:1fr}.intel-rail{grid-template-columns:repeat(3,1fr)}.candidate-row{grid-template-columns:minmax(170px,.8fr) minmax(310px,1.25fr) minmax(240px,1fr)}.action-cell{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-end;border-top:1px solid var(--line);border-right:0;padding:10px 17px}.feed-tools{align-items:flex-end;flex-direction:column}}
     @media(max-width:820px){.shell{width:min(100% - 22px,1420px);padding-top:11px}.topbar{align-items:flex-start}.terminal-name span{display:none}.terminal-head{grid-template-columns:1fr;align-items:start;padding-top:22px}.terminal-head h1{font-size:29px}.status-cluster{width:100%}.status-pill{flex:1;min-width:0}.metrics{grid-template-columns:repeat(2,1fr)}.metric:nth-child(2){border-right:0}.metric:nth-child(-n+2){border-bottom:1px solid var(--line)}.workspace{display:block}.intel-rail{grid-template-columns:1fr;margin-top:12px}.feed-head{align-items:flex-start;flex-direction:column}.feed-tools{width:100%;align-items:stretch}.filters{overflow-x:auto;scrollbar-width:none}.search{width:100%}.candidate-row{grid-template-columns:1fr}.token-cell,.market-cell,.evidence-cell,.action-cell{border-right:0;border-bottom:1px solid var(--line)}.market-cell{grid-template-columns:repeat(2,1fr)}.market-cell>div{padding:5px 0}.action-cell{grid-column:auto;justify-content:flex-start;border-top:0;border-bottom:0}.empty-state{grid-template-columns:1fr}footer{flex-direction:column}}
-    .feed-tabs{display:flex;gap:6px;padding:12px 18px;border-bottom:1px solid var(--line);overflow:auto}.feed-tab{display:flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid var(--line2);border-radius:5px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:800;white-space:nowrap}.feed-tab b{color:var(--text);font-family:var(--font-mono)}.feed-tab.active{border-color:var(--blue);color:var(--text);background:var(--panel2)}.page-summary{color:var(--muted);font:11px var(--font-mono)}.pagination{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-top:1px solid var(--line)}.pagination a,.pagination span{min-width:86px;color:var(--blue);font-size:11px;text-decoration:none}.pagination span{color:var(--faint)}.pagination strong{font:11px var(--font-mono)}.network-mark{display:flex;align-items:center;gap:10px;margin-top:14px;padding:12px;border:1px solid var(--line)}.network-mark svg{width:30px;fill:var(--purple)}.network-mark strong,.network-mark small{display:block}.network-mark small{color:var(--muted)}.dex-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.dex-badges span{padding:5px 7px;border:1px solid var(--line2);border-radius:999px;color:var(--text);font:10px var(--font-mono)}.dex-badges em{color:var(--muted);font-size:11px}.coming-soon{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.coming-soon span{display:block;color:var(--amber);font:9px var(--font-mono);text-transform:uppercase}.coming-soon strong{display:block;margin-top:3px}.feed-value small{display:block;margin-top:4px;font:10px var(--font-mono)}.feed-value small.up{color:var(--green)}.feed-value small.down{color:var(--risk)}
+        /* DISCOVERY-SEGMENTS-V1 — product-level navigation foundation */
+    .discovery-segments-v1{
+      display:flex;
+      align-items:stretch;
+      gap:24px;
+      min-width:0;
+      padding:0 18px;
+      overflow-x:auto;
+      border-bottom:1px solid var(--line);
+      background:var(--panel);
+      scrollbar-width:none;
+    }
+    .discovery-segments-v1::-webkit-scrollbar{display:none}
+    .discovery-segment-v1{
+      position:relative;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-height:44px;
+      padding:0;
+      color:var(--muted);
+      font-size:11px;
+      font-weight:850;
+      letter-spacing:.02em;
+      text-decoration:none;
+      white-space:nowrap;
+    }
+    .discovery-segment-v1 small{
+      padding:3px 5px;
+      border:1px solid var(--line2);
+      color:var(--faint);
+      font:8px var(--font-mono);
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    .discovery-segment-v1.active{color:var(--text)}
+    .discovery-segment-v1.active:after{
+      content:"";
+      position:absolute;
+      right:0;
+      bottom:-1px;
+      left:0;
+      height:2px;
+      background:var(--cyan);
+      box-shadow:0 0 9px rgba(76,244,214,.28);
+    }
+    .discovery-segment-v1.active small{
+      border-color:rgba(76,244,214,.42);
+      color:var(--cyan);
+    }
+    .discovery-segment-v1.upcoming{
+      cursor:not-allowed;
+      opacity:.62;
+      user-select:none;
+    }
+    @media(max-width:480px){
+      .discovery-segments-v1{gap:18px;padding-inline:15px}
+      .discovery-segment-v1{min-height:42px;font-size:10px}
+    }
+.feed-tabs{display:flex;gap:6px;padding:12px 18px;border-bottom:1px solid var(--line);overflow:auto}.feed-tab{display:flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid var(--line2);border-radius:5px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:800;white-space:nowrap}.feed-tab b{color:var(--text);font-family:var(--font-mono)}.feed-tab.active{border-color:var(--blue);color:var(--text);background:var(--panel2)}.page-summary{color:var(--muted);font:11px var(--font-mono)}.pagination{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-top:1px solid var(--line)}.pagination a,.pagination span{min-width:86px;color:var(--blue);font-size:11px;text-decoration:none}.pagination span{color:var(--faint)}.pagination strong{font:11px var(--font-mono)}.network-mark{display:flex;align-items:center;gap:10px;margin-top:14px;padding:12px;border:1px solid var(--line)}.network-mark svg{width:30px;fill:var(--purple)}.network-mark strong,.network-mark small{display:block}.network-mark small{color:var(--muted)}.dex-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.dex-badges span{padding:5px 7px;border:1px solid var(--line2);border-radius:999px;color:var(--text);font:10px var(--font-mono)}.dex-badges em{color:var(--muted);font-size:11px}.coming-soon{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.coming-soon span{display:block;color:var(--amber);font:9px var(--font-mono);text-transform:uppercase}.coming-soon strong{display:block;margin-top:3px}.feed-value small{display:block;margin-top:4px;font:10px var(--font-mono)}.feed-value small.up{color:var(--green)}.feed-value small.down{color:var(--risk)}
     @media(max-width:480px){.shell{width:calc(100% - 16px)}.brand img{width:112px}.terminal-name strong{font-size:11px}.top-actions{margin-left:auto}.back-link{padding:7px 8px;font-size:10px}.theme-option{width:29px;height:29px}.terminal-head h1{font-size:25px}.terminal-head p{font-size:13px}.status-cluster{display:grid;grid-template-columns:1fr 1fr}.status-pill{padding:9px}.metric{padding:13px}.metric strong{font-size:19px}.feed-head{padding:15px}.filters button{font-size:9px}.token-cell,.market-cell,.evidence-cell,.action-cell{padding:14px}.market-cell{gap:7px}.candidate-row{border-left:2px solid var(--purple)}.action-cell{align-items:stretch;flex-direction:column}.inspect-link{text-align:center}.rail-card{padding:15px}.empty-state{margin:12px;padding:18px}.empty-actions{display:grid}.primary-link,.secondary-link{text-align:center}}
     .terminal-search{display:flex;align-items:center;gap:7px}.terminal-search input{width:290px;padding:9px 11px;border:1px solid var(--line2);border-radius:5px;background:var(--panel2);color:var(--text);font-size:11px}.terminal-search button,.clear-search{padding:9px 11px;border:1px solid var(--blue);border-radius:5px;background:transparent;color:var(--blue);font-size:10px;font-weight:850;text-decoration:none;cursor:pointer}.sort-note{display:flex;justify-content:space-between;gap:12px;padding:9px 18px;border-bottom:1px solid var(--line);color:var(--muted);font:10px var(--font-mono)}
 
@@ -1934,6 +1993,10 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         <div><span class="eyebrow">SOLANA DISCOVERY</span><h2>Token List</h2><p>Persistent, server-paginated observations. Historical inclusion does not mean current qualification.</p></div>
         <form class="terminal-search" method="get" action="/discovery/solana"><input type="hidden" name="view" value="__VIEW__"><input type="hidden" name="page" value="1"><input type="search" name="q" value="__SEARCH_QUERY__" placeholder="Search token, symbol, contract or DEX" aria-label="Search the discovery archive"><button type="submit">Search</button>__CLEAR_SEARCH__</form>
       </div>
+      <nav class="discovery-segments-v1" aria-label="Solana discovery products" role="tablist">
+        <a class="discovery-segment-v1 active" href="/discovery/solana" role="tab" aria-selected="true" aria-current="page"><span>New Discoveries</span><small>Active</small></a>
+        <span class="discovery-segment-v1 upcoming" role="tab" aria-selected="false" aria-disabled="true"><span>Established Solana</span><small>Soon</small></span>
+      </nav>
       <nav class="feed-tabs" aria-label="Discovery views">__TABS__</nav>
       <div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div>
       <div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>
