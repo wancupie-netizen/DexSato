@@ -3016,7 +3016,7 @@ a.tw-market-dex:hover{color:#4CF4D6!important}
         <path d="M5.2 5.2h12.9l-2.7 2.7H2.5l2.7-2.7Zm0 5.45h12.9l2.7 2.7H7.9l-2.7-2.7Zm0 5.45h12.9l-2.7 2.7H2.5l2.7-2.7Z"/>
       </svg>
     </a>
-    <a class="tw-side-icon-v08c" href="/" aria-label="Major Assets" title="Major Assets">
+    <a class="tw-side-icon-v08c" href="/major-assets" aria-label="Major Assets" title="Major Assets">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <circle cx="12" cy="12" r="8"></circle>
         <path d="M4 12h16M12 4c2.2 2.2 3.3 4.9 3.3 8S14.2 17.8 12 20M12 4C9.8 6.2 8.7 8.9 8.7 12S9.8 17.8 12 20"></path>

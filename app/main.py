@@ -196,24 +196,30 @@ def _content_cookie_secure(request: Request) -> bool:
     return trusted_proxy_headers() and forwarded.lower() == "https"
 
 
+# LIVE-02 — Solana Discovery is the public app landing experience.
 @app.get(
     "/",
     response_class=HTMLResponse,
 )
-def founder_home() -> str:
-    """
-    Display the latest Top 100 snapshot.
-    """
+def app_home() -> str:
+    """Display Solana Discovery as the DexSato main app."""
+    return render_solana_discovery_page(
+        load_solana_discovery_feed(view="qualified", page=1, page_size=25, query="")
+    )
 
+
+@app.get(
+    "/major-assets",
+    response_class=HTMLResponse,
+)
+def major_assets() -> str:
+    """Preserve the previous Major Assets dashboard as a secondary route."""
     try:
-
         snapshot = load_current_snapshot()
-
     except (
         FileNotFoundError,
         RuntimeError,
     ) as error:
-
         raise HTTPException(
             status_code=503,
             detail="Market snapshot is temporarily unavailable.",
