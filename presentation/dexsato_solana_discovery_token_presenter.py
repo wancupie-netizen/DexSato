@@ -539,7 +539,7 @@ def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str
             f'<small>{price}</small></span>'
             f'<b class="coin-list-change {escape(change_tone)}">{change_text}</b></a>'
         )
-        if len(rendered) >= 30:
+        if len(rendered) >= 10:
             break
 
     body = "".join(rendered) if rendered else (
