@@ -241,6 +241,7 @@ def fetch_jupiter_quote(
                 "inputMint": input_mint,
                 "outputMint": output_mint,
                 "amount": str(input_raw),
+                "excludeRouters": "jupiterz,dflow,okx",
                 **fee_policy.request_parameters(),
             },
             headers={"x-api-key": resolved_key, "accept": "application/json"},

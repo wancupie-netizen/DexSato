@@ -433,6 +433,7 @@ def prepare_jupiter_swap(
             JUPITER_ORDER_URL,
             params={"inputMint": input_mint, "outputMint": output_mint,
                     "amount": str(input_raw), "taker": wallet,
+                "excludeRouters": "jupiterz,dflow,okx",
                     **fee_policy.request_parameters()},
             headers={"x-api-key": resolved_key, "accept": "application/json"},
             timeout=12,

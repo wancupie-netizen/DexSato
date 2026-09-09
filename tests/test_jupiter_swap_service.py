@@ -159,6 +159,7 @@ def test_prepares_unsigned_order_bound_to_observed_token_amount_and_wallet():
     assert call.kwargs["params"] == {
         "inputMint": WRAPPED_SOL_MINT, "outputMint": TOKEN,
         "amount": "100000000", "taker": WALLET,
+        "excludeRouters": "jupiterz,dflow,okx",
     }
     assert "referralFee" not in call.kwargs["params"]
     assert call.kwargs["headers"]["x-api-key"] == "server-secret"

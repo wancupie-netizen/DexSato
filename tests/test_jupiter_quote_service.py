@@ -61,6 +61,7 @@ def test_returns_quote_without_taker_or_transaction_material():
         "inputMint": WRAPPED_SOL_MINT,
         "outputMint": TOKEN,
         "amount": "100000000",
+        "excludeRouters": "jupiterz,dflow,okx",
     }
     assert "taker" not in call.kwargs["params"]
     assert call.kwargs["headers"]["x-api-key"] == "server-secret"
@@ -100,6 +101,7 @@ def test_returns_sell_quote_with_token_input_units_and_sol_output():
         "inputMint": TOKEN,
         "outputMint": WRAPPED_SOL_MINT,
         "amount": "1500000",
+        "excludeRouters": "jupiterz,dflow,okx",
     }
 
 
