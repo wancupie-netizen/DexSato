@@ -209,19 +209,21 @@
                 && fee.execution_ready === true && !payload.dexsato_referral_account;
         }
         const previewOnly = fee.execution_ready === false
-            && fee.activation_scope !== "ONE_SHOT_TAP";
+            && !["ONE_SHOT_TAP", "LIVE_REFERRAL"].includes(fee.activation_scope);
         const controlledOneShot = fee.execution_ready === true
             && fee.activation_scope === "ONE_SHOT_TAP"
             && fee.integrator_fee_bps === 50
             && payload.side === "buy"
             && payload.output_mint === "ADcF26nFGKMuRZ7va5361H2PCHCDRi2FmeJBkX3Spump"
             && payload.input_amount_lamports === "1000000";
+        const liveReferral = fee.execution_ready === true
+            && fee.activation_scope === "LIVE_REFERRAL";
         return fee.integrator_fee_bps >= 50 && fee.integrator_fee_bps <= 255
             && fee.amount_kind === "ESTIMATE" && fee.integrator_fee_symbol === "WSOL"
             && fee.referral_verification === "RPC_ACCOUNT_VERIFIED"
             && typeof payload.dexsato_referral_account === "string"
             && payload.dexsato_referral_account.length >= 32
-            && (previewOnly || controlledOneShot);
+            && (previewOnly || controlledOneShot || liveReferral);
     }
 
     function sameFeePolicy(first, second) {
@@ -238,10 +240,13 @@
             + fee.integrator_fee_amount_ui + " " + fee.integrator_fee_symbol, className);
         if (fee.integrator_fee_bps > 0) {
             addSummaryRow(container, "Jupiter share (included)", fee.jupiter_share_percent + "% of fee", className);
-            addSummaryRow(container, "Fee activation",
-                fee.execution_ready === true && fee.activation_scope === "ONE_SHOT_TAP"
+            const activationLabel = fee.execution_ready === true
+                && fee.activation_scope === "LIVE_REFERRAL"
+                ? "Active · DexSato referral fee"
+                : fee.execution_ready === true && fee.activation_scope === "ONE_SHOT_TAP"
                     ? "Armed · one controlled TAP swap"
-                    : "Pending · quote preview only", className);
+                    : "Pending · quote preview only";
+            addSummaryRow(container, "Fee activation", activationLabel, className);
         }
         const note = document.createElement("p");
         note.textContent = fee.note + " " + fee.network_fee_note;

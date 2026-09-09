@@ -35,8 +35,21 @@ def build_fee_disclosure(
     else:
         raise FeePolicyRejected("Fee estimate mint or amount requires review.")
     estimate = fee_raw / Decimal(10**9)
+    live_flag = os.getenv(
+        "DEXSATO_JUPITER_LIVE_FEE_EXECUTION_ENABLED", "false"
+    ).strip().lower()
+    if live_flag not in {"true", "false"}:
+        raise FeePolicyRejected("Live referral execution configuration is invalid.")
+
+    one_shot_flag = os.getenv("DEXSATO_JUPITER_ONE_SHOT_MODE", "false").strip().lower()
+    if one_shot_flag not in {"true", "false"}:
+        raise FeePolicyRejected("One-shot referral execution configuration is invalid.")
+    if live_flag == "true" and one_shot_flag == "true":
+        raise FeePolicyRejected("Live and one-shot referral execution cannot run together.")
+
+    live_ready = live_flag == "true"
     one_shot_ready = False
-    if os.getenv("DEXSATO_JUPITER_ONE_SHOT_MODE", "false").strip().lower() == "true":
+    if not live_ready and one_shot_flag == "true":
         try:
             from application.jupiter_one_shot_swap_gate import (
                 INPUT_LAMPORTS, TAP_MINT, WALLET, require_armed,
@@ -49,13 +62,25 @@ def build_fee_disclosure(
                               and input_raw == INPUT_LAMPORTS)
         except Exception:
             one_shot_ready = False
-    return {**base, "execution_ready": one_shot_ready,
-            "activation_scope": "ONE_SHOT_TAP" if one_shot_ready else "PREVIEW_ONLY",
+
+    execution_ready = live_ready or one_shot_ready
+    activation_scope = (
+        "LIVE_REFERRAL" if live_ready
+        else "ONE_SHOT_TAP" if one_shot_ready
+        else "PREVIEW_ONLY"
+    )
+    activation_note = (
+        "DexSato live referral execution is active."
+        if live_ready
+        else "One-shot TAP execution gate is armed."
+        if one_shot_ready
+        else "Fee execution is not activated."
+    )
+    return {**base, "execution_ready": execution_ready,
+            "activation_scope": activation_scope,
             "integrator_fee_amount_ui": format(estimate, "f"),
             "integrator_fee_symbol": "WSOL", "referral_verification": "RPC_ACCOUNT_VERIFIED",
             "referral_checked_at": observation.checked_at, "referral_slot": observation.slot,
             "jupiter_share_percent": format(Decimal(10000 - observation.partner_share_bps) / 100, ".2f"),
             "note": "Estimated integrator fee includes Jupiter's share; not an additional charge. "
-                    "Final debit and output depend on the transaction. "
-                    + ("One-shot TAP execution gate is armed." if one_shot_ready
-                       else "Fee execution is not activated.")}
+                    "Final debit and output depend on the transaction. " + activation_note}

@@ -113,17 +113,34 @@ def get_fee_policy() -> FeePolicy:
 
 
 def require_fee_execution_ready(policy: FeePolicy) -> None:
-    """Phase 03-C safety gate; NOT an environment-toggle bypass.
+    """Require an explicit production gate before continuous fee-bearing execution."""
+    if not policy.enabled:
+        return
 
-Phase 03-D adds account verification and disclosure, but does not activate fees.
-Remove this gate only after owner approval, a verified live account report and
-reviewed transaction-level fee destination/amount checks for controlled testing.
-Matching provider echoes alone cannot prove referral-token-account ownership
-or distinguish every default-fee fallback (including a coincidental 50 bps).
-"""
-    if policy.enabled:
+    flag = os.getenv("DEXSATO_JUPITER_LIVE_FEE_EXECUTION_ENABLED", "false").strip().lower()
+    if flag not in {"true", "false"}:
         raise FeePolicyConfigurationError(
-            "Fee-enabled execution awaits reviewed activation and transaction fee validation."
+            "DEXSATO_JUPITER_LIVE_FEE_EXECUTION_ENABLED must be true or false."
+        )
+    if flag != "true":
+        raise FeePolicyConfigurationError(
+            "Fee-enabled execution requires the reviewed live referral execution gate."
+        )
+
+    partner = os.getenv("DEXSATO_JUPITER_REFERRAL_PARTNER", "").strip()
+    if not valid_public_key(partner):
+        raise FeePolicyConfigurationError(
+            "DEXSATO_JUPITER_REFERRAL_PARTNER must be a valid public account."
+        )
+
+    one_shot = os.getenv("DEXSATO_JUPITER_ONE_SHOT_MODE", "false").strip().lower()
+    if one_shot not in {"true", "false"}:
+        raise FeePolicyConfigurationError(
+            "DEXSATO_JUPITER_ONE_SHOT_MODE must be true or false."
+        )
+    if one_shot == "true":
+        raise FeePolicyConfigurationError(
+            "Live referral execution and one-shot execution cannot be enabled together."
         )
 
 
