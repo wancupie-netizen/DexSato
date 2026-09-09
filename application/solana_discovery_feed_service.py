@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,9 @@ DISCOVERY_ARCHIVE_DB = "discovery_archive.sqlite3"
 DISCOVERY_FEED_LIMIT = 100
 TERMINAL_PAGE_SIZE = 25
 TERMINAL_VIEWS = {"qualified", "recent", "archive"}
+
+_ENGINE_FEED_LOCK = threading.Lock()
+_ENGINE_FEED_GENERATED_AT: str | None = None
 
 
 def _read_object(path: Path) -> dict[str, Any]:
@@ -410,6 +414,132 @@ def _terminal_archive_view(
         "observed_volume_24h_usd": complete_sum("volume_24h_usd"),
         "observed_txns_24h": complete_sum("txns_24h"),
         "observed_dex_ids": dex_ids,
+    }
+
+def load_solana_discovery_engine_feed(
+    output_dir: Path | str | None = None,
+    *,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Return a minimal qualified-token feed without rebuilding unchanged snapshots."""
+    global _ENGINE_FEED_GENERATED_AT
+
+    directory = Path(output_dir) if output_dir is not None else discovery_storage_dir(DEFAULT_OUTPUT_DIR)
+    database = directory / DISCOVERY_ARCHIVE_DB
+    safe_limit = min(100, max(1, _integer(limit) or 25))
+
+    try:
+        status = _read_object(directory / "status.json")
+    except (OSError, json.JSONDecodeError, ValueError):
+        status = {}
+
+    generated_at = str(status.get("generated_at") or "").strip() or None
+
+    with _ENGINE_FEED_LOCK:
+        refresh_required = bool(
+            generated_at and generated_at != _ENGINE_FEED_GENERATED_AT
+        )
+
+        if refresh_required and database.is_file():
+            connection = None
+            try:
+                connection = sqlite3.connect(
+                    database.resolve().as_uri() + "?mode=ro",
+                    uri=True,
+                )
+                row = connection.execute(
+                    """
+                    SELECT MAX(last_qualified_at)
+                    FROM discoveries
+                    WHERE currently_qualified = 1
+                    """
+                ).fetchone()
+                archived_at = str(row[0] or "").strip() if row else ""
+                if archived_at == generated_at:
+                    refresh_required = False
+            except sqlite3.Error:
+                refresh_required = True
+            finally:
+                if connection is not None:
+                    connection.close()
+
+        if refresh_required:
+            try:
+                load_solana_discovery_feed(output_dir=directory)
+            except (OSError, sqlite3.Error, json.JSONDecodeError, ValueError):
+                return {
+                    "connected": False,
+                    "generated_at": generated_at,
+                    "candidates": [],
+                }
+            _ENGINE_FEED_GENERATED_AT = generated_at
+
+        if not database.is_file():
+            return {
+                "connected": False,
+                "generated_at": generated_at,
+                "candidates": [],
+            }
+
+        connection = None
+        try:
+            connection = sqlite3.connect(
+                database.resolve().as_uri() + "?mode=ro",
+                uri=True,
+            )
+            rows = connection.execute(
+                """
+                SELECT token_address, payload_json, last_qualified_at, last_seen_at
+                FROM discoveries
+                WHERE currently_qualified = 1
+                ORDER BY COALESCE(last_seen_at, '') DESC,
+                         last_qualified_at DESC,
+                         token_address ASC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        except sqlite3.Error:
+            return {
+                "connected": False,
+                "generated_at": generated_at,
+                "candidates": [],
+            }
+        finally:
+            if connection is not None:
+                connection.close()
+
+    candidates: list[dict[str, Any]] = []
+    for token_address, payload_json, last_qualified_at, last_seen_at in rows:
+        try:
+            payload = json.loads(payload_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+
+        address = str(token_address or "").strip()
+        if not address:
+            continue
+
+        symbol = str(payload.get("symbol") or "Unknown").strip()[:40] or "Unknown"
+        quote_symbol = str(payload.get("quote_symbol") or "SOL").strip()[:20] or "SOL"
+
+        candidates.append(
+            {
+                "address": address,
+                "label": f"{symbol} / {quote_symbol}",
+                "href": f"/discovery/solana/{address}",
+                "dex_id": str(payload.get("dex_id") or "").strip()[:40],
+                "last_qualified_at": last_qualified_at,
+                "last_seen_at": last_seen_at,
+            }
+        )
+
+    return {
+        "connected": True,
+        "generated_at": generated_at,
+        "candidates": candidates,
     }
 
 def load_solana_discovery_feed(

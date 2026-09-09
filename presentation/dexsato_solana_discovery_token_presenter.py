@@ -546,6 +546,27 @@ def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str
         '<div class="coin-list-empty">No discovery tokens are available.</div>'
     )
     return (
+        '<section class="discovery-engine-v12" data-discovery-engine data-state="starting" role="status" aria-live="polite">'
+        '<div class="discovery-engine-head-v12">'
+        '<strong><i aria-hidden="true"></i><span data-engine-title>Discovery Engine</span></strong>'
+        '<small>Solana · qualified feed</small></div>'
+        '<div class="discovery-engine-screen-v12">'
+        '<div class="discovery-engine-grid-v12" aria-hidden="true"></div>'
+        '<div class="discovery-engine-beam-v12" aria-hidden="true"></div>'
+        '<div class="discovery-engine-log-v12">'
+        '<p class="active" data-engine-line="[MONITOR] Qualified discovery feed connected">[MONITOR] Qualified discovery feed connected</p>'
+        '<p data-engine-line="[SCAN] Listening for newly qualified Solana tokens">[SCAN] Listening for newly qualified Solana tokens</p>'
+        '<p data-engine-line="[FILTER] Waiting for the next candidate">[FILTER] Waiting for the next candidate</p>'
+        '</div></div>'
+        '<div class="discovery-engine-result-v12">'
+        '<span data-engine-result-label>Awaiting next candidate</span>'
+        '<a data-engine-token hidden></a>'
+        '<small data-engine-result-copy>The next token appears only after it enters the real qualified feed.</small>'
+        '</div>'
+        '<div class="discovery-engine-foot-v12">'
+        '<span data-engine-status>INITIALISING</span>'
+        '<time data-engine-countdown>Next feed check --:--</time>'
+        '</div></section>'
         '<section class="workspace-rail-card coin-list token-list-v07a" data-coin-list>'
         '<div class="workspace-rail-head token-list-head-v07a"><h2>Token List</h2>'
         '<span class="token-list-chain-v07a">SOLANA</span></div>'
@@ -558,7 +579,7 @@ def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str
         '<input type="search" placeholder="Search token or pair" data-coin-list-search></label>'
         '<div class="token-list-columns-v08b" aria-hidden="true">'
         '<span>Token</span><span>Price</span><span>24h</span></div>'
-        f'<div class="coin-list-rows" data-coin-list-rows>{body}</div></section>'
+        f'<div class="coin-list-rows" data-coin-list-rows>{body}</div>'
     )
 
 
@@ -3005,6 +3026,209 @@ a.tw-market-dex:hover{color:#4CF4D6!important}
   pointer-events:none;
 }
 
+/* TW-MOTION-01 — restrained, data-driven workspace motion */
+@keyframes dexsato-live-heartbeat{
+  0%,100%{opacity:.68;transform:scale(.92);filter:brightness(1)}
+  50%{opacity:1;transform:scale(1.58);filter:brightness(1.8)}
+}
+@keyframes dexsato-trade-enter-buy{
+  0%{opacity:.45;background-color:rgba(34,210,127,.48);box-shadow:inset 4px 0 0 #22d27f}
+  100%{opacity:1;background-color:transparent}
+}
+@keyframes dexsato-trade-enter-sell{
+  0%{opacity:.45;background-color:rgba(255,95,120,.48);box-shadow:inset 4px 0 0 #ff5f78}
+  100%{opacity:1;background-color:transparent}
+}
+@keyframes dexsato-value-flash{
+  0%{filter:brightness(1);text-shadow:none}
+  35%{filter:brightness(1.55);text-shadow:0 0 12px currentColor}
+  100%{filter:brightness(1);text-shadow:none}
+}
+.transactions-state.live::before{
+  min-width:7px;
+  min-height:7px;
+  box-shadow:0 0 9px rgba(34,210,127,.9);
+  animation:dexsato-live-heartbeat 1.45s ease-in-out infinite;
+  transform-origin:center;
+}
+.transactions-table tbody tr.dexsato-trade-enter.dexsato-side-buy>td{
+  animation:dexsato-trade-enter-buy 2s ease-out;
+}
+.transactions-table tbody tr.dexsato-trade-enter.dexsato-side-sell>td{
+  animation:dexsato-trade-enter-sell 2s ease-out;
+}
+.transactions-flow-item b.dexsato-value-flash{
+  animation:dexsato-value-flash .9s ease-out;
+}
+
+/* DISCOVERY-ENGINE-V12 — real qualified-feed scanner */
+.discovery-engine-v12{
+  position:relative;
+  margin:0;
+  overflow:hidden;
+  border:1px solid rgba(37,211,167,.34);
+  border-radius:7px;
+  background:
+    radial-gradient(circle at 50% 0,rgba(37,211,167,.07),transparent 58%),
+    #091018;
+  color:#dce8ef;
+}
+.discovery-engine-head-v12,
+.discovery-engine-foot-v12{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:9px 11px;
+}
+.discovery-engine-head-v12{
+  border-bottom:1px solid rgba(108,132,151,.18);
+}
+.discovery-engine-head-v12 strong{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#2be0bd;
+  font-size:10px;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+}
+.discovery-engine-head-v12 strong i{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#2be0bd;
+  box-shadow:0 0 0 0 rgba(43,224,189,.5);
+  animation:dexsato-engine-heartbeat-v12 1.7s ease-out infinite;
+}
+.discovery-engine-head-v12 small,
+.discovery-engine-foot-v12{
+  color:#668298;
+  font-size:8px;
+  letter-spacing:.05em;
+}
+.discovery-engine-screen-v12{
+  position:relative;
+  min-height:104px;
+  overflow:hidden;
+  padding:12px 11px;
+}
+.discovery-engine-grid-v12{
+  position:absolute;
+  inset:0;
+  opacity:.16;
+  background-image:
+    linear-gradient(rgba(44,211,180,.16) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(44,211,180,.12) 1px,transparent 1px);
+  background-size:100% 20px,22px 100%;
+}
+.discovery-engine-beam-v12{
+  position:absolute;
+  z-index:1;
+  top:-35%;
+  left:0;
+  width:100%;
+  height:38%;
+  border-bottom:1px solid rgba(52,241,203,.8);
+  background:linear-gradient(
+    to bottom,
+    transparent,
+    rgba(38,226,188,.04),
+    rgba(38,226,188,.18)
+  );
+  filter:drop-shadow(0 5px 7px rgba(38,226,188,.16));
+  animation:dexsato-engine-scan-v12 3.2s linear infinite;
+}
+.discovery-engine-log-v12{
+  position:relative;
+  z-index:2;
+}
+.discovery-engine-log-v12 p{
+  margin:0 0 9px;
+  color:#33514f;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:9px;
+  line-height:1.45;
+  opacity:.36;
+  transition:color .35s ease,opacity .35s ease,transform .35s ease;
+}
+.discovery-engine-log-v12 p.active{
+  color:#31dfc0;
+  opacity:1;
+  transform:translateX(3px);
+  text-shadow:0 0 10px rgba(49,223,192,.18);
+}
+.discovery-engine-result-v12{
+  position:relative;
+  border-top:1px solid rgba(108,132,151,.16);
+  padding:9px 11px;
+}
+.discovery-engine-result-v12>span{
+  display:block;
+  color:#b8c8d2;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.discovery-engine-result-v12>a{
+  display:block;
+  margin-top:5px;
+  overflow:hidden;
+  color:#2be0bd;
+  font-size:11px;
+  font-weight:800;
+  text-decoration:none;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.discovery-engine-result-v12 small{
+  display:block;
+  margin-top:5px;
+  color:#698193;
+  font-size:8px;
+  line-height:1.5;
+}
+.discovery-engine-foot-v12{
+  border-top:1px solid rgba(108,132,151,.16);
+}
+.discovery-engine-foot-v12 [data-engine-status]{
+  color:#2be0bd;
+}
+.discovery-engine-v12[data-state="detected"]{
+  animation:dexsato-engine-detected-v12 1.2s ease-out;
+}
+.discovery-engine-v12[data-state="detected"] .discovery-engine-result-v12{
+  background:rgba(38,226,188,.08);
+}
+.discovery-engine-v12[data-state="waiting"] .discovery-engine-head-v12 strong,
+.discovery-engine-v12[data-state="waiting"] [data-engine-status]{
+  color:#d9a43b;
+}
+.discovery-engine-v12[data-state="waiting"] .discovery-engine-head-v12 strong i{
+  background:#d9a43b;
+  animation:none;
+}
+@keyframes dexsato-engine-heartbeat-v12{
+  0%{box-shadow:0 0 0 0 rgba(43,224,189,.55)}
+  65%,100%{box-shadow:0 0 0 7px rgba(43,224,189,0)}
+}
+@keyframes dexsato-engine-scan-v12{
+  from{transform:translateY(-30%)}
+  to{transform:translateY(390%)}
+}
+@keyframes dexsato-engine-detected-v12{
+  0%{box-shadow:0 0 0 rgba(43,224,189,0)}
+  25%{box-shadow:inset 0 0 24px rgba(43,224,189,.22),0 0 16px rgba(43,224,189,.12)}
+  100%{box-shadow:0 0 0 rgba(43,224,189,0)}
+}
+@media(prefers-reduced-motion:reduce){
+  .discovery-engine-head-v12 strong i,
+  .discovery-engine-beam-v12,
+  .discovery-engine-v12[data-state="detected"]{
+    animation:none!important;
+  }
+}
 </style>
 <script src="/static/vendor/lightweight-charts.standalone.production.js?v=5.2.1"></script>
 </head><body><div class="tw-dex-app">
@@ -4789,6 +5013,12 @@ __QUALIFICATION_PANEL__
 
   function renderRows(rows){
     const scrollAnchor=captureScrollAnchor();
+    const existingTransactionIds=new Set(
+      [...tbody.querySelectorAll("tr[data-transaction-id]")]
+        .map(row=>rawText(row.dataset.transactionId))
+        .filter(Boolean)
+    );
+    const animateIncomingRows=existingTransactionIds.size>0;
     tbody.replaceChildren();
     const visibleRows=rows.slice(0,MAX_VISIBLE_TRANSACTIONS);
 
@@ -4807,7 +5037,12 @@ __QUALIFICATION_PANEL__
       if(!item||typeof item!=="object") return;
 
       const tr=document.createElement("tr");
-      tr.dataset.transactionId=rawText(item.id);
+      const transactionId=rawText(item.id);
+      tr.dataset.transactionId=transactionId;
+      if(animateIncomingRows&&!existingTransactionIds.has(transactionId)){
+        const side=rawText(item.side).toLowerCase()==="sell"?"sell":"buy";
+        tr.classList.add("dexsato-trade-enter","dexsato-side-"+side);
+      }
       tr.append(
         textCell(formatTime(item.timestamp)),
         nodeCell(sideNode(item.side)),
@@ -4922,9 +5157,26 @@ __QUALIFICATION_PANEL__
         deduped.push(item);
       });
 
+      const flowTargets=[
+        document.querySelector("[data-flow-buy-volume]"),
+        document.querySelector("[data-flow-sell-volume]"),
+        document.querySelector("[data-flow-net]"),
+        document.querySelector("[data-flow-largest]")
+      ].filter(Boolean);
+      const previousFlowValues=new Map(
+        flowTargets.map(node=>[node,node.textContent])
+      );
+
       renderRows(deduped);
       renderRecentFlow(deduped);
       renderMarketActivity(payload.market_activity);
+
+      previousFlowValues.forEach((previous,node)=>{
+        if(previous==="--"||previous===node.textContent) return;
+        node.classList.remove("dexsato-value-flash");
+        void node.offsetWidth;
+        node.classList.add("dexsato-value-flash");
+      });
 
       /* CHART_V23_TRADE_OVERLAY */
       window.dispatchEvent(new CustomEvent("dexsato:transactions-updated",{
@@ -4956,6 +5208,123 @@ __QUALIFICATION_PANEL__
 })();
 </script>
 
+<script>
+/* DISCOVERY-ENGINE-V12 — detect real additions to the qualified feed */
+(()=>{
+  const engine=document.querySelector("[data-discovery-engine]");
+  if(!engine)return;
+
+  const title=engine.querySelector("[data-engine-title]");
+  const status=engine.querySelector("[data-engine-status]");
+  const countdown=engine.querySelector("[data-engine-countdown]");
+  const resultLabel=engine.querySelector("[data-engine-result-label]");
+  const resultCopy=engine.querySelector("[data-engine-result-copy]");
+  const tokenLink=engine.querySelector("[data-engine-token]");
+  const lines=[...engine.querySelectorAll("[data-engine-line]")];
+  const intervalMs=12000;
+
+  let known=new Set();
+  let primed=false;
+  let nextCheck=Date.now();
+  let lineIndex=0;
+  let polling=false;
+
+  const rotateLine=()=>{
+    if(!lines.length)return;
+    lines.forEach((line,index)=>line.classList.toggle("active",index===lineIndex));
+    lineIndex=(lineIndex+1)%lines.length;
+  };
+
+  const renderCountdown=()=>{
+    const remaining=Math.max(0,nextCheck-Date.now());
+    const seconds=Math.ceil(remaining/1000);
+    countdown.textContent=`Next feed check 00:${String(seconds).padStart(2,"0")}`;
+  };
+
+  const markLive=()=>{
+    engine.dataset.state="live";
+    title.textContent="Discovery Engine";
+    status.textContent="SCANNING";
+  };
+
+  const announce=token=>{
+    engine.dataset.state="detected";
+    title.textContent="New Token Detected";
+    status.textContent="QUALIFIED";
+    resultLabel.textContent="New qualified candidate";
+    tokenLink.hidden=false;
+    tokenLink.href=token.href;
+    tokenLink.textContent=token.label||token.address;
+    resultCopy.textContent=`${token.address.slice(0,6)}…${token.address.slice(-6)} entered the qualified feed.`;
+
+    window.setTimeout(()=>{
+      markLive();
+      resultLabel.textContent="Monitoring next candidate";
+      resultCopy.textContent="Detection was sourced from the real qualified discovery feed.";
+    },5000);
+  };
+
+  const poll=async()=>{
+    if(polling||document.hidden)return;
+    polling=true;
+    nextCheck=Date.now()+intervalMs;
+
+    try{
+      const response=await fetch(
+        "/api/discovery/solana/engine",
+        {
+          method:"GET",
+          credentials:"same-origin",
+          headers:{"Accept":"application/json"},
+          cache:"no-store"
+        }
+      );
+
+      if(!response.ok)throw new Error("qualified feed unavailable");
+
+      const payload=await response.json();
+      if(payload.connected!==true)throw new Error("qualified feed unavailable");
+
+      const candidates=Array.isArray(payload.candidates)
+        ? payload.candidates.filter(item=>
+            item&&typeof item==="object"&&item.address&&item.href
+          )
+        : [];
+
+      if(!primed){
+        known=new Set(candidates.map(item=>item.address));
+        primed=true;
+        markLive();
+      }else{
+        const detected=candidates.find(item=>!known.has(item.address));
+        candidates.forEach(item=>known.add(item.address));
+        if(detected)announce(detected);
+        else markLive();
+      }
+    }catch(error){
+      engine.dataset.state="waiting";
+      title.textContent="Discovery Engine";
+      status.textContent="WAITING";
+      resultLabel.textContent="Feed check delayed";
+      resultCopy.textContent="Existing observations remain unchanged. The engine will retry automatically.";
+    }finally{
+      polling=false;
+      nextCheck=Date.now()+intervalMs;
+      renderCountdown();
+    }
+  };
+
+  rotateLine();
+  window.setInterval(rotateLine,1800);
+  window.setInterval(renderCountdown,250);
+  window.setInterval(poll,intervalMs);
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden)poll();
+  });
+
+  poll();
+})();
+</script>
 </body></html>"""
     replacements = {
         "__SYMBOL__": symbol, "__QUOTE__": quote, "__NAME__": name,

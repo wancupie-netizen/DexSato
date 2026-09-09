@@ -60,6 +60,7 @@ from application.founder_snapshot_service import (
     read_latest_snapshot,
 )
 from application.solana_discovery_feed_service import (
+    load_solana_discovery_engine_feed,
     load_solana_discovery_feed,
 )
 from application.solana_discovery_token_service import (
@@ -256,6 +257,11 @@ def solana_discovery_token(token_address: str) -> str:
     feed = load_solana_discovery_feed()
     return render_solana_discovery_token_page(detail, feed=feed)
 
+
+@app.get("/api/discovery/solana/engine")
+def solana_discovery_engine() -> dict[str, object]:
+    """Return the lightweight qualified-token feed used by Discovery Engine."""
+    return load_solana_discovery_engine_feed(limit=25)
 
 # CHART_V22_LIVE_CANDLE
 @app.get("/api/discovery/solana/{token_address}/candles")
