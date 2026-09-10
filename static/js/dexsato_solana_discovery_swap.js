@@ -7,6 +7,8 @@
 
     const walletState = sandbox.querySelector("[data-wallet-state]");
     const connect = sandbox.querySelector("[data-connect-wallet]");
+    const walletConnectShell = sandbox.querySelector("[data-wallet-connect-shell]");
+    const headerConnect = document.querySelector("[data-header-connect-wallet]");
     const quoteButton = sandbox.querySelector("[data-get-quote]");
     const amount = sandbox.querySelector("[data-quote-amount]");
     const receiveAmount = sandbox.querySelector("[data-receive-amount]");
@@ -65,6 +67,26 @@
     function currentWalletAddress() {
         return walletProvider && walletProvider.publicKey
             ? String(walletProvider.publicKey) : "";
+    }
+
+    function walletLabel(address) {
+        return address.slice(0, 4) + "…" + address.slice(-4) + " · Connected";
+    }
+
+    function renderWalletState(message) {
+        const connected = Boolean(walletAddress);
+        walletConnectShell.hidden = connected;
+        connect.textContent = "Connect";
+        walletState.textContent = connected ? "" : present(message, "");
+        walletState.hidden = connected || !walletState.textContent;
+        if (headerConnect) {
+            headerConnect.textContent = connected ? "● " + walletLabel(walletAddress) : "Connect Wallet";
+            headerConnect.classList.toggle("connected", connected);
+            headerConnect.setAttribute(
+                "aria-label",
+                connected ? walletLabel(walletAddress) + ". Change wallet" : "Connect wallet"
+            );
+        }
     }
 
     function canonicalDecimal(value) {
@@ -608,10 +630,15 @@
         const provider = window.phantom && window.phantom.solana
             ? window.phantom.solana : window.solana;
         if (!provider || typeof provider.connect !== "function") {
-            walletState.textContent = "Supported Solana wallet not detected.";
+            renderWalletState("Supported Solana wallet not detected.");
             return;
         }
         connect.disabled = true;
+        connect.textContent = "Connecting…";
+        if (headerConnect) {
+            headerConnect.disabled = true;
+            headerConnect.textContent = "Connecting…";
+        }
         try {
             const connection = await provider.connect();
             const key = connection && connection.publicKey ? connection.publicKey : provider.publicKey;
@@ -620,10 +647,7 @@
             }
             walletProvider = provider;
             walletAddress = String(key);
-            walletState.textContent = walletAddress.slice(0, 4) + "…"
-                + walletAddress.slice(-4) + " · Connected";
-            walletState.classList.add("connected");
-            connect.textContent = "Change";
+            renderWalletState();
             clearPreparedState();
             clearWalletBalance();
             loadWalletBalance();
@@ -632,10 +656,7 @@
                     const changed = publicKey ? String(publicKey) : "";
                     if (changed !== walletAddress) {
                         walletAddress = changed;
-                        walletState.textContent = changed
-                            ? changed.slice(0, 4) + "…" + changed.slice(-4) + " · Connected"
-                            : "Wallet disconnected.";
-                        walletState.classList.toggle("connected", Boolean(changed));
+                        renderWalletState(changed ? "" : "Wallet disconnected.");
                         clearQuote();
                         clearWalletBalance();
                         if (changed) loadWalletBalance();
@@ -643,20 +664,22 @@
                 });
                 provider.on("disconnect", function () {
                     walletAddress = "";
-                    walletState.textContent = "Wallet disconnected.";
-                    walletState.classList.remove("connected");
+                    renderWalletState("Wallet disconnected.");
                     clearQuote();
                     clearWalletBalance();
                 });
             }
         } catch (error) {
-            walletState.classList.remove("connected");
-            walletState.textContent = present(error.message, "Wallet connection was not approved.");
+            renderWalletState(present(error.message, "Wallet connection was not approved."));
         } finally {
             connect.disabled = false;
+            if (headerConnect) headerConnect.disabled = false;
+            renderWalletState(walletState.textContent);
             updateSwapAvailability();
         }
     });
+
+    renderWalletState();
 
     quoteButton.addEventListener("click", async function () {
         if (busy) return;

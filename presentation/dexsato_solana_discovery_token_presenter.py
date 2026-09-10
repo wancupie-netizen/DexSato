@@ -1994,6 +1994,15 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
 .tw-dex-topbar .tw-header-wallet-v07b:hover{
   filter:brightness(.96);
 }
+.tw-dex-topbar .tw-header-wallet-v07b.connected{
+  border-color:rgba(76,244,214,.46);
+  background:#10221f;
+  color:#4CF4D6;
+}
+.tw-dex-topbar .tw-header-wallet-v07b:disabled{
+  cursor:wait;
+  opacity:.72;
+}
 .tw-dex-topbar .tw-header-wallet-v07b:focus-visible{
   outline:2px solid #E7EDF4;
   outline-offset:2px;
@@ -2427,7 +2436,7 @@ html[data-theme="intel"] .coin-list-search input{border-color:#303a45;background
 .trade-head-v04{display:flex;align-items:center;justify-content:space-between;gap:10px}.trade-head-v04 h3{margin:0!important;font-size:17px!important}.trade-head-v04 .trade-network-v04{display:inline-flex;align-items:center;gap:5px;margin:0;padding:5px 8px;border:1px solid #254c45;border-radius:5px;background:#16322f;color:var(--cyan);font:700 8px/1 var(--mono);letter-spacing:.02em}.trade-network-v04 i{width:5px;height:5px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 2px rgba(76,244,214,.08)}
 .trade-switch-v04{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:4px;border:1px solid var(--line);border-radius:9px;background:#080e15}.trade-switch-v04 button{height:39px;border:0;border-radius:6px;background:transparent;color:var(--muted);font:700 13px var(--ui);cursor:pointer}.trade-switch-v04 button[aria-pressed="true"]{background:var(--trade-accent);color:#07120f}.trade-switch-v04 button:disabled{cursor:wait;opacity:.65}
 .trade-orderline-v04{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-size:10px}.trade-orderline-v04 strong{padding-bottom:6px;border-bottom:2px solid var(--trade-accent);color:var(--text);font-weight:650}.trade-orderline-v04 span:last-child{font-size:9px}
-.trade-v04 .wallet-bar-v27{margin:0;padding:8px 9px;background:#090f17}
+.trade-connect-v08{display:grid;gap:6px}.trade-connect-v08[hidden]{display:none!important}.trade-connect-button-v08{width:100%;height:43px;border:1px solid #bdf477;border-radius:7px;background:#bdf477;color:#0b1308;font:800 12px var(--ui);cursor:pointer}.trade-connect-button-v08:hover{filter:brightness(.96)}.trade-connect-button-v08:focus-visible{outline:2px solid #e7edf4;outline-offset:2px}.trade-connect-button-v08:disabled{cursor:wait;opacity:.62}.trade-wallet-error-v08{display:block;padding:2px 3px 0;color:var(--amber);font:600 9px/1.4 var(--ui)}.trade-wallet-error-v08[hidden]{display:none}
 .trade-amount-v04,.trade-receive-v04{padding:13px;border:1px solid #2a3948;border-radius:8px;background:#090f17}.trade-receive-v04{background:#121e27;border-color:#263642}.trade-field-head-v04{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;color:var(--muted);font-size:9px}.trade-field-head-v04 span:last-child{text-align:right}.trade-amount-row-v04{display:flex;align-items:center;gap:8px}.trade-amount-row-v04 input{width:100%;min-width:0;padding:0;border:0;background:transparent;color:var(--text);font:650 27px/1.2 var(--display)}.trade-amount-row-v04 input:focus{outline:0}.trade-amount-row-v04 strong{min-width:0;font:650 22px/1.2 var(--display);overflow-wrap:anywhere}.trade-coin-v04{flex:0 0 auto;padding:8px 10px;border-radius:20px;background:#1a2734;color:var(--text);font:700 11px var(--display);white-space:nowrap}.trade-receive-v04 .trade-coin-v04{background:transparent;padding-right:0}.trade-note-v04{display:block;margin-top:7px;color:var(--muted);font-size:9px}
 .trade-presets-v04{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.trade-presets-v04 button{padding:7px 0;border:1px solid var(--line2);border-radius:5px;background:#15202b;color:#afbfce;font-size:9px;cursor:pointer}.trade-presets-v04 button:hover,.trade-presets-v04 button.active{border-color:var(--trade-accent);color:var(--trade-accent);background:color-mix(in srgb,var(--trade-accent) 8%,#15202b)}.trade-presets-v04 button:disabled{cursor:not-allowed;opacity:.38}
 .trade-route-v04{display:flex;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);color:var(--muted);font-size:9px}.trade-route-v04 b{color:var(--text);font-weight:550;text-align:right}
@@ -3272,7 +3281,7 @@ __CANDLESTICK_CHART_PANEL__
 <section class="card jupiter jupiter-v27 trade-v04 trade-v05" data-jupiter-sandbox data-token-address="__TOKEN__" data-token-symbol="__SYMBOL__" data-side="buy" data-quote-ready="false">
   <div class="trade-head-v04"><h3>Trade __SYMBOL__</h3><span class="trade-network-v04"><i aria-hidden="true"></i>Solana</span></div>
   <div class="trade-switch-v04" role="group" aria-label="Trade direction"><button type="button" data-trade-side="buy" aria-pressed="true">Buy</button><button type="button" data-trade-side="sell" aria-pressed="false">Sell</button></div>
-  <div class="wallet-bar-v27"><div class="wallet-state" data-wallet-state>Wallet not connected</div><button class="sandbox-button" type="button" data-connect-wallet>Connect wallet</button></div>
+  <div class="trade-connect-v08" data-wallet-connect-shell><button class="trade-connect-button-v08" type="button" data-connect-wallet aria-label="Connect wallet">Connect</button><small class="trade-wallet-error-v08" data-wallet-state role="status" aria-live="polite" hidden></small></div>
   <div class="trade-orderline-v04"><strong>Market swap</strong><span>Slippage · managed by Jupiter</span></div>
   <label class="trade-amount-v04" for="jupiter-amount"><span class="trade-field-head-v04"><span>You pay</span><span data-balance-label>SOL balance checked at order</span></span><span class="trade-amount-row-v04"><input id="jupiter-amount" data-quote-amount inputmode="decimal" type="number" min="0" step="any" value="0.1" aria-label="Amount to pay"><span class="trade-coin-v04" data-pay-coin>&#9678; SOL</span></span><small class="trade-note-v04" data-amount-note>Enter an amount between 0.001 and 100 SOL</small><span class="swap-input-error-v272" data-swap-input-error hidden role="alert"></span></label>
   <div class="trade-presets-v04" aria-label="Wallet balance percentages"><button type="button" data-amount-percent="25" disabled>25%</button><button type="button" data-amount-percent="50" disabled>50%</button><button type="button" data-amount-percent="75" disabled>75%</button><button type="button" data-amount-percent="100" disabled data-maximum-label>MAX</button></div>
@@ -3291,7 +3300,7 @@ __TOKEN_OBSERVATION_PANEL__
 __QUALIFICATION_PANEL__
 <section class="card market-snapshot-v26"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div></section>
 </aside></div>
-</main></div></div><script src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-07" defer></script><script>
+</main></div></div><script src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-08" defer></script><script>
 (function(){
   const options=[...document.querySelectorAll("[data-theme-option]")];
   function applyTheme(theme){

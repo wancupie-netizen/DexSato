@@ -249,6 +249,24 @@ def test_trade_percentage_controls_use_authoritative_raw_wallet_balances():
     assert "Number(first)" not in script and "Number(second)" not in script
 
 
+def test_trade_wallet_connect_is_full_width_and_moves_connected_identity_to_header():
+    html = render_solana_discovery_token_page(DETAIL, feed=None)
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "static" / "js" / "dexsato_solana_discovery_swap.js"
+    ).read_text(encoding="utf-8")
+
+    assert "Wallet not connected" not in html
+    assert 'class="trade-connect-button-v08" type="button" data-connect-wallet' in html
+    assert '>Connect</button>' in html
+    assert 'data-wallet-connect-shell' in html
+    assert 'data-header-connect-wallet>Connect Wallet</button>' in html
+    assert 'walletConnectShell.hidden = connected' in script
+    assert 'headerConnect.textContent = connected ? "● " + walletLabel(walletAddress)' in script
+    assert 'headerConnect.classList.toggle("connected", connected)' in script
+    assert 'dexsato_solana_discovery_swap.js?v=tw-dex-08' in html
+
+
 def test_jupiter_v27_renders_readable_quote_preview_fields():
     script = (
         Path(__file__).resolve().parents[1]
