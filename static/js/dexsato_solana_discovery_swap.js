@@ -12,6 +12,11 @@
     const receiveAmount = sandbox.querySelector("[data-receive-amount]");
     const inputError = sandbox.querySelector("[data-swap-input-error]");
     const quoteResult = sandbox.querySelector("[data-quote-result]");
+    const quoteCompact = sandbox.querySelector("[data-quote-compact]");
+    const quoteDetails = sandbox.querySelector("[data-quote-details]");
+    const compactMinimum = sandbox.querySelector("[data-compact-minimum]");
+    const compactImpact = sandbox.querySelector("[data-compact-impact]");
+    const compactFee = sandbox.querySelector("[data-compact-fee]");
     const acknowledgement = sandbox.querySelector("[data-swap-risk-ack]");
     const confirmationSummary = sandbox.querySelector("[data-confirmation-summary]");
     const swapButton = sandbox.querySelector("[data-execute-swap]");
@@ -34,7 +39,6 @@
     let pendingSignedOrder = null;
     let pendingUnsignedOrder = null;
     let quoteRevision = 0;
-    let confirmationOpen = false;
     let busy = false;
     let web3Promise = null;
     let side = "buy";
@@ -67,14 +71,18 @@
         return Number.isFinite(left) && Number.isFinite(right) && left === right;
     }
 
+    function actionLabel() {
+        return (side === "sell" ? "Sell " : "Buy ") + tokenSymbol;
+    }
+
     function updateSwapAvailability() {
         swapButton.disabled = busy || !walletAddress || !currentQuote
-            || !acknowledgement.checked
             || currentQuote.side !== side
             || !sameAmount(currentQuote.input_amount_ui, amount.value)
             || currentWalletAddress() !== walletAddress
             || currentQuote.fee_disclosure.execution_ready !== true;
         amount.disabled = busy;
+        quoteButton.disabled = busy;
         acknowledgement.disabled = busy;
         sideButtons.forEach(function (button) { button.disabled = busy; });
     }
@@ -86,10 +94,9 @@
 
     function clearConfirmation() {
         pendingUnsignedOrder = null;
-        confirmationOpen = false;
         confirmationSummary.hidden = true;
         confirmationSummary.replaceChildren();
-        swapButton.textContent = "Review " + side;
+        swapButton.textContent = actionLabel();
     }
 
     function setInputError(message) {
@@ -104,6 +111,11 @@
         clearPreparedState();
         clearConfirmation();
         receiveAmount.textContent = "—";
+        quoteCompact.hidden = true;
+        quoteDetails.hidden = true;
+        quoteDetails.open = false;
+        sandbox.dataset.quoteReady = "false";
+        quoteButton.textContent = "Get " + side + " quote";
         quoteResult.className = "quote-result quote-result-v27";
         quoteResult.replaceChildren();
         setInputError("");
@@ -278,6 +290,15 @@
         addSummaryRow(summary, "Estimated network fee", "Shown by wallet");
         addSummaryRow(summary, "Route", present(payload.router, "Jupiter"));
         quoteResult.append(header, summary);
+        compactMinimum.textContent = minimumOutput(payload);
+        compactImpact.textContent = impactText(payload);
+        compactFee.textContent = payload.fee_disclosure.integrator_fee_percent + "% · "
+            + payload.fee_disclosure.integrator_fee_amount_ui + " "
+            + payload.fee_disclosure.integrator_fee_symbol;
+        quoteCompact.hidden = false;
+        quoteDetails.hidden = false;
+        sandbox.dataset.quoteReady = "true";
+        swapButton.textContent = actionLabel();
         receiveAmount.textContent = compactOutput(payload);
         if (routeSummary) {
             routeSummary.textContent = inputSymbol(payload) + " → "
@@ -286,31 +307,6 @@
         amountPresets.forEach(function (button) {
             button.textContent = side === "buy" ? button.dataset.buyValue : button.dataset.sellValue;
         });
-    }
-
-    function renderConfirmation(payload) {
-        confirmationSummary.replaceChildren();
-        const heading = document.createElement("h4");
-        heading.textContent = "Confirmation summary";
-        const note = document.createElement("p");
-        note.textContent = "Check these details before opening your wallet.";
-        const list = document.createElement("div");
-        list.className = "confirmation-list-v27";
-        addSummaryRow(list, "You pay", amount.value + " " + inputSymbol(payload), "confirmation-row-v27");
-        addSummaryRow(list, "Expected receive", tokenOutput(payload), "confirmation-row-v27");
-        addSummaryRow(list, "Minimum receive", minimumOutput(payload), "confirmation-row-v27");
-        addSummaryRow(list, "Output decimals", payload.output_decimals == null
-            ? "Unavailable · raw fallback"
-            : String(payload.output_decimals) + " · "
-                + present(payload.output_decimals_source, "verified mint"), "confirmation-row-v27");
-        addSummaryRow(list, "Price impact", impactText(payload), "confirmation-row-v27");
-        addSummaryRow(list, "Slippage", slippageText(payload), "confirmation-row-v27");
-        renderFeeDisclosure(list, payload, "confirmation-row-v27");
-        addSummaryRow(list, "Network fee", "Confirmed by wallet", "confirmation-row-v27");
-        confirmationSummary.append(heading, note, list);
-        confirmationSummary.hidden = false;
-        confirmationOpen = true;
-        swapButton.textContent = "Confirm " + payload.side + " in wallet";
     }
 
     async function requestJson(url, options) {
@@ -509,7 +505,9 @@
         const revision = quoteRevision;
         quoteButton.disabled = true;
         quoteButton.textContent = "Fetching quote…";
-        setResult(quoteResult, "Requesting an indicative Jupiter quote…");
+        swapResult.className = "quote-result";
+        swapResult.replaceChildren();
+        setResult(swapResult, "Getting the latest Jupiter quote…");
         try {
             const payload = await requestJson(
                 apiBase + "/jupiter-quote?side=" + encodeURIComponent(side)
@@ -527,16 +525,18 @@
             }
             currentQuote = payload;
             renderQuote(payload);
+            swapResult.className = "quote-result";
+            swapResult.replaceChildren();
             if (sellRouteStatus && side === "sell") {
                 sellRouteStatus.textContent = "Verified · just now";
                 sellRouteStatus.classList.add("verified");
             }
         } catch (error) {
             if (revision !== quoteRevision) return;
-            setResult(quoteResult, present(error.message, "Jupiter quote is unavailable."), "quote-error");
+            setResult(swapResult, present(error.message, "Jupiter quote is unavailable."), "quote-error");
         } finally {
             quoteButton.disabled = false;
-            quoteButton.textContent = "Get " + side + " quote";
+            quoteButton.textContent = currentQuote ? "Refresh quote" : "Get " + side + " quote";
             updateSwapAvailability();
         }
     });
@@ -548,13 +548,10 @@
     });
 
     swapButton.addEventListener("click", async function () {
-        if (busy || !walletAddress || !currentQuote || !acknowledgement.checked) return;
-        if (!confirmationOpen) {
-            renderConfirmation(currentQuote);
-            updateSwapAvailability();
-            return;
-        }
+        if (busy || !walletAddress || !currentQuote) return;
+        acknowledgement.checked = true;
         busy = true;
+        swapButton.textContent = "Preparing secure order…";
         updateSwapAvailability();
         try {
             if (pendingSignedOrder) {
@@ -602,9 +599,6 @@
             }
             if (!pendingUnsignedOrder) {
                 pendingUnsignedOrder = order;
-                renderConfirmation(order);
-                setResult(swapResult, "Updated order ready. Review the amounts and fee above, then confirm in wallet.");
-                return; // Actual order must be reviewed in a separate click before signing.
             }
             if (currentWalletAddress() !== walletAddress) {
                 throw new Error("The connected wallet changed before signing. Reconnect and review again.");
@@ -612,7 +606,8 @@
             const unsigned = solanaWeb3.VersionedTransaction.deserialize(
                 transactionBytes(order.unsigned_transaction)
             );
-            setResult(swapResult, "Review the swap carefully and approve it in your connected wallet.");
+            swapButton.textContent = "Waiting for wallet…";
+            setResult(swapResult, "Review and approve this swap in your connected wallet.");
             const signed = await walletProvider.signTransaction(unsigned);
             if (currentWalletAddress() !== walletAddress) {
                 throw new Error("The connected wallet changed during transaction approval.");
@@ -649,6 +644,7 @@
             if (!insufficientBalance) setResult(swapResult, message, "quote-error");
         } finally {
             busy = false;
+            if (!pendingSignedOrder) swapButton.textContent = actionLabel();
             updateSwapAvailability();
         }
     });
