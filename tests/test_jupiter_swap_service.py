@@ -12,6 +12,7 @@ from application.jupiter_quote_service import (
 from application.jupiter_swap_service import (
     COMPUTE_BUDGET_PROGRAM,
     JUPITER_V6_PROGRAM,
+    PHANTOM_LIGHTHOUSE_PROGRAM,
     SYSTEM_PROGRAM,
     MAX_PENDING_ORDERS_PER_WALLET,
     JUPITER_EXECUTE_URL,
@@ -21,6 +22,8 @@ from application.jupiter_swap_service import (
     _pending_orders,
     _base58_bytes,
     _CompiledInstruction,
+    _transaction_parts,
+    _validate_lighthouse_augmentation,
     _validate_transaction_policy,
     execute_jupiter_swap,
     prepare_jupiter_swap,
@@ -66,6 +69,75 @@ def _transaction(
     signatures = (signature or bytes(64)) + (bytes(64) if extra_signer else b"")
     transaction = bytes([signer_count]) + signatures + message
     return base64.b64encode(transaction).decode("ascii")
+
+
+def _versioned_transaction(
+    signature: bytes,
+    static_accounts: list[bytes],
+    readonly_unsigned: int,
+    instructions: list[tuple[int, tuple[int, ...], bytes]],
+    lookups: list[tuple[bytes, tuple[int, ...], tuple[int, ...]]],
+    *,
+    blockhash: bytes | None = None,
+) -> str:
+    message = bytearray([128, 1, 0, readonly_unsigned, len(static_accounts)])
+    message.extend(b"".join(static_accounts))
+    message.extend(blockhash or bytes([6]) * 32)
+    message.append(len(instructions))
+    for program_index, account_indices, data in instructions:
+        message.extend((program_index, len(account_indices), *account_indices, len(data)))
+        message.extend(data)
+    message.append(len(lookups))
+    for table_account, writable_indexes, readonly_indexes in lookups:
+        message.extend(table_account)
+        message.extend((len(writable_indexes), *writable_indexes))
+        message.extend((len(readonly_indexes), *readonly_indexes))
+    return base64.b64encode(bytes([1]) + signature + bytes(message)).decode("ascii")
+
+
+def _lighthouse_pair(
+    *,
+    core_data=b"\x01",
+    signed_core_data=None,
+    second_discriminator=10,
+    signed_blockhash=None,
+):
+    wallet = _base58_bytes(WALLET)
+    output_account = bytes([3]) * 32
+    jupiter = _base58_bytes(JUPITER_V6_PROGRAM)
+    lighthouse = _base58_bytes(PHANTOM_LIGHTHOUSE_PROGRAM)
+    table_one = bytes([21]) * 32
+    table_two = bytes([22]) * 32
+    original = _versioned_transaction(
+        bytes(64),
+        [wallet, output_account, jupiter],
+        1,
+        [(2, (0,), core_data)],
+        [
+            (table_one, (141, 123), (117, 99)),
+            (table_two, (62,), (52,)),
+        ],
+    )
+    first_assertion = bytes.fromhex(
+        "060403000dd98201000000000403000001000000000000000000"
+    )
+    second_assertion = bytes([second_discriminator]) + bytes(16)
+    signed = _versioned_transaction(
+        bytes([9]) * 64,
+        [wallet, output_account, lighthouse, jupiter],
+        2,
+        [
+            (3, (0,), core_data if signed_core_data is None else signed_core_data),
+            (2, (0,), first_assertion),
+            (2, (1,), second_assertion),
+        ],
+        [
+            (table_one, (123, 141), (99, 117)),
+            (table_two, (62,), (52,)),
+        ],
+        blockhash=signed_blockhash,
+    )
+    return original, signed
 
 
 def _response(payload):
@@ -356,6 +428,74 @@ def test_executes_only_the_wallet_signed_unchanged_transaction():
         "lastValidBlockHeight": "123456",
     }
     assert call.kwargs["headers"]["x-api-key"] == "server-secret"
+
+
+def test_executes_phantom_lighthouse_augmented_transaction_without_weakening_core_order():
+    _pending_orders.clear()
+    original, signed = _lighthouse_pair()
+    order = _prepare(_order(request_id="lighthouse-order", transaction=original))
+    request_post = Mock(return_value=_response({
+        "status": "Success", "signature": "7" * 88,
+    }))
+
+    result = execute_jupiter_swap(
+        TOKEN, order["request_id"], WALLET, signed,
+        api_key="server-secret", feed=FEED, request_post=request_post,
+        now=lambda: NOW + timedelta(seconds=10),
+    )
+
+    assert result["status"] == "SWAP_CONFIRMED"
+    assert request_post.call_args.kwargs["json"]["signedTransaction"] == signed
+
+
+def test_lighthouse_execution_consumes_one_shot_gate_with_approved_message(tmp_path):
+    import hashlib
+    import json
+    _pending_orders.clear()
+    original, signed = _lighthouse_pair()
+    order = _prepare(_order(request_id="lighthouse-gate", transaction=original))
+    pending = _pending_orders[order["request_id"]]
+    gate_path = tmp_path / "gate.json"
+    gate_path.write_text(json.dumps({
+        "status": "BOUND",
+        "request_id": order["request_id"],
+        "message_sha256": hashlib.sha256(pending.approved_message).hexdigest(),
+    }), encoding="utf-8")
+    pending.one_shot_gate_path = str(gate_path)
+
+    execute_jupiter_swap(
+        TOKEN, order["request_id"], WALLET, signed,
+        api_key="server-secret", feed=FEED,
+        request_post=Mock(return_value=_response({
+            "status": "Success", "signature": "7" * 88,
+        })),
+        now=lambda: NOW + timedelta(seconds=10),
+    )
+
+    gate = json.loads(gate_path.read_text(encoding="utf-8"))
+    assert gate["status"] == "FINALIZATION_PENDING"
+    assert gate["message_sha256"] == hashlib.sha256(pending.approved_message).hexdigest()
+
+
+@pytest.mark.parametrize(
+    "changes,expected",
+    [
+        ({"signed_core_data": b"\x02"}, "Jupiter instruction"),
+        ({"second_discriminator": 11}, "unsupported Lighthouse"),
+        ({"signed_blockhash": bytes([8]) * 32}, "blockhash"),
+    ],
+)
+def test_rejects_lighthouse_wrapper_that_changes_approved_semantics(changes, expected):
+    original, signed = _lighthouse_pair(**changes)
+    _, _, approved_message, _, _, _ = _transaction_parts(original)
+    _, _, signed_message, _, _, _ = _transaction_parts(signed)
+
+    with pytest.raises(JupiterSwapRejected, match=expected):
+        _validate_lighthouse_augmentation(
+            approved_message,
+            signed_message,
+            _base58_bytes(WALLET),
+        )
 
 
 def test_rejects_unsigned_modified_expired_or_replayed_transactions():

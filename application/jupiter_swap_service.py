@@ -61,6 +61,8 @@ TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 ASSOCIATED_TOKEN_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 JUPITER_V6_PROGRAM = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+PHANTOM_LIGHTHOUSE_PROGRAM = "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95"
+PHANTOM_LIGHTHOUSE_ASSERTIONS = ((6, 26), (10, 17))
 DEFAULT_ALLOWED_SWAP_PROGRAMS = frozenset(
     {
         SYSTEM_PROGRAM,
@@ -82,6 +84,7 @@ class _PendingOrder:
     input_amount_raw: str
     wallet_address: str
     expires_at: datetime
+    approved_message: bytes
     message_digest: bytes
     wallet_signature_index: int
     last_valid_block_height: str | None
@@ -97,6 +100,24 @@ class _CompiledInstruction:
     program_index: int
     account_indices: tuple[int, ...]
     data: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _AddressLookup:
+    table_account: bytes
+    writable_indexes: tuple[int, ...]
+    readonly_indexes: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _MessageSemantics:
+    required_signatures: int
+    readonly_signed: int
+    readonly_unsigned: int
+    static_accounts: tuple[bytes, ...]
+    recent_blockhash: bytes
+    instructions: tuple[_CompiledInstruction, ...]
+    lookups: tuple[_AddressLookup, ...]
 
 
 _pending_orders: dict[str, _PendingOrder] = {}
@@ -257,6 +278,210 @@ def _transaction_parts(
     if readonly_signed != 0:
         raise JupiterSwapRejected("Transaction payer must be a writable signer.")
     return raw, signatures, message, accounts[:required_signatures], accounts, instructions
+
+
+def _message_semantics(message: bytes) -> _MessageSemantics:
+    """Parse the identity-bearing parts of a validated Solana message."""
+    if not message:
+        raise JupiterSwapRejected("Jupiter returned an incomplete Solana message.")
+    versioned = bool(message[0] & 0x80)
+    if not versioned or (message[0] & 0x7F) != 0:
+        raise JupiterSwapRejected("Phantom Lighthouse requires a versioned Solana transaction.")
+    if len(message) < 4:
+        raise JupiterSwapRejected("Jupiter returned an incomplete Solana message.")
+
+    required_signatures = message[1]
+    readonly_signed = message[2]
+    readonly_unsigned = message[3]
+    account_count, cursor = _shortvec(message, 4)
+    accounts_end = cursor + account_count * 32
+    if account_count < required_signatures or accounts_end + 32 > len(message):
+        raise JupiterSwapRejected("Solana transaction account metadata is invalid.")
+    static_accounts = tuple(
+        message[cursor + index * 32:cursor + (index + 1) * 32]
+        for index in range(account_count)
+    )
+    recent_blockhash = message[accounts_end:accounts_end + 32]
+    cursor = accounts_end + 32
+
+    instruction_count, cursor = _shortvec(message, cursor)
+    instructions: list[_CompiledInstruction] = []
+    for _ in range(instruction_count):
+        if cursor >= len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete Solana instructions.")
+        program_index = message[cursor]
+        account_index_count, cursor = _shortvec(message, cursor + 1)
+        instruction_accounts_end = cursor + account_index_count
+        if instruction_accounts_end > len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete Solana instruction accounts.")
+        account_indices = tuple(message[cursor:instruction_accounts_end])
+        data_length, cursor = _shortvec(message, instruction_accounts_end)
+        data_end = cursor + data_length
+        if data_end > len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete Solana instruction data.")
+        instructions.append(
+            _CompiledInstruction(program_index, account_indices, message[cursor:data_end])
+        )
+        cursor = data_end
+
+    lookup_count, cursor = _shortvec(message, cursor)
+    if lookup_count > 16:
+        raise JupiterSwapRejected("Solana transaction has too many address lookups.")
+    lookups: list[_AddressLookup] = []
+    for _ in range(lookup_count):
+        if cursor + 32 > len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete address lookup data.")
+        table_account = message[cursor:cursor + 32]
+        writable_count, cursor = _shortvec(message, cursor + 32)
+        writable_end = cursor + writable_count
+        if writable_end > len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete address lookup indexes.")
+        writable_indexes = tuple(message[cursor:writable_end])
+        readonly_count, cursor = _shortvec(message, writable_end)
+        readonly_end = cursor + readonly_count
+        if readonly_end > len(message):
+            raise JupiterSwapRejected("Jupiter returned incomplete address lookup indexes.")
+        lookups.append(
+            _AddressLookup(
+                table_account,
+                writable_indexes,
+                tuple(message[cursor:readonly_end]),
+            )
+        )
+        cursor = readonly_end
+    if cursor != len(message):
+        raise JupiterSwapRejected("Jupiter returned trailing Solana transaction data.")
+
+    return _MessageSemantics(
+        required_signatures,
+        readonly_signed,
+        readonly_unsigned,
+        static_accounts,
+        recent_blockhash,
+        tuple(instructions),
+        tuple(lookups),
+    )
+
+
+def _static_permissions(message: _MessageSemantics) -> dict[bytes, tuple[bool, bool]]:
+    permissions: dict[bytes, tuple[bool, bool]] = {}
+    signed_writable = message.required_signatures - message.readonly_signed
+    unsigned_writable = (
+        len(message.static_accounts)
+        - message.required_signatures
+        - message.readonly_unsigned
+    )
+    if signed_writable < 0 or unsigned_writable < 0:
+        raise JupiterSwapRejected("Solana transaction account permissions are invalid.")
+    for index, account in enumerate(message.static_accounts):
+        signer = index < message.required_signatures
+        writable = (
+            index < signed_writable
+            if signer
+            else index < message.required_signatures + unsigned_writable
+        )
+        if account in permissions:
+            raise JupiterSwapRejected("Solana transaction contains a duplicate static account.")
+        permissions[account] = (signer, writable)
+    return permissions
+
+
+def _account_references(message: _MessageSemantics) -> tuple[tuple[Any, ...], ...]:
+    references: list[tuple[Any, ...]] = [
+        ("static", account) for account in message.static_accounts
+    ]
+    references.extend(
+        ("lookup", lookup.table_account, "writable", index)
+        for lookup in message.lookups
+        for index in lookup.writable_indexes
+    )
+    references.extend(
+        ("lookup", lookup.table_account, "readonly", index)
+        for lookup in message.lookups
+        for index in lookup.readonly_indexes
+    )
+    return tuple(references)
+
+
+def _lookup_permissions(message: _MessageSemantics) -> tuple[tuple[Any, ...], ...]:
+    references = _account_references(message)[len(message.static_accounts):]
+    return tuple(sorted(references, key=repr))
+
+
+def _normalized_instructions(
+    message: _MessageSemantics,
+) -> tuple[tuple[tuple[Any, ...], tuple[tuple[Any, ...], ...], bytes], ...]:
+    references = _account_references(message)
+    normalized = []
+    for instruction in message.instructions:
+        if instruction.program_index >= len(references) or any(
+            index >= len(references) for index in instruction.account_indices
+        ):
+            raise JupiterSwapRejected("Solana transaction instruction account index is invalid.")
+        normalized.append(
+            (
+                references[instruction.program_index],
+                tuple(references[index] for index in instruction.account_indices),
+                instruction.data,
+            )
+        )
+    return tuple(normalized)
+
+
+def _validate_lighthouse_augmentation(
+    approved_message: bytes,
+    signed_message: bytes,
+    wallet_bytes: bytes,
+) -> None:
+    """Allow only Phantom's observed fail-closed Lighthouse assertion profile."""
+    approved = _message_semantics(approved_message)
+    signed = _message_semantics(signed_message)
+    lighthouse = _base58_bytes(PHANTOM_LIGHTHOUSE_PROGRAM)
+
+    if approved.recent_blockhash != signed.recent_blockhash:
+        raise JupiterSwapRejected("Signed transaction changed the approved blockhash.")
+    if (
+        approved.required_signatures != 1
+        or approved.readonly_signed != 0
+        or signed.required_signatures != approved.required_signatures
+        or signed.readonly_signed != approved.readonly_signed
+    ):
+        raise JupiterSwapRejected("Signed transaction changed the approved signer policy.")
+
+    approved_permissions = _static_permissions(approved)
+    signed_permissions = _static_permissions(signed)
+    if approved_permissions.get(wallet_bytes) != (True, True):
+        raise JupiterSwapRejected("Connected wallet must remain the transaction signer and payer.")
+    expected_permissions = dict(approved_permissions)
+    expected_permissions[lighthouse] = (False, False)
+    if lighthouse in approved_permissions or signed_permissions != expected_permissions:
+        raise JupiterSwapRejected("Signed transaction changed the approved static accounts.")
+    if _lookup_permissions(approved) != _lookup_permissions(signed):
+        raise JupiterSwapRejected("Signed transaction changed the approved address lookups.")
+
+    approved_instructions = _normalized_instructions(approved)
+    signed_instructions = _normalized_instructions(signed)
+    if signed_instructions[:len(approved_instructions)] != approved_instructions:
+        raise JupiterSwapRejected("Signed transaction changed an approved Jupiter instruction.")
+    assertions = signed_instructions[len(approved_instructions):]
+    if len(assertions) != len(PHANTOM_LIGHTHOUSE_ASSERTIONS):
+        raise JupiterSwapRejected("Signed transaction has an unexpected Lighthouse assertion count.")
+
+    approved_references = frozenset(_account_references(approved))
+    lighthouse_reference = ("static", lighthouse)
+    for assertion, (discriminator, length) in zip(
+        assertions, PHANTOM_LIGHTHOUSE_ASSERTIONS, strict=True
+    ):
+        program, accounts, data = assertion
+        if (
+            program != lighthouse_reference
+            or len(accounts) != 1
+            or accounts[0] not in approved_references
+            or len(data) != length
+            or not data
+            or data[0] != discriminator
+        ):
+            raise JupiterSwapRejected("Signed transaction contains an unsupported Lighthouse assertion.")
 
 
 def _validate_transaction_policy(
@@ -490,6 +715,7 @@ def prepare_jupiter_swap(
         input_amount_raw=str(input_raw),
         wallet_address=wallet,
         expires_at=expires_at,
+        approved_message=message,
         message_digest=hashlib.sha256(message).digest(),
         wallet_signature_index=wallet_index,
         last_valid_block_height=last_height_text,
@@ -566,7 +792,7 @@ def execute_jupiter_swap(
     request_post: Callable[..., Any] = requests.post,
     now: Callable[[], datetime] = _utcnow,
 ) -> dict[str, Any]:
-    """Relay one wallet-signed, unchanged Jupiter transaction for settlement."""
+    """Relay one wallet-signed Jupiter transaction after strict semantic validation."""
     token = _observed_token(token_address, feed)
     wallet = str(wallet_address or "").strip()
     wallet_bytes = _base58_bytes(wallet)
@@ -576,6 +802,7 @@ def execute_jupiter_swap(
 
     raw, signatures, message, signer_accounts, _, _ = _transaction_parts(signed_transaction)
     signed_digest = hashlib.sha256(raw).digest()
+    signed_message_digest = hashlib.sha256(message).digest()
     resolved_key = _api_key(api_key)
     current = now()
     with _pending_lock:
@@ -586,8 +813,12 @@ def execute_jupiter_swap(
             raise JupiterSwapRejected("Swap request does not match the approved token and wallet.")
         if pending.fee_evidence.policy != _fee_policy():
             raise JupiterSwapRejected("Swap request fee policy changed. Request a new quote and order.")
-        if not hmac.compare_digest(hashlib.sha256(message).digest(), pending.message_digest):
-            raise JupiterSwapRejected("Signed transaction changed the approved Jupiter message.")
+        if not hmac.compare_digest(signed_message_digest, pending.message_digest):
+            _validate_lighthouse_augmentation(
+                pending.approved_message,
+                message,
+                wallet_bytes,
+            )
         index = pending.wallet_signature_index
         if index >= len(signer_accounts) or signer_accounts[index] != wallet_bytes:
             raise JupiterSwapRejected("Connected wallet is not the approved transaction signer.")
@@ -603,7 +834,12 @@ def execute_jupiter_swap(
         pending.executing = True
 
     if pending.one_shot_gate_path:
-        try:consume_one_shot(pending.one_shot_gate_path,order_id,message,signed_digest.hex())
+        try:consume_one_shot(
+            pending.one_shot_gate_path,
+            order_id,
+            pending.approved_message,
+            signed_digest.hex(),
+        )
         except GateRejected as error:
             with _pending_lock:pending.executing=False
             raise JupiterSwapRejected("The one-shot approval is unavailable or does not match this transaction.") from error
