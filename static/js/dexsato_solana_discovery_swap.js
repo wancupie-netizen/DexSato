@@ -27,7 +27,7 @@
     const balanceLabel = sandbox.querySelector("[data-balance-label]");
     const routeSummary = sandbox.querySelector("[data-route-summary]");
     const amountNote = sandbox.querySelector("[data-amount-note]");
-    const amountPresets = Array.from(document.querySelectorAll("[data-amount-preset]"));
+    const amountPresets = Array.from(sandbox.querySelectorAll("[data-amount-percent]"));
     const tokenAddress = sandbox.dataset.tokenAddress;
     const tokenSymbol = sandbox.dataset.tokenSymbol || "token";
     const wrappedSolMint = "So11111111111111111111111111111111111111112";
@@ -42,6 +42,8 @@
     let busy = false;
     let web3Promise = null;
     let side = "buy";
+    let walletBalance = null;
+    let balanceRevision = 0;
 
     document.querySelectorAll("[data-copy-address]").forEach(function (button) {
         button.addEventListener("click", async function () {
@@ -65,10 +67,43 @@
             ? String(walletProvider.publicKey) : "";
     }
 
+    function canonicalDecimal(value) {
+        const text = String(value === null || value === undefined ? "" : value).trim();
+        if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text)) return null;
+        const parts = text.split(".");
+        const whole = parts[0].replace(/^0+(?=\d)/, "") || "0";
+        const fraction = (parts[1] || "").replace(/0+$/, "");
+        return fraction ? whole + "." + fraction : whole;
+    }
+
     function sameAmount(first, second) {
-        const left = Number(first);
-        const right = Number(second);
-        return Number.isFinite(left) && Number.isFinite(right) && left === right;
+        const left = canonicalDecimal(first);
+        const right = canonicalDecimal(second);
+        return left !== null && right !== null && left === right;
+    }
+
+    function unsignedInteger(value) {
+        return typeof value === "string" && /^\d+$/.test(value);
+    }
+
+    function rawAmount(raw, decimals) {
+        if (!unsignedInteger(raw) || !Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
+            return null;
+        }
+        const digits = raw.replace(/^0+(?=\d)/, "") || "0";
+        if (decimals === 0) return digits;
+        const padded = digits.padStart(decimals + 1, "0");
+        const whole = padded.slice(0, -decimals);
+        const fraction = padded.slice(-decimals).replace(/0+$/, "");
+        return fraction ? whole + "." + fraction : whole;
+    }
+
+    function percentageAmount(raw, decimals, percent) {
+        if (!unsignedInteger(raw) || !Number.isInteger(percent) || percent < 1 || percent > 100) {
+            return null;
+        }
+        const selected = (BigInt(raw) * BigInt(percent)) / 100n;
+        return selected > 0n ? rawAmount(String(selected), decimals) : null;
     }
 
     function actionLabel() {
@@ -85,6 +120,94 @@
         quoteButton.disabled = busy;
         acknowledgement.disabled = busy;
         sideButtons.forEach(function (button) { button.disabled = busy; });
+        updatePercentageAvailability();
+    }
+
+    function updatePercentageAvailability() {
+        const usableRaw = walletBalance && side === "buy"
+            ? walletBalance.buy_spendable_lamports
+            : walletBalance && walletBalance.token_balance_raw;
+        const enabled = Boolean(
+            !busy && walletAddress && walletBalance && unsignedInteger(usableRaw)
+            && BigInt(usableRaw) > 0n
+            && (side === "buy" || walletBalance.sell_percentage_ready === true)
+        );
+        amountPresets.forEach(function (button) {
+            button.disabled = !enabled;
+            if (button.hasAttribute("data-maximum-label")) {
+                button.textContent = side === "buy" ? "MAX" : "100%";
+            }
+        });
+    }
+
+    function clearPresetSelection() {
+        amountPresets.forEach(function (button) { button.classList.remove("active"); });
+    }
+
+    function renderBalanceLabel() {
+        if (!balanceLabel) return;
+        if (!walletAddress) {
+            balanceLabel.textContent = side === "buy"
+                ? "Connect wallet for balance %"
+                : "Connect wallet for token %";
+            return;
+        }
+        if (!walletBalance) {
+            balanceLabel.textContent = "Balance unavailable · manual amount allowed";
+            return;
+        }
+        if (side === "buy") {
+            balanceLabel.textContent = "Available to trade: "
+                + present(walletBalance.buy_spendable_ui, "0") + " SOL";
+            return;
+        }
+        if (walletBalance.sell_percentage_ready !== true) {
+            balanceLabel.textContent = "Multiple token accounts · enter amount manually";
+            return;
+        }
+        balanceLabel.textContent = "Available: "
+            + present(walletBalance.token_balance_ui, "0") + " " + tokenSymbol;
+    }
+
+    function clearWalletBalance() {
+        balanceRevision += 1;
+        walletBalance = null;
+        clearPresetSelection();
+        renderBalanceLabel();
+        updatePercentageAvailability();
+    }
+
+    async function loadWalletBalance() {
+        const requestedWallet = walletAddress;
+        if (!requestedWallet) {
+            clearWalletBalance();
+            return;
+        }
+        const revision = ++balanceRevision;
+        walletBalance = null;
+        if (balanceLabel) balanceLabel.textContent = "Checking wallet balance…";
+        updatePercentageAvailability();
+        try {
+            const payload = await requestJson(
+                apiBase + "/wallet-balance?wallet_address="
+                    + encodeURIComponent(requestedWallet),
+                {headers: {accept: "application/json"}, cache: "no-store"}
+            );
+            if (revision !== balanceRevision || requestedWallet !== walletAddress) return;
+            if (payload.status !== "BALANCE_READY"
+                    || payload.wallet_address !== requestedWallet
+                    || payload.token_mint !== tokenAddress
+                    || !unsignedInteger(payload.buy_spendable_lamports)
+                    || !unsignedInteger(payload.token_total_balance_raw)) {
+                throw new Error("Wallet balance response did not match this trade.");
+            }
+            walletBalance = payload;
+        } catch (_) {
+            if (revision !== balanceRevision || requestedWallet !== walletAddress) return;
+            walletBalance = null;
+        }
+        renderBalanceLabel();
+        updatePercentageAvailability();
     }
 
     function clearPreparedState() {
@@ -213,13 +336,22 @@
             || fee.policy_id !== payload.dexsato_fee_policy_id
             || !Number.isInteger(fee.integrator_fee_bps)
             || fee.integrator_fee_bps !== payload.dexsato_integrator_fee_bps
-            || typeof fee.integrator_fee_amount_ui !== "string"
-            || !/^\d+(\.\d+)?$/.test(fee.integrator_fee_amount_ui)
             || fee.integrator_fee_percent !== (fee.integrator_fee_bps / 100).toFixed(2)) return false;
         if (fee.integrator_fee_bps === 0) {
-            return fee.amount_kind === "ZERO" && Number(fee.integrator_fee_amount_ui) === 0
+            return fee.amount_kind === "ZERO"
+                && typeof fee.integrator_fee_amount_ui === "string"
+                && /^\d+(\.\d+)?$/.test(fee.integrator_fee_amount_ui)
+                && Number(fee.integrator_fee_amount_ui) === 0
                 && fee.execution_ready === true && !payload.dexsato_referral_account;
         }
+        const amountIsEstimate = fee.amount_kind === "ESTIMATE"
+            && typeof fee.integrator_fee_amount_ui === "string"
+            && /^\d+(\.\d+)?$/.test(fee.integrator_fee_amount_ui);
+        const amountIsWalletConfirmed = fee.amount_kind === "RATE_ONLY"
+            && fee.integrator_fee_amount_ui === null
+            && payload.side === "sell"
+            && payload.output_mint === wrappedSolMint
+            && payload.dexsato_fee_mint === wrappedSolMint;
         const previewOnly = fee.execution_ready === false
             && !["ONE_SHOT_TAP", "LIVE_REFERRAL"].includes(fee.activation_scope);
         const controlledOneShot = fee.execution_ready === true
@@ -231,7 +363,8 @@
         const liveReferral = fee.execution_ready === true
             && fee.activation_scope === "LIVE_REFERRAL";
         return fee.integrator_fee_bps >= 50 && fee.integrator_fee_bps <= 255
-            && fee.amount_kind === "ESTIMATE" && fee.integrator_fee_symbol === "WSOL"
+            && (amountIsEstimate || amountIsWalletConfirmed)
+            && fee.integrator_fee_symbol === "WSOL"
             && fee.referral_verification === "RPC_ACCOUNT_VERIFIED"
             && typeof payload.dexsato_referral_account === "string"
             && payload.dexsato_referral_account.length >= 32
@@ -247,9 +380,14 @@
 
     function renderFeeDisclosure(container, payload, className) {
         const fee = payload.fee_disclosure;
-        const label = fee.integrator_fee_bps === 0 ? "DexSato fee" : "Estimated integrator fee";
-        addSummaryRow(container, label, fee.integrator_fee_percent + "% · "
-            + fee.integrator_fee_amount_ui + " " + fee.integrator_fee_symbol, className);
+        const rateOnly = fee.amount_kind === "RATE_ONLY";
+        const label = fee.integrator_fee_bps === 0
+            ? "DexSato fee" : rateOnly ? "Integrator fee" : "Estimated integrator fee";
+        const amountLabel = rateOnly
+            ? "amount shown by wallet"
+            : fee.integrator_fee_amount_ui + " " + fee.integrator_fee_symbol;
+        addSummaryRow(container, label,
+            fee.integrator_fee_percent + "% · " + amountLabel, className);
         if (fee.integrator_fee_bps > 0) {
             addSummaryRow(container, "Jupiter share (included)", fee.jupiter_share_percent + "% of fee", className);
             const activationLabel = fee.execution_ready === true
@@ -293,8 +431,10 @@
         compactMinimum.textContent = minimumOutput(payload);
         compactImpact.textContent = impactText(payload);
         compactFee.textContent = payload.fee_disclosure.integrator_fee_percent + "% · "
-            + payload.fee_disclosure.integrator_fee_amount_ui + " "
-            + payload.fee_disclosure.integrator_fee_symbol;
+            + (payload.fee_disclosure.amount_kind === "RATE_ONLY"
+                ? "amount shown by wallet"
+                : payload.fee_disclosure.integrator_fee_amount_ui + " "
+                    + payload.fee_disclosure.integrator_fee_symbol);
         quoteCompact.hidden = false;
         quoteDetails.hidden = false;
         sandbox.dataset.quoteReady = "true";
@@ -374,15 +514,11 @@
         });
         if (payCoin) payCoin.textContent = side === "buy" ? "◎ SOL" : tokenSymbol;
         if (receiveCoin) receiveCoin.textContent = side === "buy" ? tokenSymbol : "◎ SOL";
-        if (balanceLabel) {
-            balanceLabel.textContent = side === "buy"
-                ? "SOL balance checked at order"
-                : tokenSymbol + " balance checked at order";
-        }
+        renderBalanceLabel();
         if (amountNote) {
             amountNote.textContent = side === "buy"
-                ? "Enter an amount between 0.001 and 100 SOL"
-                : "Enter the exact token amount to sell";
+                ? "Enter SOL manually or choose a % of spendable balance"
+                : "Enter tokens manually or choose a % of available balance";
         }
         if (routeSummary) {
             routeSummary.textContent = side === "buy"
@@ -390,6 +526,7 @@
                 : tokenSymbol + " → Jupiter → SOL";
         }
         if (resetAmount !== false) amount.value = side === "buy" ? "0.1" : "1";
+        clearPresetSelection();
         quoteButton.textContent = "Get " + side + " quote";
         clearQuote();
     }
@@ -402,8 +539,21 @@
 
     amountPresets.forEach(function (button) {
         button.addEventListener("click", function () {
-            amount.value = side === "buy" ? button.dataset.buyValue : button.dataset.sellValue;
+            if (!walletBalance || button.disabled) return;
+            const percent = Number(button.dataset.amountPercent);
+            const raw = side === "buy"
+                ? walletBalance.buy_spendable_lamports
+                : walletBalance.token_balance_raw;
+            const decimals = side === "buy" ? 9 : walletBalance.token_decimals;
+            const selected = percentageAmount(raw, decimals, percent);
+            if (!selected) {
+                setInputError("The selected percentage is below the minimum trade amount.");
+                return;
+            }
+            amount.value = selected;
             clearQuote();
+            clearPresetSelection();
+            button.classList.add("active");
             amount.focus();
         });
     });
@@ -448,6 +598,10 @@
         explorer.textContent = "Verify transaction on Solscan ↗";
         swapResult.append(heading, signature, explorer);
         clearQuote();
+        loadWalletBalance();
+        window.setTimeout(function () {
+            if (walletAddress === pending.wallet_address) loadWalletBalance();
+        }, 3000);
     }
 
     connect.addEventListener("click", async function () {
@@ -471,6 +625,8 @@
             walletState.classList.add("connected");
             connect.textContent = "Change";
             clearPreparedState();
+            clearWalletBalance();
+            loadWalletBalance();
             if (typeof provider.on === "function") {
                 provider.on("accountChanged", function (publicKey) {
                     const changed = publicKey ? String(publicKey) : "";
@@ -481,6 +637,8 @@
                             : "Wallet disconnected.";
                         walletState.classList.toggle("connected", Boolean(changed));
                         clearQuote();
+                        clearWalletBalance();
+                        if (changed) loadWalletBalance();
                     }
                 });
                 provider.on("disconnect", function () {
@@ -488,6 +646,7 @@
                     walletState.textContent = "Wallet disconnected.";
                     walletState.classList.remove("connected");
                     clearQuote();
+                    clearWalletBalance();
                 });
             }
         } catch (error) {
@@ -541,7 +700,10 @@
         }
     });
 
-    amount.addEventListener("input", clearQuote);
+    amount.addEventListener("input", function () {
+        clearPresetSelection();
+        clearQuote();
+    });
     acknowledgement.addEventListener("change", function () {
         if (!acknowledgement.checked) clearConfirmation();
         updateSwapAvailability();

@@ -68,6 +68,12 @@ from application.solana_discovery_token_service import (
     load_solana_discovery_token,
     load_solana_discovery_transactions,
 )
+from application.solana_wallet_balance_service import (
+    SolanaWalletBalanceRejected,
+    SolanaWalletBalanceUnavailable,
+    load_solana_wallet_balance,
+    validate_wallet_trade_amount,
+)
 
 from application.telegram_notifier import (
     send_telegram_alert,
@@ -352,6 +358,22 @@ async def _jupiter_swap_body(request: Request, permitted: set[str]) -> dict[str,
     return payload
 
 
+@app.get("/api/discovery/solana/{token_address}/wallet-balance")
+async def solana_discovery_wallet_balance(
+    token_address: str,
+    wallet_address: str,
+) -> dict[str, object]:
+    """Return read-only SOL and exact-token balances for percentage controls."""
+    try:
+        return await run_in_threadpool(
+            load_solana_wallet_balance, token_address, wallet_address,
+        )
+    except SolanaWalletBalanceRejected as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except SolanaWalletBalanceUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
 @app.post("/api/discovery/solana/{token_address}/jupiter-order")
 async def solana_discovery_jupiter_order(
     token_address: str,
@@ -369,19 +391,34 @@ async def solana_discovery_jupiter_order(
         request,
         {"amount", "amount_sol", "side", "wallet_address", "risk_acknowledged"},
     )
+    trade_amount = (
+        payload.get("amount")
+        if payload.get("amount") is not None
+        else payload.get("amount_sol")
+    )
+    wallet_address = str(payload.get("wallet_address") or "")
+    side = str(payload.get("side") or "buy")
     try:
+        balance = await run_in_threadpool(
+            load_solana_wallet_balance, token_address, wallet_address,
+        )
+        await run_in_threadpool(
+            validate_wallet_trade_amount, balance, side, trade_amount,
+        )
         return await run_in_threadpool(
             prepare_jupiter_swap,
             token_address,
-            payload.get("amount") if payload.get("amount") is not None else payload.get("amount_sol"),
-            str(payload.get("wallet_address") or ""),
-            side=str(payload.get("side") or "buy"),
+            trade_amount,
+            wallet_address,
+            side=side,
             risk_acknowledged=payload.get("risk_acknowledged") is True,
         )
     except JupiterSwapExpired as error:
         raise HTTPException(status_code=410, detail=str(error)) from error
     except (JupiterSwapRejected, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    except SolanaWalletBalanceUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     except JupiterQuoteNotConfigured as error:
         raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
     except JupiterQuoteUnavailable as error:

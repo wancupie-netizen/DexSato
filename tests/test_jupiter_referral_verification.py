@@ -209,6 +209,45 @@ class FeeDisclosureTests(unittest.TestCase):
         self.assertFalse(result["execution_ready"])
         self.assertFalse(result["fee_receipt_verified"])
 
+    def test_sell_to_sol_allows_verified_rate_when_provider_omits_fee_amount(self):
+        evidence = FeeEvidence(FeePolicy(True, REFERRAL, 50), WSOL_MINT)
+        report = v.ReferralObservation(REFERRAL, PARTNER, 8000, 123, "now", ())
+        payload = {"inAmount": "1000000", "platformFee": None}
+        with patch("application.jupiter_fee_disclosure.verify_referral_accounts", return_value=report):
+            result = build_fee_disclosure(
+                evidence, payload, 1000000, WSOL_MINT, input_mint=USDC_MINT,
+            )
+        self.assertEqual(result["amount_kind"], "RATE_ONLY")
+        self.assertIsNone(result["integrator_fee_amount_ui"])
+        self.assertEqual(result["integrator_fee_percent"], "0.50")
+        self.assertIn("review the final debit in your wallet", result["note"])
+
+    def test_sell_to_sol_uses_provider_fee_amount_when_available(self):
+        evidence = FeeEvidence(FeePolicy(True, REFERRAL, 50), WSOL_MINT)
+        report = v.ReferralObservation(REFERRAL, PARTNER, 8000, 123, "now", ())
+        payload = {"inAmount": "1000000", "platformFee": {"amount": "25000"}}
+        with patch("application.jupiter_fee_disclosure.verify_referral_accounts", return_value=report):
+            result = build_fee_disclosure(
+                evidence, payload, 1000000, WSOL_MINT, input_mint=USDC_MINT,
+            )
+        self.assertEqual(result["amount_kind"], "ESTIMATE")
+        self.assertEqual(result["integrator_fee_amount_ui"], "0.000025")
+
+    def test_sell_to_sol_rejects_malformed_provider_fee_amount(self):
+        evidence = FeeEvidence(FeePolicy(True, REFERRAL, 50), WSOL_MINT)
+        report = v.ReferralObservation(REFERRAL, PARTNER, 8000, 123, "now", ())
+        payloads = (
+            {"inAmount": "1000000", "platformFee": "invalid"},
+            {"inAmount": "1000000", "platformFee": {"amount": "1.5"}},
+            {"inAmount": "1000000", "platformFee": {"amount": True}},
+        )
+        with patch("application.jupiter_fee_disclosure.verify_referral_accounts", return_value=report):
+            for payload in payloads:
+                with self.subTest(payload=payload), self.assertRaises(FeePolicyRejected):
+                    build_fee_disclosure(
+                        evidence, payload, 1000000, WSOL_MINT, input_mint=USDC_MINT,
+                    )
+
     def test_enabled_rejects_missing_input_gasless_and_verification_failure(self):
         evidence = FeeEvidence(FeePolicy(True, REFERRAL, 50), WSOL_MINT)
         for payload in ({}, {"inAmount": "1"}, {"inAmount": "100000000", "gasless": True}):

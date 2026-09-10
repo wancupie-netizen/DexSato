@@ -27,14 +27,27 @@ def build_fee_disclosure(
     observation = verify_referral_accounts(policy.referral_account,
         os.getenv("DEXSATO_JUPITER_REFERRAL_PARTNER", "").strip(), mints=(WSOL_MINT,))
     platform_fee = payload.get("platformFee")
+    if platform_fee is not None and not isinstance(platform_fee, dict):
+        raise FeePolicyRejected("Fee estimate payload requires review.")
     platform_raw = platform_fee.get("amount") if isinstance(platform_fee, dict) else None
     if evidence.fee_mint == WSOL_MINT and input_mint == WSOL_MINT:
         fee_raw = Decimal(input_raw) * Decimal(policy.fee_bps) / Decimal(10000)
-    elif evidence.fee_mint == WSOL_MINT and str(platform_raw or "").isdigit():
+        amount_kind = "ESTIMATE"
+    elif (evidence.fee_mint == WSOL_MINT and output_mint == WSOL_MINT
+          and platform_raw is None):
+        # Swap V2 can confirm the referral rate and WSOL fee mint without
+        # returning a platformFee amount for token-to-SOL orders. Do not
+        # invent an amount from outAmount; the wallet remains authoritative.
+        fee_raw = None
+        amount_kind = "RATE_ONLY"
+    elif (evidence.fee_mint == WSOL_MINT and output_mint == WSOL_MINT
+          and type(platform_raw) in (str, int)
+          and str(platform_raw).isascii() and str(platform_raw).isdigit()):
         fee_raw = Decimal(str(platform_raw))
+        amount_kind = "ESTIMATE"
     else:
         raise FeePolicyRejected("Fee estimate mint or amount requires review.")
-    estimate = fee_raw / Decimal(10**9)
+    estimate = fee_raw / Decimal(10**9) if fee_raw is not None else None
     live_flag = os.getenv(
         "DEXSATO_JUPITER_LIVE_FEE_EXECUTION_ENABLED", "false"
     ).strip().lower()
@@ -76,11 +89,20 @@ def build_fee_disclosure(
         if one_shot_ready
         else "Fee execution is not activated."
     )
+    amount_note = (
+        "The exact integrator fee amount was not supplied in this quote; "
+        "review the final debit in your wallet. "
+        if amount_kind == "RATE_ONLY" else ""
+    )
     return {**base, "execution_ready": execution_ready,
             "activation_scope": activation_scope,
-            "integrator_fee_amount_ui": format(estimate, "f"),
+            "amount_kind": amount_kind,
+            "integrator_fee_amount_ui": (
+                format(estimate, "f") if estimate is not None else None
+            ),
             "integrator_fee_symbol": "WSOL", "referral_verification": "RPC_ACCOUNT_VERIFIED",
             "referral_checked_at": observation.checked_at, "referral_slot": observation.slot,
             "jupiter_share_percent": format(Decimal(10000 - observation.partner_share_bps) / 100, ".2f"),
-            "note": "Estimated integrator fee includes Jupiter's share; not an additional charge. "
+            "note": amount_note
+                    + "The integrator fee includes Jupiter's share; not an additional charge. "
                     "Final debit and output depend on the transaction. " + activation_note}

@@ -232,6 +232,23 @@ def test_swap_client_requires_explicit_wallet_signing_and_preserves_same_origin_
     assert "privateKey" not in script and "seedPhrase" not in script
 
 
+def test_trade_percentage_controls_use_authoritative_raw_wallet_balances():
+    html = render_solana_discovery_token_page(DETAIL, feed=None)
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "static" / "js" / "dexsato_solana_discovery_swap.js"
+    ).read_text(encoding="utf-8")
+
+    for percent in (25, 50, 75, 100):
+        assert f'data-amount-percent="{percent}"' in html
+    assert 'data-buy-value="0.1"' not in html
+    assert 'apiBase + "/wallet-balance?wallet_address="' in script
+    assert "BigInt(raw) * BigInt(percent)" in script
+    assert 'button.textContent = side === "buy" ? "MAX" : "100%"' in script
+    assert "walletBalance.sell_percentage_ready === true" in script
+    assert "Number(first)" not in script and "Number(second)" not in script
+
+
 def test_jupiter_v27_renders_readable_quote_preview_fields():
     script = (
         Path(__file__).resolve().parents[1]
