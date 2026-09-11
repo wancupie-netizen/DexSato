@@ -191,12 +191,30 @@
             + present(walletBalance.token_balance_ui, "0") + " " + tokenSymbol;
     }
 
+    function publishWalletBalance(status) {
+        const tokenTotalUi = walletBalance && walletBalance.token_total_balance_raw === "0"
+            ? "0"
+            : walletBalance
+                ? rawAmount(walletBalance.token_total_balance_raw, walletBalance.token_decimals)
+                : null;
+        window.dispatchEvent(new CustomEvent("dexsato:wallet-balance", {
+            detail: {
+                status: status,
+                wallet_address: walletAddress,
+                token_symbol: tokenSymbol,
+                token_balance_ui: tokenTotalUi,
+                spendable_sol_ui: walletBalance ? walletBalance.buy_spendable_ui : null
+            }
+        }));
+    }
+
     function clearWalletBalance() {
         balanceRevision += 1;
         walletBalance = null;
         clearPresetSelection();
         renderBalanceLabel();
         updatePercentageAvailability();
+        publishWalletBalance(walletAddress ? "loading" : "disconnected");
     }
 
     async function loadWalletBalance() {
@@ -209,6 +227,7 @@
         walletBalance = null;
         if (balanceLabel) balanceLabel.textContent = "Checking wallet balance…";
         updatePercentageAvailability();
+        publishWalletBalance("loading");
         try {
             const payload = await requestJson(
                 apiBase + "/wallet-balance?wallet_address="
@@ -230,6 +249,7 @@
         }
         renderBalanceLabel();
         updatePercentageAvailability();
+        publishWalletBalance(walletBalance ? "ready" : "unavailable");
     }
 
     function clearPreparedState() {

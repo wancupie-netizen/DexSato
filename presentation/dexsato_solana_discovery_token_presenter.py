@@ -418,7 +418,24 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
         '<b class="flow-largest-tone" data-flow-largest>--</b>'
         '<small class="flow-largest-tone" data-flow-largest-side>--</small></div>'
         '</div>'
-        '<div class="transactions-detail-grid">'
+        '<div class="transactions-detail-grid" data-market-tabs-shell>'
+        '<section class="market-tabs-v11" data-market-tabs>'
+        '<div class="market-tabs-list-v11" role="tablist" aria-label="Token market information">'
+        '<button type="button" id="market-tab-recent" class="market-tab-v11 active" role="tab" '
+        'aria-selected="true" aria-controls="market-panel-recent" tabindex="0" data-market-tab="recent">Recent Trades</button>'
+        '<button type="button" id="market-tab-activity" class="market-tab-v11" role="tab" '
+        'aria-selected="false" aria-controls="market-panel-activity" tabindex="-1" data-market-tab="activity">Market Activity</button>'
+        '<button type="button" id="market-tab-holdings" class="market-tab-v11" role="tab" '
+        'aria-selected="false" aria-controls="market-panel-holdings" tabindex="-1" data-market-tab="holdings">My Holdings</button>'
+        '<button type="button" id="market-tab-orders" class="market-tab-v11" role="tab" '
+        'aria-selected="false" aria-controls="market-panel-orders" tabindex="-1" data-market-tab="orders">My Orders</button>'
+        '<button type="button" id="market-tab-holders" class="market-tab-v11" role="tab" '
+        'aria-selected="false" aria-controls="market-panel-holders" tabindex="-1" data-market-tab="holders">Holders</button>'
+        '<button type="button" id="market-tab-traders" class="market-tab-v11" role="tab" '
+        'aria-selected="false" aria-controls="market-panel-traders" tabindex="-1" data-market-tab="traders">Top Traders</button>'
+        '</div>'
+        '<div id="market-panel-recent" class="market-tab-panel-v11" role="tabpanel" '
+        'aria-labelledby="market-tab-recent" data-market-panel="recent">'
         '<section class="recent-trades-card" aria-label="Recent exact-pool trades">'
         '<div class="transactions-head">'
         '<h2>Recent Trades</h2>'
@@ -434,12 +451,38 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
         '<tr class="transactions-placeholder">'
         '<td colspan="7">Loading recent exact-pool transactions...</td>'
         '</tr>'
-        '</tbody></table></div></section>'
+        '</tbody></table></div></section></div>'
+        '<div id="market-panel-activity" class="market-tab-panel-v11" role="tabpanel" '
+        'aria-labelledby="market-tab-activity" data-market-panel="activity" hidden>'
         '<section class="market-activity" data-market-activity aria-label="Multi-timeframe exact-pool market activity">'
         '<div class="market-activity-head"><span>Market Activity</span><small data-market-activity-source>Loading aggregate</small></div>'
         '<div class="market-activity-wrap"><table class="market-activity-table"><thead><tr><th>Window</th><th>Buy</th><th>Sell</th><th>Trades</th><th>Volume</th></tr></thead>'
-        '<tbody data-market-activity-body><tr><td colspan="5">Loading exact-pool activity...</td></tr></tbody></table></div></section>'
-        '</div>'
+        '<tbody data-market-activity-body><tr><td colspan="5">Loading exact-pool activity...</td></tr></tbody></table></div></section></div>'
+        '<div id="market-panel-holdings" class="market-tab-panel-v11" role="tabpanel" '
+        'aria-labelledby="market-tab-holdings" data-market-panel="holdings" hidden>'
+        '<section class="market-holdings-v11" data-market-holdings '
+        f'data-holdings-token-symbol="{escape(str(detail.get("symbol") or "Token"), quote=True)}">'
+        '<div class="market-personal-head-v11"><strong>My Holdings</strong><small>Connected wallet</small></div>'
+        '<div class="market-holdings-status-v11" data-holdings-status>'
+        '<strong>Connect wallet to view holdings</strong>'
+        '<span>Only balances returned for your connected wallet will be shown.</span></div>'
+        '<div class="market-holdings-grid-v11" data-holdings-values hidden>'
+        '<div><span>Token balance</span><b data-holdings-token-balance>--</b></div>'
+        '<div><span>Spendable SOL</span><b data-holdings-sol-balance>--</b></div>'
+        '</div></section></div>'
+        '<div id="market-panel-orders" class="market-tab-panel-v11" role="tabpanel" '
+        'aria-labelledby="market-tab-orders" data-market-panel="orders" hidden>'
+        '<section class="market-empty-v11"><strong>Order history is not connected yet.</strong>'
+        '<span>No order records are displayed until a verified order-history source is available.</span></section></div>'
+        '<div id="market-panel-holders" class="market-tab-panel-v11" role="tabpanel" '
+        'aria-labelledby="market-tab-holders" data-market-panel="holders" hidden>'
+        '<section class="market-empty-v11"><strong>Holder distribution data is not available yet.</strong>'
+        '<span>No holder count, concentration or wallet distribution is inferred.</span></section></div>'
+        '<div id="market-panel-traders" class="market-tab-panel-v11" role="tabpanel" '
+        'aria-labelledby="market-tab-traders" data-market-panel="traders" hidden>'
+        '<section class="market-empty-v11"><strong>Top trader analytics is not available yet.</strong>'
+        '<span>Recent transactions are not presented as a trader ranking.</span></section></div>'
+        '</section></div>'
         '</section>'
     )
 
@@ -1519,6 +1562,118 @@ html[data-theme="intel"] .market-activity{border-color:#1d2733;background:#0e141
 html[data-theme="intel"] .recent-trades-card{border-color:#1d2733;background:#0e141c}
 html[data-theme="intel"] .transactions-table{background:#10171f}
 @media(max-width:700px){.transactions-table{min-width:0}}
+
+/* TW-DEX-11 — Unified real-data market information tabs.
+   Existing transaction and activity renderers remain mounted; unavailable datasets stay explicit. */
+.transactions-detail-grid[data-market-tabs-shell]{display:block!important}
+.market-tabs-v11{
+  min-width:0;
+  overflow:hidden;
+  border:1px solid #1D2733;
+  border-radius:11px;
+  background:#0E141C;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);
+}
+.market-tabs-list-v11{
+  display:flex;
+  align-items:stretch;
+  overflow-x:auto;
+  scrollbar-width:none;
+  border-bottom:1px solid #1D2733;
+  background:#0E141C;
+}
+.market-tabs-list-v11::-webkit-scrollbar{display:none}
+.market-tab-v11{
+  appearance:none;
+  flex:1 0 auto;
+  min-height:44px;
+  padding:10px 14px;
+  border:0;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  color:#7C8CA0;
+  font:700 10px/1.2 var(--mono);
+  white-space:nowrap;
+  cursor:pointer;
+}
+.market-tab-v11:hover{color:#E7EDF4;background:rgba(76,244,214,.025)}
+.market-tab-v11.active{
+  border-bottom-color:#4CF4D6;
+  background:rgba(76,244,214,.045);
+  color:#4CF4D6;
+  font-weight:800;
+}
+.market-tab-v11:focus-visible{
+  position:relative;
+  z-index:1;
+  outline:2px solid #4CF4D6;
+  outline-offset:-3px;
+}
+.market-tab-panel-v11[hidden]{display:none!important}
+.market-tab-panel-v11>.recent-trades-card,
+.market-tab-panel-v11>.market-activity{
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+.market-personal-head-v11{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:48px;
+  padding:0 14px;
+  border-bottom:1px solid #1D2733;
+}
+.market-personal-head-v11 strong{
+  color:#E7EDF4;
+  font:800 13px/1.2 var(--mono);
+  letter-spacing:.045em;
+  text-transform:uppercase;
+}
+.market-personal-head-v11 small{color:#7C8CA0;font:700 10px/1.3 var(--mono)}
+.market-holdings-status-v11,
+.market-empty-v11{
+  display:grid;
+  place-content:center;
+  gap:7px;
+  min-height:190px;
+  padding:28px;
+  text-align:center;
+  background:#10171F;
+}
+.market-holdings-status-v11 strong,
+.market-empty-v11 strong{color:#E7EDF4;font:750 13px/1.4 var(--ui)}
+.market-holdings-status-v11 span,
+.market-empty-v11 span{color:#7C8CA0;font:500 11px/1.5 var(--ui)}
+.market-holdings-status-v11.loading strong{color:#8AB9FF}
+.market-holdings-status-v11.unavailable strong{color:#FFB800}
+.market-holdings-grid-v11{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  min-height:190px;
+  padding:18px;
+  background:#10171F;
+}
+.market-holdings-grid-v11[hidden]{display:none!important}
+.market-holdings-grid-v11>div{
+  display:grid;
+  align-content:center;
+  gap:8px;
+  padding:18px;
+  border:1px solid #1D2733;
+  border-radius:8px;
+  background:#0E141C;
+}
+.market-holdings-grid-v11 span{color:#7C8CA0;font:700 10px/1.3 var(--mono);text-transform:uppercase}
+.market-holdings-grid-v11 b{color:#4CF4D6;font:800 18px/1.3 var(--mono);overflow-wrap:anywhere}
+html[data-theme="intel"] .market-tabs-v11{border-color:#1D2733;background:#0E141C}
+@media(max-width:760px){
+  .market-tab-v11{flex:0 0 auto;padding-inline:13px}
+  .market-holdings-grid-v11{grid-template-columns:1fr;min-height:0}
+  .market-holdings-grid-v11>div{min-height:96px}
+}
 
 /* TW-DEX-06 — Token Intelligence + Qualification
    UI-only evidence hierarchy. Existing observations, qualification facts and data semantics remain unchanged. */
@@ -3494,7 +3649,7 @@ __TOKEN_OBSERVATION_PANEL__
 __QUALIFICATION_PANEL__
 <section class="card market-snapshot-v26"><h3>Market Snapshot</h3><div class="metrics"><div class="metric"><span>Observed price</span><b class="value">__PRICE__</b></div><div class="metric"><span>24h change</span><b class="value change __CHANGE_TONE__">__CHANGE__</b></div><div class="metric"><span>Liquidity</span><b class="value">__LIQUIDITY__</b></div><div class="metric"><span>24h volume</span><b class="value">__VOLUME__</b></div><div class="metric"><span>Market cap / FDV</span><b class="value">__MARKET_CAP__</b></div><div class="metric"><span>Pair age</span><b class="value">__AGE__</b></div></div><div class="evidence"><strong>Why this token appeared</strong>__EVIDENCE__</div><div class="risk"><strong>Risk context</strong><p>__RISK__. Pool verification is not token verification. Inclusion is not an endorsement.</p></div></section>
 </aside></div>
-</main></div></div><script src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-08" defer></script><script>
+</main></div></div><script src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer></script><script>
 (function(){
   const options=[...document.querySelectorAll("[data-theme-option]")];
   function applyTheme(theme){
@@ -4965,6 +5120,74 @@ __QUALIFICATION_PANEL__
 (function(){
   const panel=document.querySelector("[data-transactions-panel]");
   if(!panel) return;
+
+  /* TW-DEX-11_MARKET_INFORMATION_TABS */
+  const marketTabs=[...panel.querySelectorAll("[data-market-tab]")];
+  const marketPanels=[...panel.querySelectorAll("[data-market-panel]")];
+  const activateMarketTab=(name,{focus=false}={})=>{
+    marketTabs.forEach(tab=>{
+      const active=tab.dataset.marketTab===name;
+      tab.classList.toggle("active",active);
+      tab.setAttribute("aria-selected",active?"true":"false");
+      tab.tabIndex=active?0:-1;
+      if(active&&focus)tab.focus();
+    });
+    marketPanels.forEach(content=>{
+      content.hidden=content.dataset.marketPanel!==name;
+    });
+  };
+  marketTabs.forEach((tab,index)=>{
+    tab.addEventListener("click",()=>activateMarketTab(tab.dataset.marketTab));
+    tab.addEventListener("keydown",event=>{
+      let target=index;
+      if(event.key==="ArrowRight")target=(index+1)%marketTabs.length;
+      else if(event.key==="ArrowLeft")target=(index-1+marketTabs.length)%marketTabs.length;
+      else if(event.key==="Home")target=0;
+      else if(event.key==="End")target=marketTabs.length-1;
+      else return;
+      event.preventDefault();
+      activateMarketTab(marketTabs[target].dataset.marketTab,{focus:true});
+    });
+  });
+  activateMarketTab("recent");
+
+  const holdings=panel.querySelector("[data-market-holdings]");
+  const holdingsStatus=panel.querySelector("[data-holdings-status]");
+  const holdingsValues=panel.querySelector("[data-holdings-values]");
+  const holdingsToken=panel.querySelector("[data-holdings-token-balance]");
+  const holdingsSol=panel.querySelector("[data-holdings-sol-balance]");
+  const holdingsSymbol=holdings?.dataset.holdingsTokenSymbol||"Token";
+  const renderHoldings=event=>{
+    if(!holdings||!holdingsStatus||!holdingsValues)return;
+    const detail=event&&event.detail&&typeof event.detail==="object"?event.detail:{};
+    const status=String(detail.status||"disconnected");
+    holdingsStatus.classList.remove("loading","unavailable");
+    if(status==="ready"&&detail.token_balance_ui!==null&&detail.token_balance_ui!==undefined
+        &&detail.spendable_sol_ui!==null&&detail.spendable_sol_ui!==undefined){
+      holdingsToken.textContent=String(detail.token_balance_ui)+" "+holdingsSymbol;
+      holdingsSol.textContent=String(detail.spendable_sol_ui)+" SOL";
+      holdingsStatus.hidden=true;
+      holdingsValues.hidden=false;
+      return;
+    }
+    holdingsValues.hidden=true;
+    holdingsStatus.hidden=false;
+    const heading=holdingsStatus.querySelector("strong");
+    const copy=holdingsStatus.querySelector("span");
+    if(status==="loading"){
+      holdingsStatus.classList.add("loading");
+      heading.textContent="Checking connected wallet balances";
+      copy.textContent="Balances will appear after the verified wallet response is ready.";
+    }else if(status==="unavailable"){
+      holdingsStatus.classList.add("unavailable");
+      heading.textContent="Wallet balances are temporarily unavailable.";
+      copy.textContent="No holding amount is estimated or inferred.";
+    }else{
+      heading.textContent="Connect wallet to view holdings";
+      copy.textContent="Only balances returned for your connected wallet will be shown.";
+    }
+  };
+  window.addEventListener("dexsato:wallet-balance",renderHoldings);
 
   const url=panel.dataset.transactionsUrl||"";
   const tbody=panel.querySelector("[data-transactions-body]");

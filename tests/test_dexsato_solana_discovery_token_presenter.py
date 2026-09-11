@@ -76,7 +76,7 @@ def test_renders_controlled_jupiter_swap_with_solana_badge_and_discloses_risk():
     assert 'data-swap-risk-ack' in html
     assert 'data-execute-swap disabled' in html
     assert 'data-token-symbol="TEST"' in html
-    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-04" defer' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
     assert "Fees are shown in the quote and order review before wallet approval." in html
     assert "Pool verification is not token verification" in html
     assert "never holds your funds" in html
@@ -286,7 +286,7 @@ def test_trade_wallet_connect_is_full_width_and_moves_connected_identity_to_head
     assert 'walletConnectShell.hidden = connected' in script
     assert 'headerConnect.textContent = connected ? "● " + walletLabel(walletAddress)' in script
     assert 'headerConnect.classList.toggle("connected", connected)' in script
-    assert 'dexsato_solana_discovery_swap.js?v=tw-dex-08' in html
+    assert 'dexsato_solana_discovery_swap.js?v=tw-dex-09' in html
 
 
 def test_jupiter_v27_renders_readable_quote_preview_fields():
@@ -1299,6 +1299,73 @@ def test_transactions_v16b_renders_market_activity_ui():
     assert '["buys","activity-buys",activityNumber]' in html
     assert '["volume_usd","activity-volume",activityUsd]' in html
     assert 'renderMarketActivity(payload.market_activity);' in html
+
+
+def test_market_information_tabs_reuse_real_panels_and_keep_honest_templates():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    expected_tabs = (
+        ("recent", "Recent Trades"),
+        ("activity", "Market Activity"),
+        ("holdings", "My Holdings"),
+        ("orders", "My Orders"),
+        ("holders", "Holders"),
+        ("traders", "Top Traders"),
+    )
+    for key, label in expected_tabs:
+        assert f'data-market-tab="{key}"' in html
+        assert f'>{label}</button>' in html
+        assert f'data-market-panel="{key}"' in html
+
+    assert 'data-market-panel="recent">' in html
+    assert 'data-market-panel="activity" hidden>' in html
+    assert 'data-market-panel="holdings" hidden>' in html
+    assert 'data-market-panel="orders" hidden>' in html
+    assert 'data-market-panel="holders" hidden>' in html
+    assert 'data-market-panel="traders" hidden>' in html
+    assert html.index('<div class="transactions-flow" data-transactions-flow') < html.index(
+        '<div class="transactions-detail-grid" data-market-tabs-shell>'
+    )
+    assert 'data-transactions-body' in html
+    assert 'data-market-activity-body' in html
+    assert "Order history is not connected yet." in html
+    assert "Holder distribution data is not available yet." in html
+    assert "Top trader analytics is not available yet." in html
+    assert "Recent transactions are not presented as a trader ranking." in html
+
+
+def test_market_tabs_are_keyboard_accessible_and_holdings_use_wallet_balance_event():
+    html = render_solana_discovery_token_page(DETAIL)
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "static" / "js" / "dexsato_solana_discovery_swap.js"
+    ).read_text(encoding="utf-8")
+
+    assert 'role="tablist" aria-label="Token market information"' in html
+    assert 'role="tab" aria-selected="true"' in html
+    assert 'role="tabpanel"' in html
+    assert 'event.key==="ArrowRight"' in html
+    assert 'event.key==="ArrowLeft"' in html
+    assert 'event.key==="Home"' in html
+    assert 'event.key==="End"' in html
+    assert 'window.addEventListener("dexsato:wallet-balance",renderHoldings);' in html
+    assert 'new CustomEvent("dexsato:wallet-balance"' in script
+    assert 'token_balance_ui: tokenTotalUi' in script
+    assert 'spendable_sol_ui: walletBalance ? walletBalance.buy_spendable_ui : null' in script
+    assert 'walletProvider.signTransaction(unsigned)' in script
+    assert 'dexsato_solana_discovery_swap.js?v=tw-dex-09' in html
+
+
+def test_market_tabs_use_clean_borderless_separators_and_weighted_labels():
+    html = render_solana_discovery_token_page(DETAIL)
+    tab_rule = html.split('.market-tab-v11{', 1)[1].split('}', 1)[0]
+
+    assert '.market-tab-v11{' in html
+    assert 'border-right:' not in tab_rule
+    assert '.market-tab-v11:last-child{border-right:0}' not in html
+    assert 'font:700 10px/1.2 var(--mono)' in tab_rule
+    assert 'font-weight:800;' in html
+    assert 'border-bottom-color:#4CF4D6' in html
 
 
 def test_transactions_v26b_places_readable_market_activity_summary_after_trades():
