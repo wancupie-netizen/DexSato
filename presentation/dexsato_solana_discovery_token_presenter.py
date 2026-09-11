@@ -535,7 +535,9 @@ def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str
         if not token_address or token_address in seen:
             continue
         seen.add(token_address)
-        symbol = escape(str(item.get("symbol") or "Unknown"))
+        symbol_raw = str(item.get("symbol") or "Unknown")
+        symbol = escape(symbol_raw)
+        symbol_title = escape(symbol_raw, quote=True)
         quote = escape(str(item.get("quote_symbol") or "SOL"))
         price = escape(_usd(item.get("price_usd")))
         change_text, change_tone = _change_percent(item.get("change_24h"))
@@ -550,12 +552,15 @@ def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str
             if image_url else f'<span aria-hidden="true">{initial}</span>'
         )
         rendered.append(
-            f'<a class="coin-list-row{active_class}" href="/discovery/solana/'
+            f'<a class="coin-list-row{active_class} token-list-row-v10" href="/discovery/solana/'
             f'{escape(token_address, quote=True)}"{current}>'
             f'<span class="coin-list-avatar">{avatar}</span>'
-            f'<span class="coin-list-identity"><strong>{symbol} / {quote}</strong>'
-            f'<small>{price}</small></span>'
-            f'<b class="coin-list-change {escape(change_tone)}">{change_text}</b></a>'
+            f'<span class="coin-list-identity"><strong title="{symbol_title}">{symbol}</strong>'
+            f'<small class="coin-list-pair-v10">/ {quote}</small></span>'
+            '<span class="coin-list-market-v10">'
+            f'<small class="coin-list-price-v10">{price}</small>'
+            f'<b class="coin-list-change {escape(change_tone)}">{change_text}</b>'
+            '</span></a>'
         )
         if len(rendered) >= 10:
             break
@@ -595,8 +600,6 @@ def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str
         '</div>'
         '<label class="coin-list-search"><span class="sr-only">Search coin list</span>'
         '<input type="search" placeholder="Search token or pair" data-coin-list-search></label>'
-        '<div class="token-list-columns-v08b" aria-hidden="true">'
-        '<span>Token</span><span>Price</span><span>24h</span></div>'
         f'<div class="coin-list-rows" data-coin-list-rows>{body}</div>'
     )
 
@@ -2423,6 +2426,67 @@ html[data-theme="intel"] .workspace-left-v26>.token-list-v07a{
     max-height:none!important;
     overflow:visible!important;
   }
+}
+
+/* TW-DEX-10 — Minimal two-line Token List rows.
+   UI-only: token order, links, search, tabs and selected state remain unchanged. */
+.workspace-left-v26>.token-list-v07a .token-list-columns-v08b{
+  display:none!important;
+}
+.workspace-left-v26>.token-list-v07a .token-list-row-v10{
+  grid-template-columns:34px minmax(0,1fr) minmax(72px,auto)!important;
+  gap:10px!important;
+  min-height:55px;
+  padding:8px 12px!important;
+}
+.workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-identity{
+  display:grid!important;
+  align-content:center;
+  gap:2px;
+  min-width:0;
+}
+.workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-identity strong{
+  display:block;
+  min-width:0;
+  overflow:hidden;
+  color:#E7EDF4!important;
+  font:800 11px/1.25 var(--ui)!important;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-pair-v10{
+  display:block;
+  margin:0!important;
+  overflow:visible;
+  color:#7C8CA0!important;
+  font:650 9px/1.25 var(--mono)!important;
+  text-align:left;
+  text-overflow:clip;
+  white-space:nowrap;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-market-v10{
+  display:grid;
+  align-content:center;
+  justify-items:end;
+  gap:2px;
+  min-width:72px;
+}
+.workspace-left-v26>.token-list-v07a .coin-list-price-v10{
+  display:block;
+  margin:0!important;
+  overflow:visible;
+  color:#8EA0B5!important;
+  font:650 9px/1.25 var(--mono)!important;
+  font-variant-numeric:tabular-nums lining-nums;
+  text-align:right;
+  text-overflow:clip;
+  white-space:nowrap;
+}
+.workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-change{
+  align-self:auto;
+  font:800 10px/1.25 var(--mono)!important;
+  font-variant-numeric:tabular-nums lining-nums;
+  text-align:right;
 }
 
 /* TW-DEX-08C — Compact Icon Sidebar

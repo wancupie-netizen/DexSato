@@ -207,6 +207,28 @@ def test_token_observation_keeps_coin_navigation_below_observation():
     assert html.index('data-token-observation') < html.index('data-coin-list')
 
 
+def test_token_list_uses_clear_two_line_identity_and_market_values():
+    token = {
+        **DETAIL,
+        "symbol": "basket",
+        "quote_symbol": "SOL",
+        "price_usd": 0.000007,
+        "change_24h": 68.94,
+    }
+    html = render_solana_discovery_token_page(token, feed={"candidates": [token]})
+
+    assert '<a class="coin-list-row active token-list-row-v10"' in html
+    assert '<strong title="basket">basket</strong>' in html
+    assert '<small class="coin-list-pair-v10">/ SOL</small>' in html
+    assert '<small class="coin-list-price-v10">$0.00000700</small>' in html
+    assert '<b class="coin-list-change up">+68.94%</b>' in html
+    assert 'class="coin-list-market-v10"' in html
+    assert 'class="token-list-columns-v08b"' not in html
+    assert "TW-DEX-10 — Minimal two-line Token List rows" in html
+    assert "grid-template-columns:34px minmax(0,1fr) minmax(72px,auto)!important" in html
+    assert "text-overflow:clip" in html
+
+
 def test_token_workspace_v26a4_removes_competing_vertical_scrollbars():
     html = render_solana_discovery_token_page(DETAIL, feed=None)
 
