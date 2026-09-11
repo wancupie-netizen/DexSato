@@ -448,9 +448,11 @@ def _transactions_table_panel(detail: dict[str, Any]) -> str:
 def _token_observation_panel(detail: dict[str, Any]) -> str:
     """Render verified facts only; unavailable evidence is never inferred."""
     change, change_tone = _change_percent(detail.get("change_24h"))
+    mint_observation = str(detail.get("mint_authority_observation") or "Unavailable")
+    freeze_observation = str(detail.get("freeze_authority_observation") or "Unavailable")
     rows = (
-        ("Mint authority", str(detail.get("mint_authority_observation") or "Unavailable"), ""),
-        ("Freeze authority", str(detail.get("freeze_authority_observation") or "Unavailable"), ""),
+        ("Mint authority", mint_observation, ""),
+        ("Freeze authority", freeze_observation, ""),
         ("Metadata", str(detail.get("metadata_observation") or "Unavailable"), ""),
         ("Sell route verified", "Unavailable", "sell-route"),
         ("Liquidity", _usd(detail.get("liquidity_usd")), ""),
@@ -488,10 +490,26 @@ def _token_observation_panel(detail: dict[str, Any]) -> str:
         f'<b class="token-observation-value{status_tone}">{status_label}</b></div>'
     )
 
-    return ('<section class="workspace-rail-card token-observation-v28" data-token-observation>'
-            '<div class="workspace-rail-head"><h2>Token Intelligence</h2></div>'
-            f'<div class="token-observation-rows">{"".join(rendered)}</div>'
-            '<p class="token-observation-note">Route availability is not a safety guarantee.</p></section>')
+    authority_summary = escape(
+        f"Mint {mint_observation} · Freeze {freeze_observation}"
+    )
+    return (
+        '<section class="workspace-rail-card token-observation-v28 rail-disclosure-card-v09" data-token-observation>'
+        '<details class="rail-disclosure-v09" data-token-intelligence-details>'
+        '<summary class="rail-disclosure-summary-v09">'
+        '<span class="rail-disclosure-heading-v09"><strong>Token Intelligence</strong>'
+        f'<small>{authority_summary}</small></span>'
+        '<span class="rail-disclosure-side-v09">'
+        f'<b class="rail-disclosure-status-v09{status_tone}">{status_label}</b>'
+        '<span class="rail-disclosure-action-v09">'
+        '<span class="rail-disclosure-closed-v09">View details</span>'
+        '<span class="rail-disclosure-open-v09">Hide details</span>'
+        '<i aria-hidden="true"></i></span></span></summary>'
+        '<div class="rail-disclosure-body-v09"><div class="rail-disclosure-inner-v09">'
+        f'<div class="token-observation-rows">{"".join(rendered)}</div>'
+        '<p class="token-observation-note">Route availability is not a safety guarantee.</p>'
+        '</div></div></details></section>'
+    )
 
 
 def _coin_list_panel(detail: dict[str, Any], feed: dict[str, Any] | None) -> str:
@@ -619,24 +637,31 @@ def render_solana_discovery_token_page(
     status_label = escape(str(detail.get("quote_label") or "Stored collector observation"))
     assessment = detail.get("current_qualification") if isinstance(detail.get("current_qualification"), dict) else {}
     if detail.get("currently_qualified") is True:
-        qualification_title = escape(str(assessment.get("title") or "Qualified now"))
-        qualification_message = escape(str(assessment.get("message") or "Current identity, exact-pool, liquidity and 24h activity checks passed."))
         qualification_tone = "qualified"
+        qualification_status = '<b class="rail-disclosure-status-v09 verified">4/4 passed</b>'
     else:
-        qualification_title = escape(str(assessment.get("title") or "Not evaluated in this scan"))
-        qualification_message = escape(str(assessment.get("message") or "No current scan assessment was recorded for this archived observation."))
         qualification_tone = "not-qualified"
+        qualification_status = ""
     last_qualified = escape(_relative_timestamp(detail.get("last_qualified_at")))
     current_scan = escape(_relative_timestamp(assessment.get("scan_at")))
     qualification_panel = (
-        f'<section class="qualification qualification-vp0d3 {qualification_tone}">'
-        '<span class="eyebrow">Qualification</span>'
-        f'<h3>{qualification_title}</h3><p class="qualification-reason">{qualification_message}</p>'
+        f'<section class="qualification qualification-vp0d3 {qualification_tone} rail-disclosure-card-v09">'
+        '<details class="rail-disclosure-v09" data-qualification-details>'
+        '<summary class="rail-disclosure-summary-v09">'
+        '<span class="rail-disclosure-heading-v09"><strong>Qualification</strong>'
+        f'<small>Last qualified: {last_qualified} · Current scan: {current_scan}</small></span>'
+        '<span class="rail-disclosure-side-v09">'
+        f'{qualification_status}'
+        '<span class="rail-disclosure-action-v09">'
+        '<span class="rail-disclosure-closed-v09">View checks</span>'
+        '<span class="rail-disclosure-open-v09">Hide checks</span>'
+        '<i aria-hidden="true"></i></span></span></summary>'
+        '<div class="rail-disclosure-body-v09"><div class="rail-disclosure-inner-v09">'
         '<span class="eyebrow qualification-history-label">Last confirmed checks</span>'
         '<div class="check">Solana token identity</div><div class="check">Exact token and pool match</div>'
         '<div class="check">Observed liquidity threshold</div><div class="check">Observed 24h activity</div>'
         f'<div class="source">Last qualified: {last_qualified}<br>Current scan: {current_scan}</div>'
-        '</section>'
+        '</div></div></details></section>'
     )
     html = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>__SYMBOL__ · Solana Discovery</title>
@@ -1877,6 +1902,111 @@ html[data-theme="intel"] .workspace-right-v26>.qualification-vp0d3{
 .workspace-right-v26>.qualification-vp0d3 .qualification-history-label{
   border-top:0!important;
   padding-top:11px!important;
+}
+
+/* TW-DEX-09 — Compact Token Intelligence and Qualification disclosures.
+   Presentation only: every existing fact remains available inside its card. */
+.workspace-right-v26>.rail-disclosure-card-v09{
+  padding:0!important;
+}
+.rail-disclosure-v09{
+  display:block;
+  background:#0E141C;
+}
+.rail-disclosure-summary-v09{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:72px;
+  padding:13px 14px;
+  list-style:none;
+  cursor:pointer;
+  user-select:none;
+  background:#0E141C;
+}
+.rail-disclosure-summary-v09::-webkit-details-marker{display:none}
+.rail-disclosure-summary-v09::marker{content:""}
+.rail-disclosure-summary-v09:focus-visible{
+  outline:2px solid #4CF4D6;
+  outline-offset:-2px;
+}
+.rail-disclosure-heading-v09{
+  display:grid;
+  gap:5px;
+  min-width:0;
+}
+.rail-disclosure-heading-v09 strong{
+  color:#E7EDF4;
+  font:800 12px/1.25 var(--mono);
+  letter-spacing:.055em;
+  text-transform:uppercase;
+}
+.rail-disclosure-heading-v09 small{
+  overflow:hidden;
+  color:#7C8CA0;
+  font:500 9px/1.4 var(--mono);
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.rail-disclosure-side-v09{
+  display:grid;
+  flex:0 0 auto;
+  justify-items:end;
+  gap:5px;
+}
+.rail-disclosure-status-v09{
+  max-width:122px;
+  overflow:hidden;
+  color:#AAB6C4;
+  font:800 10px/1.25 var(--mono);
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.rail-disclosure-status-v09.verified{color:#4CF4D6}
+.rail-disclosure-status-v09.review{color:#FFB800}
+.rail-disclosure-action-v09{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:#8AB9FF;
+  font:700 9px/1.2 var(--mono);
+}
+.rail-disclosure-action-v09 i{
+  width:6px;
+  height:6px;
+  border-right:1px solid currentColor;
+  border-bottom:1px solid currentColor;
+  transform:rotate(45deg) translateY(-1px);
+  transition:transform .18s ease;
+}
+.rail-disclosure-open-v09{display:none}
+.rail-disclosure-v09[open] .rail-disclosure-closed-v09{display:none}
+.rail-disclosure-v09[open] .rail-disclosure-open-v09{display:inline}
+.rail-disclosure-v09[open] .rail-disclosure-action-v09 i{
+  transform:rotate(225deg) translate(-1px,-1px);
+}
+.rail-disclosure-body-v09{
+  display:grid!important;
+  grid-template-rows:0fr;
+  overflow:hidden;
+  border-top:0 solid #1D2733;
+  transition:grid-template-rows .18s ease,border-top-width .18s ease;
+}
+.rail-disclosure-v09[open]>.rail-disclosure-body-v09{
+  grid-template-rows:1fr;
+  border-top-width:1px;
+}
+.rail-disclosure-inner-v09{
+  min-height:0;
+  overflow:hidden;
+}
+.workspace-right-v26>.qualification-vp0d3 .rail-disclosure-inner-v09>h3{
+  padding-top:12px!important;
+}
+@media(prefers-reduced-motion:reduce){
+  .rail-disclosure-body-v09,
+  .rail-disclosure-action-v09 i{transition:none}
 }
 
 

@@ -1213,6 +1213,59 @@ def test_chart_v24_preserves_v23_trade_mapping_and_live_wiring():
     assert "const POLL_INTERVAL_MS=5000;" in html
 
 
+def test_token_intelligence_and_qualification_use_collapsed_native_disclosures():
+    html = render_solana_discovery_token_page({
+        **DETAIL,
+        "mint_authority_observation": "Revoked",
+        "freeze_authority_observation": "Revoked",
+        "last_qualified_at": "2026-09-10T00:00:00+00:00",
+        "current_qualification": {
+            "title": "Current qualification",
+            "message": "All current checks passed.",
+            "scan_at": "2026-09-10T00:05:00+00:00",
+        },
+    })
+
+    intelligence = '<details class="rail-disclosure-v09" data-token-intelligence-details>'
+    qualification = '<details class="rail-disclosure-v09" data-qualification-details>'
+    assert intelligence in html
+    assert qualification in html
+    assert '<details class="rail-disclosure-v09" data-token-intelligence-details open>' not in html
+    assert '<details class="rail-disclosure-v09" data-qualification-details open>' not in html
+    assert "Mint Revoked · Freeze Revoked" in html
+    assert "4/4 passed" in html
+    assert "View details" in html and "Hide details" in html
+    assert "View checks" in html and "Hide checks" in html
+    assert html.index(intelligence) < html.index('class="token-observation-rows"')
+    assert html.index(qualification) < html.index("Last confirmed checks")
+    assert 'data-copy-address="TokenAddress123456789"' in html
+    assert "@media(prefers-reduced-motion:reduce)" in html
+
+
+def test_qualification_disclosure_omits_current_cycle_explanation_but_keeps_checks():
+    html = render_solana_discovery_token_page({
+        **DETAIL,
+        "currently_qualified": False,
+        "last_qualified_at": "2026-09-10T00:00:00+00:00",
+        "current_qualification": {
+            "title": "Not evaluated in this scan",
+            "message": "The bounded rotating scan did not select this token in the current cycle.",
+            "scan_at": "2026-09-10T08:00:00+00:00",
+        },
+    })
+
+    assert "Not evaluated in this scan" not in html
+    assert "The bounded rotating scan did not select this token in the current cycle." not in html
+    assert "Last confirmed checks" in html
+    assert "Solana token identity" in html
+    assert "Exact token and pool match" in html
+    assert "Observed liquidity threshold" in html
+    assert "Observed 24h activity" in html
+    assert "Last qualified:" in html
+    assert "Current scan:" in html
+    assert "View checks" in html and "Hide checks" in html
+
+
 # TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI
 def test_transactions_v16b_renders_market_activity_ui():
     html=render_solana_discovery_token_page(DETAIL)
