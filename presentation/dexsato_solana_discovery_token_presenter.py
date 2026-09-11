@@ -264,6 +264,18 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
         f'data-copy-address="{pair_attr}" aria-label="Copy pair address">Copy</button>'
         if pair_raw else ""
     )
+    social_items = "".join(
+        link for link in (
+            _info_link("Website", str(detail.get("website_url") or ""), "website"),
+            _info_link("Telegram", str(detail.get("telegram_url") or ""), "telegram"),
+            _info_link("Twitter", str(detail.get("twitter_url") or ""), "twitter"),
+        ) if link
+    )
+    social_links = (
+        '<nav class="token-social-links tw-market-socials-v12" '
+        f'aria-label="Official token links">{social_items}</nav>'
+        if social_items else ""
+    )
 
     return (
         '<section class="token-overview-card tw-market-header" aria-label="Token market overview">'
@@ -278,6 +290,7 @@ def _token_overview_card(detail: dict[str, Any]) -> str:
         '<span aria-hidden="true">&#9734;</span></button>'
         '</div>'
         f'<span>{name} · {dex} exact pool</span>'
+        f'{social_links}'
         '</div></div>'
         '<div class="tw-market-price">'
         '<span>PRICE · USD</span>'
@@ -1217,6 +1230,27 @@ html[data-theme="intel"] .token-meta-row{border-color:#28313b}
 .token-social-links .social-inner-sep{
   margin:0 1px;
 }
+
+/* TOKEN_WORKSPACE_V249_MINIMAL_SOCIAL_LINKS */
+.tw-market-socials-v12{
+  margin-top:5px;
+  gap:10px;
+}
+.tw-market-socials-v12 .token-info-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:3px;
+  min-width:0;
+  padding:0;
+  border:0;
+  color:#7C8CA0;
+  font:700 9px/1.2 var(--mono);
+  text-decoration:none;
+}
+.tw-market-socials-v12 .token-info-link b{color:#53667C;font-size:9px}
+.tw-market-socials-v12 .token-info-link:hover,
+.tw-market-socials-v12 .token-info-link:focus-visible{color:#4CF4D6}
 
 
 

@@ -1368,6 +1368,43 @@ def test_market_tabs_use_clean_borderless_separators_and_weighted_labels():
     assert 'border-bottom-color:#4CF4D6' in html
 
 
+def test_token_header_restores_only_available_official_social_links_minimally():
+    detail = dict(DETAIL)
+    detail.update({
+        "website_url": "https://example.com",
+        "telegram_url": "",
+        "twitter_url": "https://x.com/example",
+    })
+
+    html = render_solana_discovery_token_page(detail)
+    header = html.split(
+        'class="token-overview-card tw-market-header"', 1
+    )[1].split("</section>", 1)[0]
+
+    assert 'class="token-social-links tw-market-socials-v12"' in header
+    assert 'aria-label="Official token links"' in header
+    assert 'href="https://example.com"' in header
+    assert 'href="https://x.com/example"' in header
+    assert ">Website<" in header
+    assert ">Twitter<" in header
+    assert "Telegram" not in header
+    assert 'target="_blank" rel="noopener noreferrer"' in header
+    assert "social-inner-sep" not in header
+    assert ".tw-market-socials-v12 .token-info-link{" in html
+
+    unavailable = render_solana_discovery_token_page({
+        **DETAIL,
+        "website_url": "",
+        "telegram_url": "javascript:alert(1)",
+        "twitter_url": "",
+    })
+    unavailable_header = unavailable.split(
+        'class="token-overview-card tw-market-header"', 1
+    )[1].split("</section>", 1)[0]
+    assert "tw-market-socials-v12" not in unavailable_header
+    assert "javascript:" not in unavailable_header
+
+
 def test_transactions_v26b_places_readable_market_activity_summary_after_trades():
     html=render_solana_discovery_token_page(DETAIL)
 
