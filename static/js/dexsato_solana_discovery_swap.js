@@ -35,8 +35,15 @@
     const wrappedSolMint = "So11111111111111111111111111111111111111112";
     const sellRouteStatus = document.querySelector("[data-sell-route-status]");
     const apiBase = "/api/discovery/solana/" + encodeURIComponent(tokenAddress);
+    const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
+    const BALANCE_REQUEST_TIMEOUT_MS = 12000;
+    const QUOTE_REQUEST_TIMEOUT_MS = 18000;
+    const ORDER_REQUEST_TIMEOUT_MS = 20000;
+    const EXECUTE_REQUEST_TIMEOUT_MS = 30000;
     let walletProvider = null;
     let walletAddress = "";
+    let listenerProvider = null;
+    const walletListenerRegistry = new WeakMap();
     let currentQuote = null;
     let pendingSignedOrder = null;
     let pendingUnsignedOrder = null;
@@ -232,7 +239,9 @@
             const payload = await requestJson(
                 apiBase + "/wallet-balance?wallet_address="
                     + encodeURIComponent(requestedWallet),
-                {headers: {accept: "application/json"}, cache: "no-store"}
+                {headers: {accept: "application/json"}, cache: "no-store"},
+                BALANCE_REQUEST_TIMEOUT_MS,
+                "Wallet balance request timed out."
             );
             if (revision !== balanceRevision || requestedWallet !== walletAddress) return;
             if (payload.status !== "BALANCE_READY"
@@ -491,20 +500,47 @@
         });
     }
 
-    async function requestJson(url, options) {
-        const response = await fetch(url, Object.assign({credentials: "same-origin"}, options));
-        let payload;
+    async function requestJson(url, options, timeoutMs, timeoutMessage) {
+        const controller = new AbortController();
+        const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0
+            ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
+        const timer = window.setTimeout(function () {
+            controller.abort();
+        }, timeout);
+
         try {
-            payload = await response.json();
-        } catch (_) {
-            throw new Error("DexSato received an invalid provider response.");
-        }
-        if (!response.ok) {
-            const error = new Error(present(payload.detail, "Swap request was rejected."));
-            error.status = response.status;
+            const response = await fetch(
+                url,
+                Object.assign({}, options, {
+                    credentials: "same-origin",
+                    signal: controller.signal
+                })
+            );
+            let payload;
+            try {
+                payload = await response.json();
+            } catch (_) {
+                throw new Error("DexSato received an invalid provider response.");
+            }
+            if (!response.ok) {
+                const error = new Error(present(payload.detail, "Swap request was rejected."));
+                error.status = response.status;
+                throw error;
+            }
+            return payload;
+        } catch (error) {
+            if (error && error.name === "AbortError") {
+                const timeoutError = new Error(
+                    present(timeoutMessage, "Request timed out. Please try again.")
+                );
+                timeoutError.name = "DexSatoTimeoutError";
+                timeoutError.code = "REQUEST_TIMEOUT";
+                throw timeoutError;
+            }
             throw error;
+        } finally {
+            window.clearTimeout(timer);
         }
-        return payload;
     }
 
     function transactionBytes(base64) {
@@ -525,9 +561,9 @@
         if (!web3Promise) {
             web3Promise = new Promise(function (resolve, reject) {
                 const script = document.createElement("script");
-                script.src = "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.4/lib/index.iife.min.js";
+                script.src = "/static/vendor/solana-web3/1.98.4/index.iife.min.js";
+                script.integrity = "sha384-I45YF+S0YGWIolUyTksLk9TNtTqaDgZg8e6T1OoBoJvvFmphqYNIPZw3Kl0TkZNN";
                 script.async = true;
-                script.crossOrigin = "anonymous";
                 script.onload = function () {
                     if (window.solanaWeb3 && window.solanaWeb3.VersionedTransaction) {
                         resolve(window.solanaWeb3);
@@ -618,7 +654,8 @@
                 wallet_address: pending.wallet_address,
                 signed_transaction: pending.signed_transaction
             })
-        });
+        }, EXECUTE_REQUEST_TIMEOUT_MS,
+        "Transaction submission timed out. The signed transaction has been kept for a safe retry.");
         clearPreparedState();
         if (result.status !== "SWAP_CONFIRMED") {
             throw new Error(present(result.error, "Jupiter could not settle the swap."));
@@ -646,6 +683,91 @@
         }, 3000);
     }
 
+    function removeWalletProviderListener(provider, eventName, handler) {
+        if (!provider || !handler) return false;
+        if (typeof provider.off === "function") {
+            provider.off(eventName, handler);
+            return true;
+        }
+        if (typeof provider.removeListener === "function") {
+            provider.removeListener(eventName, handler);
+            return true;
+        }
+        return false;
+    }
+
+    function detachWalletListeners(provider) {
+        if (!provider) return;
+        const handlers = walletListenerRegistry.get(provider);
+        if (handlers) {
+            const accountRemoved = removeWalletProviderListener(
+                provider, "accountChanged", handlers.accountChanged
+            );
+            const disconnectRemoved = removeWalletProviderListener(
+                provider, "disconnect", handlers.disconnect
+            );
+            if (accountRemoved && disconnectRemoved) {
+                walletListenerRegistry.delete(provider);
+            }
+        }
+        if (listenerProvider === provider) listenerProvider = null;
+    }
+
+    function handleWalletAccountChanged(provider, publicKey) {
+        if (listenerProvider !== provider || walletProvider !== provider) return;
+        const changed = publicKey ? String(publicKey) : "";
+        if (changed === walletAddress) return;
+
+        walletAddress = changed;
+        renderWalletState(changed ? "" : "Wallet disconnected.");
+        clearQuote();
+        clearWalletBalance();
+
+        if (changed) {
+            loadWalletBalance();
+            return;
+        }
+
+        detachWalletListeners(provider);
+        if (walletProvider === provider) walletProvider = null;
+        updateSwapAvailability();
+    }
+
+    function handleWalletDisconnect(provider) {
+        if (listenerProvider !== provider || walletProvider !== provider) return;
+        walletAddress = "";
+        renderWalletState("Wallet disconnected.");
+        clearQuote();
+        clearWalletBalance();
+        detachWalletListeners(provider);
+        if (walletProvider === provider) walletProvider = null;
+        updateSwapAvailability();
+    }
+
+    function attachWalletListeners(provider) {
+        if (!provider || typeof provider.on !== "function") return;
+        if (listenerProvider === provider) return;
+
+        if (listenerProvider) detachWalletListeners(listenerProvider);
+
+        let handlers = walletListenerRegistry.get(provider);
+        if (!handlers) {
+            handlers = {
+                accountChanged: function (publicKey) {
+                    handleWalletAccountChanged(provider, publicKey);
+                },
+                disconnect: function () {
+                    handleWalletDisconnect(provider);
+                }
+            };
+            walletListenerRegistry.set(provider, handlers);
+            provider.on("accountChanged", handlers.accountChanged);
+            provider.on("disconnect", handlers.disconnect);
+        }
+
+        listenerProvider = provider;
+    }
+
     connect.addEventListener("click", async function () {
         const provider = window.phantom && window.phantom.solana
             ? window.phantom.solana : window.solana;
@@ -665,30 +787,16 @@
             if (!key || typeof provider.signTransaction !== "function") {
                 throw new Error("This wallet does not support transaction approval.");
             }
+            if (walletProvider && walletProvider !== provider) {
+                detachWalletListeners(walletProvider);
+            }
             walletProvider = provider;
             walletAddress = String(key);
+            attachWalletListeners(provider);
             renderWalletState();
             clearPreparedState();
             clearWalletBalance();
             loadWalletBalance();
-            if (typeof provider.on === "function") {
-                provider.on("accountChanged", function (publicKey) {
-                    const changed = publicKey ? String(publicKey) : "";
-                    if (changed !== walletAddress) {
-                        walletAddress = changed;
-                        renderWalletState(changed ? "" : "Wallet disconnected.");
-                        clearQuote();
-                        clearWalletBalance();
-                        if (changed) loadWalletBalance();
-                    }
-                });
-                provider.on("disconnect", function () {
-                    walletAddress = "";
-                    renderWalletState("Wallet disconnected.");
-                    clearQuote();
-                    clearWalletBalance();
-                });
-            }
         } catch (error) {
             renderWalletState(present(error.message, "Wallet connection was not approved."));
         } finally {
@@ -714,7 +822,9 @@
             const payload = await requestJson(
                 apiBase + "/jupiter-quote?side=" + encodeURIComponent(side)
                     + "&amount=" + encodeURIComponent(amount.value),
-                {headers: {accept: "application/json"}}
+                {headers: {accept: "application/json"}},
+                QUOTE_REQUEST_TIMEOUT_MS,
+                "Jupiter quote took too long to respond. Please try again."
             );
             if (revision !== quoteRevision) return;
             const expectedInputMint = side === "buy" ? wrappedSolMint : tokenAddress;
@@ -784,7 +894,8 @@
                         wallet_address: walletAddress,
                         risk_acknowledged: acknowledgement.checked
                     })
-                });
+                }, ORDER_REQUEST_TIMEOUT_MS,
+                "Swap preparation took too long to respond. Please try again shortly.");
                 if (revision !== quoteRevision || !currentQuote || !acknowledgement.checked) {
                     throw new Error("The trade changed. Request a new quote and review it again.");
                 }
@@ -852,6 +963,10 @@
             if (!pendingSignedOrder) swapButton.textContent = actionLabel();
             updateSwapAvailability();
         }
+    });
+
+    window.addEventListener("pagehide", function () {
+        if (listenerProvider) detachWalletListeners(listenerProvider);
     });
 
     applySide("buy", false);

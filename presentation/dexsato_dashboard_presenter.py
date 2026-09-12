@@ -1158,6 +1158,9 @@ def render_dexsato_dashboard(
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DexSato Market Decision Intelligence</title>
   <link rel="icon" type="image/png" href="/static/branding/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root{{--bg:#06111f;--panel:#0b1a2c;--panel2:#0d2034;--line:#1d3852;
       --text:#f5f8ff;--muted:#91a8c1;--violet:#8068ff;--cyan:#23d9d2;
@@ -1299,33 +1302,70 @@ def render_dexsato_dashboard(
       .evidence-column h4{{font-size:14px}} .teaser-headline{{font-size:15px}} .summary-column p{{font-size:13px;line-height:1.55}}
       .decision-detail{{grid-template-columns:1fr}}
     }}
+
+
+    /* UI-01: DexSato DEX Intelligence shell — template-aligned visual layer. */
+    :root{{--bg:#080B10;--panel:#0E141C;--panel2:#10171F;--line:#1D2733;--line-bright:#2A3847;
+      --text:#E7EDF4;--muted:#7C8CA0;--text-faint:#45505F;--violet:#B98CFF;--cyan:#4CF4D6;
+      --green:#4CF4D6;--amber:#F7B928;--red:#FF5C7A;--blue:#4CF4D6;
+      --font-display:"Space Grotesk",sans-serif;--font-mono:"JetBrains Mono",monospace}}
+    body{{background-color:var(--bg);background-image:linear-gradient(rgba(76,244,214,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(76,244,214,.035) 1px,transparent 1px);background-size:42px 42px;color:var(--text);font-family:var(--font-mono);font-size:14px}}
+    .app{{grid-template-columns:76px minmax(0,1fr)}}
+    .sidebar{{position:sticky;top:0;display:flex;flex-direction:column;align-items:center;width:76px;height:100vh;padding:20px 0;border-right:1px solid var(--line);background:var(--panel);z-index:30}}
+    .brand{{display:flex;align-items:center;justify-content:center;width:34px;height:34px;margin:0 0 32px;padding:0;background:transparent!important}}
+    .brand img{{width:34px!important;max-width:none!important;height:34px!important;object-fit:contain}}
+    nav{{display:flex;flex:1;flex-direction:column;gap:6px;width:44px}}
+    nav a{{position:relative;display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border-radius:0;background:transparent!important;color:var(--text-faint);text-decoration:none;transition:color .15s ease}}
+    nav a:hover{{color:var(--muted)}} nav a.active{{color:var(--cyan)}} nav a.active:before{{position:absolute;top:50%;left:-16px;width:2px;height:18px;background:var(--cyan);box-shadow:0 0 8px var(--cyan);content:"";transform:translateY(-50%)}}
+    nav a span{{width:auto;font-family:var(--font-mono);font-size:19px;line-height:1;text-align:center}} nav a em{{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}}
+    .engine-card{{display:none}} .sidebar-foot{{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--line-bright);color:var(--muted);font-size:10px;font-weight:700;clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,6px 100%,0 calc(100% - 6px))}}
+    .content{{min-width:0;padding:0}}
+    .topbar{{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 28px;border-bottom:1px solid var(--line);background:rgba(8,11,16,.82);backdrop-filter:blur(8px)}}
+    .topbar-brand{{display:flex;align-items:baseline;gap:8px;white-space:nowrap}} .topbar-brand strong{{font-family:var(--font-display);font-size:17px;font-weight:700;letter-spacing:.01em}} .topbar-brand span{{color:var(--text-faint);font-size:10px;font-weight:500;letter-spacing:.08em}}
+    .top-actions{{display:flex;align-items:center;gap:10px}} .top-status{{display:flex;gap:8px}}
+    .status-chip{{padding:7px 10px;border:1px solid var(--line);border-radius:0;background:var(--panel2);color:var(--muted);font-size:11px}} .status-chip b{{color:var(--cyan)}}
+    .theme-switcher{{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:0;background:var(--panel2)}} .theme-option{{min-width:30px;padding:5px 7px;border-radius:0;color:var(--muted)}} .theme-option.active{{background:var(--cyan);color:#06110F;box-shadow:none}}
+    .workspace{{margin-top:0;padding:28px;gap:18px}} .metrics{{gap:1px;margin-bottom:22px;border:1px solid var(--line);background:var(--line)}} .metric{{padding:18px 20px;border:0;border-radius:0;background:var(--panel)}} .metric strong{{font-family:var(--font-display);font-size:24px;font-weight:600}} .metric span{{color:var(--text-faint);font-size:11px;letter-spacing:.03em}}
+    .section-title h2,.rail-card h2{{font-family:var(--font-display);font-weight:600}} .section-title h2{{font-size:19px}}
+    .search-wrap input{{border:1px solid var(--line);border-radius:0;background:var(--panel2);color:var(--text);font-family:var(--font-mono);font-size:12px}} .search-wrap input:focus{{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(76,244,214,.08)}}
+    .filters{{gap:1px;margin:12px 0;background:var(--line)}} .filters button{{border:0;border-radius:0;background:var(--panel);color:var(--muted);font-family:var(--font-mono);font-size:11px}} .filters button.active{{background:var(--cyan);color:#06110F}}
+    .decision-list{{gap:10px}} .decision-card{{border:1px solid var(--line);border-left:2px solid var(--blue);border-radius:0;background:var(--panel);box-shadow:none}} .evidence-column,.summary-column{{border-left-color:var(--line)}}
+    .coin-logo{{border-color:var(--line-bright);border-radius:0;background:var(--panel2)}} .market-title-button{{font-family:var(--font-display)}}
+    .decision-pill{{border-radius:0}} .decision-button{{border-radius:0}} .decision-detail{{border-top-color:var(--line);background:#0A1017}}
+    .rail{{top:82px}} .rail-card{{border:1px solid var(--line);border-radius:0;background:var(--panel)}} .timeline li:before{{background:var(--line-bright)}}
+    .footer{{border-color:var(--line);border-radius:0;background:var(--panel)}}
+    ::selection{{background:#1B4A44;color:var(--cyan)}} :focus-visible{{outline:2px solid var(--cyan);outline-offset:2px}}
+    @media(max-width:820px){{
+      .app{{grid-template-columns:60px minmax(0,1fr)!important;overflow:visible}} .sidebar{{position:sticky!important;top:0!important;display:flex!important;width:60px!important;height:100vh!important;padding:16px 0!important}} nav{{display:flex!important;width:44px!important}} .brand{{margin-bottom:24px!important}} .content{{max-width:none!important;padding:0!important;overflow:hidden}} .workspace{{padding:16px 12px}} .topbar{{height:auto;min-height:64px;padding:10px 14px;gap:10px}} .top-status{{display:none}} .metrics{{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    }}
+    @media(max-width:520px){{.topbar-brand span{{display:none}} .workspace{{padding:12px 10px}} .metrics{{grid-template-columns:1fr}}}}
   </style>
 </head>
 <body>
 <div class="app">
-  <aside class="sidebar">
-    <div class="brand">
-      <img src="/static/branding/dexsato-logo.png" alt="DexSato">
-    </div>
+  <aside class="sidebar" aria-label="Primary navigation">
+    <a class="brand" href="#" aria-label="DexSato dashboard" title="DexSato">
+      <img src="/static/branding/dexsato-mark.png" alt="">
+    </a>
     <nav>
-      <a class="active" href="#"><span>⌂</span>Overview</a>
-      <a href="#decisions"><span>◉</span>Market Radar</a>
-      <a href="#timeline"><span>◷</span>Decision History</a>
-      <a href="/api/system-status"><span>⌁</span>System Health</a>
-      <a href="#decisions"><span>☆</span>Watchlist</a>
-      <a href="#"><span>⚙</span>Settings</a>
+      <a class="active" href="#" aria-label="Dashboard" title="Dashboard"><span>⌂</span><em>Dashboard</em></a>
+      <a href="#decisions" aria-label="Discover" title="Discover"><span>⌕</span><em>Discover</em></a>
+      <a href="#decisions" aria-label="Token Workspace" title="Token Workspace"><span>◇</span><em>Token Workspace</em></a>
+      <a href="#timeline" aria-label="Signals" title="Signals"><span>⌁</span><em>Signals</em></a>
+      <a href="#decisions" aria-label="Watchlist" title="Watchlist"><span>☆</span><em>Watchlist</em></a>
+      <a href="/api/system-status" aria-label="System Health" title="System Health"><span>◉</span><em>System Health</em></a>
     </nav>
-    <div class="engine-card"><strong>Decision Engine</strong><b>● ONLINE</b><small>3 scheduled scans daily</small></div>
+    <div class="sidebar-foot" title="DexSato DEX Intelligence">DS</div>
   </aside>
   <main class="content">
     <header class="topbar">
-      <div><h1>Market Decision Intelligence</h1><p class="subtitle">Evidence-led decisions across the Founder V1 market universe.</p></div>
+      <div class="topbar-brand"><strong>dexsato</strong><span>DEX INTELLIGENCE</span></div>
       <div class="top-actions">
+        <div class="top-status"><span class="status-chip">● <b>System {_text(effective_health.title())}</b></span><span class="status-chip">Last scan <b id="last-scan-age">calculating…</b></span></div>
         <div class="theme-switcher" role="group" aria-label="Dashboard theme">
           <button class="theme-option active" type="button" data-theme-option="current" aria-label="Use current dark theme" title="Current dark theme" aria-pressed="true">🌙</button>
           <button class="theme-option" type="button" data-theme-option="plain" aria-label="Use plain white theme" title="Plain white theme" aria-pressed="false">☀️</button>
         </div>
-        <div class="top-status"><span class="status-chip">● <b>System {_text(effective_health.title())}</b></span><span class="status-chip">Last scan <b id="last-scan-age">calculating…</b></span></div>
       </div>
     </header>
     <div class="workspace">

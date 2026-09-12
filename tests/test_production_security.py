@@ -12,14 +12,18 @@ from application.production_security import (
     ProductionLoggingMiddleware,
     SecurityHeadersMiddleware,
     _PRODUCTION_LOGGER,
-    _RateRule,
-    _SlidingWindowLimiter,
     allowed_hosts,
     application_host,
     production_log_level,
     require_internal_access,
     safe_jupiter_error_detail,
     trusted_proxy_headers,
+)
+
+from application.token_workspace_rate_limit import (
+    RULES,
+    SlidingWindowRateLimiter,
+    TokenWorkspaceRateLimitMiddleware,
 )
 
 
@@ -131,12 +135,15 @@ def test_boundary_rejects_oversized_content_length_before_application():
     assert sent[0]["status"] == 413
 
 
-def test_boundary_rate_limits_sensitive_route():
+def test_shared_limiter_rate_limits_sensitive_route():
     async def downstream(scope, receive, send):
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"ok"})
 
-    middleware = ApplicationBoundaryMiddleware(downstream)
+    middleware = TokenWorkspaceRateLimitMiddleware(
+        downstream,
+        limiter=SlidingWindowRateLimiter(max_buckets=100),
+    )
 
     async def one_request():
         sent = []
@@ -161,17 +168,19 @@ def test_boundary_rate_limits_sensitive_route():
     assert statuses == [200, 200, 200, 429]
 
 
-def test_rate_limiter_sweeps_stale_buckets_and_bounds_new_clients():
-    rule = _RateRule("test", 2, 60)
-    limiter = _SlidingWindowLimiter(maximum_buckets=2)
+def test_shared_in_memory_limiter_sweeps_stale_buckets_and_bounds_new_clients():
+    current = [1.0]
+    limiter = SlidingWindowRateLimiter(max_buckets=2, clock=lambda: current[0])
+    rule = RULES["workspace"]
 
-    assert limiter.allow("client-a", rule, 1.0) is True
-    assert limiter.allow("client-b", rule, 1.0) is True
-    assert limiter.allow("client-c", rule, 1.0) is False
-    assert len(limiter._events) == 2
+    assert limiter.check([("client-a", rule)]).allowed is True
+    assert limiter.check([("client-b", rule)]).allowed is True
+    assert limiter.check([("client-c", rule)]).allowed is False
+    assert limiter.bucket_count == 2
 
-    assert limiter.allow("client-c", rule, 902.0) is True
-    assert list(limiter._events) == [("client-c", "test")]
+    current[0] = 902.0
+    assert limiter.check([("client-c", rule)]).allowed is True
+    assert limiter.bucket_count == 1
 
 
 def test_security_headers_are_attached_without_echoing_request_id():

@@ -8,14 +8,16 @@ from __future__ import annotations
 
 import base64
 import binascii
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
 import hmac
+import json
 import os
 import re
 import threading
+import uuid
 from typing import Any, Callable
 
 import requests
@@ -46,12 +48,21 @@ from application.jupiter_one_shot_swap_gate import (
     record as record_one_shot,require_armed as require_one_shot_armed,
 )
 from application.solana_discovery_feed_service import load_solana_discovery_record
+from application.jupiter_pending_store import (
+    JupiterPendingStoreConflict,
+    JupiterPendingStoreLimit,
+    JupiterPendingStoreUnavailable,
+    RedisJupiterPendingStore,
+)
 
 
 JUPITER_EXECUTE_URL = "https://api.jup.ag/swap/v2/execute"
 ORDER_LIFETIME_SECONDS = 120
 MAX_PENDING_ORDERS = 256
-MAX_PENDING_ORDERS_PER_WALLET = 4
+PENDING_ADMISSION_LIMIT = 240
+MAX_PENDING_ORDERS_PER_WALLET = 2
+MAX_PENDING_ORDERS_PER_WALLET_TOKEN = 1
+PENDING_RESERVATION_SECONDS = 30
 MAX_TRANSACTION_BYTES = 4096
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 BASE58_DIGITS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -96,6 +107,13 @@ class _PendingOrder:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingReservation:
+    token_address: str
+    wallet_address: str
+    expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class _CompiledInstruction:
     program_index: int
     account_indices: tuple[int, ...]
@@ -121,7 +139,214 @@ class _MessageSemantics:
 
 
 _pending_orders: dict[str, _PendingOrder] = {}
+_pending_reservations: dict[str, _PendingReservation] = {}
 _pending_lock = threading.RLock()
+
+
+_redis_pending_store: RedisJupiterPendingStore | None = None
+_redis_pending_store_lock = threading.RLock()
+
+
+@dataclass(slots=True)
+class _RedisPendingOrder:
+    token_address: str
+    side: str
+    input_mint: str
+    output_mint: str
+    input_amount_raw: str
+    wallet_address: str
+    expires_at: datetime
+    approved_message: bytes
+    message_digest: bytes
+    wallet_signature_index: int
+    last_valid_block_height: str | None
+    fee_policy_snapshot: str
+    fee_execution_fields: dict[str, Any]
+    one_shot_gate_path: str | None = None
+    signed_digest: bytes | None = None
+
+
+def _pending_store_mode() -> str:
+    value = os.getenv("DEXSATO_PENDING_STORE", "memory").strip().lower()
+    if value not in {"memory", "redis"}:
+        raise RuntimeError("DEXSATO_PENDING_STORE must be memory or redis.")
+    return value
+
+
+def _policy_snapshot(policy: Any) -> str:
+    if is_dataclass(policy):
+        value = asdict(policy)
+    elif hasattr(policy, "__dict__"):
+        value = dict(vars(policy))
+    else:
+        value = repr(policy)
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _pending_to_redis_payload(pending: _PendingOrder) -> dict[str, Any]:
+    return {
+        "token_address": pending.token_address,
+        "side": pending.side,
+        "input_mint": pending.input_mint,
+        "output_mint": pending.output_mint,
+        "input_amount_raw": pending.input_amount_raw,
+        "wallet_address": pending.wallet_address,
+        "expires_at": pending.expires_at.isoformat(),
+        "approved_message": base64.b64encode(pending.approved_message).decode("ascii"),
+        "message_digest": pending.message_digest.hex(),
+        "wallet_signature_index": pending.wallet_signature_index,
+        "last_valid_block_height": pending.last_valid_block_height,
+        "fee_policy_snapshot": _policy_snapshot(pending.fee_evidence.policy),
+        "fee_execution_fields": pending.fee_evidence.execution_fields(),
+        "one_shot_gate_path": pending.one_shot_gate_path,
+        "signed_digest": pending.signed_digest.hex() if pending.signed_digest is not None else None,
+    }
+
+
+def _pending_from_redis_payload(payload: dict[str, Any]) -> _RedisPendingOrder:
+    try:
+        expires_at = datetime.fromisoformat(str(payload["expires_at"]))
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        approved_message = base64.b64decode(str(payload["approved_message"]), validate=True)
+        message_digest = bytes.fromhex(str(payload["message_digest"]))
+        signed_raw = payload.get("signed_digest")
+        signed_digest = bytes.fromhex(str(signed_raw)) if signed_raw else None
+        execution_fields = payload["fee_execution_fields"]
+        if not isinstance(execution_fields, dict):
+            raise ValueError("fee_execution_fields")
+        return _RedisPendingOrder(
+            token_address=str(payload["token_address"]),
+            side=str(payload["side"]),
+            input_mint=str(payload["input_mint"]),
+            output_mint=str(payload["output_mint"]),
+            input_amount_raw=str(payload["input_amount_raw"]),
+            wallet_address=str(payload["wallet_address"]),
+            expires_at=expires_at.astimezone(timezone.utc),
+            approved_message=approved_message,
+            message_digest=message_digest,
+            wallet_signature_index=int(payload["wallet_signature_index"]),
+            last_valid_block_height=(
+                str(payload["last_valid_block_height"]) if payload.get("last_valid_block_height") is not None else None
+            ),
+            fee_policy_snapshot=str(payload["fee_policy_snapshot"]),
+            fee_execution_fields=dict(execution_fields),
+            one_shot_gate_path=(
+                str(payload["one_shot_gate_path"]) if payload.get("one_shot_gate_path") else None
+            ),
+            signed_digest=signed_digest,
+        )
+    except (KeyError, TypeError, ValueError, binascii.Error) as error:
+        raise JupiterPendingStoreUnavailable("Redis pending order payload was invalid.") from error
+
+
+def _get_redis_pending_store() -> RedisJupiterPendingStore:
+    global _redis_pending_store
+    with _redis_pending_store_lock:
+        if _redis_pending_store is None:
+            url = os.getenv("REDIS_URL", "").strip()
+            if not url:
+                raise JupiterPendingStoreUnavailable("REDIS_URL is required for the Redis pending store.")
+            _redis_pending_store = RedisJupiterPendingStore.from_url(url)
+        return _redis_pending_store
+
+
+def configure_jupiter_pending_store() -> None:
+    mode = _pending_store_mode()
+    production = os.getenv("DEXSATO_ENV", "development").strip().lower() == "production"
+    if production and mode != "redis":
+        raise RuntimeError("Production requires DEXSATO_PENDING_STORE=redis.")
+    if mode == "redis":
+        _get_redis_pending_store().ping()
+
+
+def _pending_policy_matches(pending: _PendingOrder | _RedisPendingOrder) -> bool:
+    if isinstance(pending, _PendingOrder):
+        return pending.fee_evidence.policy == _fee_policy()
+    return pending.fee_policy_snapshot == _policy_snapshot(_fee_policy())
+
+
+def _pending_execution_fields(pending: _PendingOrder | _RedisPendingOrder) -> dict[str, Any]:
+    if isinstance(pending, _PendingOrder):
+        return pending.fee_evidence.execution_fields()
+    return dict(pending.fee_execution_fields)
+
+
+def _load_pending_order(order_id: str, current: datetime) -> _PendingOrder | _RedisPendingOrder | None:
+    if _pending_store_mode() == "redis":
+        payload = _get_redis_pending_store().get_pending(order_id)
+        if payload is None:
+            return None
+        pending = _pending_from_redis_payload(payload)
+        if pending.expires_at <= current:
+            return None
+        return pending
+    with _pending_lock:
+        pending = _pending_orders.get(order_id)
+        if pending is None or pending.expires_at <= current or pending.completed:
+            return None
+        return pending
+
+
+def _begin_pending_execution(
+    order_id: str,
+    pending: _PendingOrder | _RedisPendingOrder,
+    signed_digest: bytes,
+    current: datetime,
+) -> str | None:
+    if _pending_store_mode() == "redis":
+        try:
+            return _get_redis_pending_store().begin_execution(order_id, signed_digest.hex())
+        except JupiterPendingStoreConflict as error:
+            if error.kind == "missing":
+                raise JupiterSwapExpired("The Jupiter swap order is unavailable or has expired.") from error
+            if error.kind == "digest_mismatch":
+                raise JupiterSwapRejected("A retry cannot replace the approved signed transaction.") from error
+            if error.kind == "executing":
+                raise JupiterSwapRejected("The approved signed transaction is already being submitted.") from error
+            raise JupiterSwapRejected("The approved signed transaction could not be locked.") from error
+
+    with _pending_lock:
+        current_pending = _pending_orders.get(order_id)
+        if current_pending is not pending or pending.expires_at <= current or pending.completed:
+            raise JupiterSwapExpired("The Jupiter swap order is unavailable or has expired.")
+        if pending.signed_digest is not None and not hmac.compare_digest(pending.signed_digest, signed_digest):
+            raise JupiterSwapRejected("A retry cannot replace the approved signed transaction.")
+        if pending.executing:
+            raise JupiterSwapRejected("The approved signed transaction is already being submitted.")
+        pending.signed_digest = signed_digest
+        pending.executing = True
+    return None
+
+
+def _release_pending_execution(
+    order_id: str,
+    pending: _PendingOrder | _RedisPendingOrder,
+    execution_owner: str | None,
+) -> None:
+    if _pending_store_mode() == "redis":
+        if execution_owner:
+            _get_redis_pending_store().release_execution(order_id, execution_owner)
+        return
+    with _pending_lock:
+        pending.executing = False
+
+
+def _complete_pending_execution(
+    order_id: str,
+    pending: _PendingOrder | _RedisPendingOrder,
+    execution_owner: str | None,
+) -> None:
+    if _pending_store_mode() == "redis":
+        if not execution_owner:
+            raise JupiterPendingStoreUnavailable("Redis execution owner token is missing.")
+        _get_redis_pending_store().complete(
+            order_id, execution_owner, pending.wallet_address, pending.token_address
+        )
+        return
+    with _pending_lock:
+        pending.executing = False
+        pending.completed = True
 
 
 class JupiterSwapRejected(ValueError):
@@ -130,6 +355,10 @@ class JupiterSwapRejected(ValueError):
 
 class JupiterSwapExpired(JupiterSwapRejected):
     """Raised when an order is unknown, expired, or already completed."""
+
+
+class JupiterSwapPendingLimit(JupiterSwapRejected):
+    """Raised when one wallet already owns its permitted active swap reviews."""
 
 
 def _utcnow() -> datetime:
@@ -567,22 +796,177 @@ def _observed_token(token_address: str, feed: dict[str, Any] | None) -> str:
     return token
 
 
-def _prune_orders(current: datetime, wallet_address: str) -> None:
-    stale = [key for key, value in _pending_orders.items()
-             if value.expires_at <= current or value.completed]
-    for key in stale:
+def _prune_pending_state(current: datetime) -> None:
+    stale_orders = [
+        key
+        for key, value in _pending_orders.items()
+        if value.expires_at <= current or value.completed
+    ]
+    for key in stale_orders:
         _pending_orders.pop(key, None)
-    if len(_pending_orders) >= MAX_PENDING_ORDERS:
-        raise JupiterQuoteUnavailable("The swap pilot is temporarily busy.")
-    wallet_orders = sum(
+
+    stale_reservations = [
+        key
+        for key, value in _pending_reservations.items()
+        if value.expires_at <= current
+    ]
+    for key in stale_reservations:
+        _pending_reservations.pop(key, None)
+
+
+def _active_pending_count() -> int:
+    return len(_pending_orders) + len(_pending_reservations)
+
+
+def _wallet_pending_count(wallet_address: str) -> int:
+    orders = sum(
         1
         for value in _pending_orders.values()
         if value.wallet_address == wallet_address
     )
-    if wallet_orders >= MAX_PENDING_ORDERS_PER_WALLET:
-        raise JupiterQuoteUnavailable(
-            "This wallet has too many pending swap reviews. Complete or wait for an existing review to expire."
+    reservations = sum(
+        1
+        for value in _pending_reservations.values()
+        if value.wallet_address == wallet_address
+    )
+    return orders + reservations
+
+
+def _wallet_token_pending_count(wallet_address: str, token_address: str) -> int:
+    orders = sum(
+        1
+        for value in _pending_orders.values()
+        if value.wallet_address == wallet_address and value.token_address == token_address
+    )
+    reservations = sum(
+        1
+        for value in _pending_reservations.values()
+        if value.wallet_address == wallet_address and value.token_address == token_address
+    )
+    return orders + reservations
+
+
+def _reserve_pending_slot(
+    token_address: str,
+    wallet_address: str,
+    current: datetime,
+) -> str:
+    """Atomically reserve capacity before the Jupiter network request starts."""
+    if _pending_store_mode() == "redis":
+        reservation_id = uuid.uuid4().hex
+        try:
+            _get_redis_pending_store().reserve(
+                reservation_id,
+                token_address,
+                wallet_address,
+                current.timestamp(),
+                admission_limit=PENDING_ADMISSION_LIMIT,
+                wallet_limit=MAX_PENDING_ORDERS_PER_WALLET,
+                wallet_token_limit=MAX_PENDING_ORDERS_PER_WALLET_TOKEN,
+            )
+        except JupiterPendingStoreLimit as error:
+            if error.kind == "global":
+                raise JupiterQuoteUnavailable("The swap pilot is temporarily busy.") from error
+            if error.kind == "wallet_token":
+                raise JupiterSwapPendingLimit(
+                    "Another swap order is still pending for this wallet and token. "
+                    "Complete it or try again shortly."
+                ) from error
+            if error.kind == "wallet":
+                raise JupiterSwapPendingLimit(
+                    "This wallet already has the maximum number of pending swap reviews. "
+                    "Complete an existing review or try again shortly."
+                ) from error
+            raise JupiterQuoteUnavailable("The swap pilot is temporarily busy.") from error
+        return reservation_id
+
+    with _pending_lock:
+        _prune_pending_state(current)
+
+        if _active_pending_count() >= PENDING_ADMISSION_LIMIT:
+            raise JupiterQuoteUnavailable("The swap pilot is temporarily busy.")
+
+        if _wallet_token_pending_count(wallet_address, token_address) >= MAX_PENDING_ORDERS_PER_WALLET_TOKEN:
+            raise JupiterSwapPendingLimit(
+                "Another swap order is still pending for this wallet and token. "
+                "Complete it or try again shortly."
+            )
+
+        if _wallet_pending_count(wallet_address) >= MAX_PENDING_ORDERS_PER_WALLET:
+            raise JupiterSwapPendingLimit(
+                "This wallet already has the maximum number of pending swap reviews. "
+                "Complete an existing review or try again shortly."
+            )
+
+        reservation_id = uuid.uuid4().hex
+        _pending_reservations[reservation_id] = _PendingReservation(
+            token_address=token_address,
+            wallet_address=wallet_address,
+            expires_at=current + timedelta(seconds=PENDING_RESERVATION_SECONDS),
         )
+        return reservation_id
+
+
+def _release_pending_slot(reservation_id: str) -> None:
+    if _pending_store_mode() == "redis":
+        _get_redis_pending_store().release_reservation(reservation_id)
+        return
+    with _pending_lock:
+        _pending_reservations.pop(reservation_id, None)
+
+
+def _commit_pending_slot(
+    reservation_id: str,
+    request_id: str,
+    pending: _PendingOrder,
+    current: datetime,
+) -> None:
+    """Convert exactly one live reservation into one pending order atomically."""
+    if _pending_store_mode() == "redis":
+        try:
+            _get_redis_pending_store().commit(
+                reservation_id,
+                request_id,
+                _pending_to_redis_payload(pending),
+                current.timestamp(),
+                pending.expires_at.timestamp(),
+                max_pending=MAX_PENDING_ORDERS,
+            )
+        except JupiterPendingStoreConflict as error:
+            if error.kind == "reservation_missing":
+                raise JupiterQuoteUnavailable("The swap preparation reservation expired. Please retry.") from error
+            if error.kind == "reservation_mismatch":
+                raise JupiterSwapRejected("Swap preparation reservation did not match the pending order.") from error
+            if error.kind == "duplicate_request":
+                raise JupiterSwapRejected("Jupiter returned a duplicate active swap request.") from error
+            raise JupiterSwapRejected("Swap preparation state conflicted.") from error
+        except JupiterPendingStoreLimit as error:
+            raise JupiterQuoteUnavailable("The swap pilot is temporarily busy.") from error
+        return
+
+    with _pending_lock:
+        _prune_pending_state(current)
+        reservation = _pending_reservations.get(reservation_id)
+        if reservation is None:
+            raise JupiterQuoteUnavailable("The swap preparation reservation expired. Please retry.")
+        if (
+            reservation.wallet_address != pending.wallet_address
+            or reservation.token_address != pending.token_address
+        ):
+            raise JupiterSwapRejected("Swap preparation reservation did not match the pending order.")
+        if request_id in _pending_orders:
+            raise JupiterSwapRejected("Jupiter returned a duplicate active swap request.")
+        if len(_pending_orders) >= MAX_PENDING_ORDERS:
+            raise JupiterQuoteUnavailable("The swap pilot is temporarily busy.")
+
+        _pending_orders[request_id] = pending
+        _pending_reservations.pop(reservation_id, None)
+
+
+def _prune_orders(current: datetime, wallet_address: str | None = None) -> None:
+    """Backward-compatible pruning helper; admission is handled by reservations."""
+    del wallet_address
+    _prune_pending_state(current)
 
 
 def _order_error_message(payload: dict[str, Any], side: str) -> str | None:
@@ -650,88 +1034,86 @@ def prepare_jupiter_swap(
     except (FeePolicyConfigurationError,GateRejected) as error:
         raise JupiterQuoteNotConfigured("Fee-enabled swap execution is not activated for this exact one-shot order.") from error
 
-    with _pending_lock:
-        _prune_orders(now(), wallet)
-
+    reservation_id = _reserve_pending_slot(token_mint, wallet, now())
     try:
-        response = request_get(
-            JUPITER_ORDER_URL,
-            params={"inputMint": input_mint, "outputMint": output_mint,
-                    "amount": str(input_raw), "taker": wallet,
-                "excludeRouters": "jupiterz,dflow,okx",
-                    **fee_policy.request_parameters()},
-            headers={"x-api-key": resolved_key, "accept": "application/json"},
-            timeout=12,
+        try:
+            response = request_get(
+                JUPITER_ORDER_URL,
+                params={"inputMint": input_mint, "outputMint": output_mint,
+                        "amount": str(input_raw), "taker": wallet,
+                    "excludeRouters": "jupiterz,dflow,okx",
+                        **fee_policy.request_parameters()},
+                headers={"x-api-key": resolved_key, "accept": "application/json"},
+                timeout=12,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, RuntimeError, TypeError, ValueError) as error:
+            raise JupiterQuoteUnavailable("Jupiter swap order is temporarily unavailable.") from error
+
+        if not isinstance(payload, dict):
+            raise JupiterQuoteUnavailable("Jupiter could not prepare this swap transaction.")
+        provider_error = _order_error_message(payload, direction)
+        if provider_error is not None:
+            raise JupiterQuoteUnavailable(provider_error)
+        fee_evidence = _fee_evidence(fee_policy, payload, input_mint, output_mint)
+        fee_disclosure = _fee_disclosure(
+            fee_evidence, payload, input_raw, input_mint, output_mint,
         )
-        response.raise_for_status()
-        payload = response.json()
-    except (requests.RequestException, RuntimeError, TypeError, ValueError) as error:
-        raise JupiterQuoteUnavailable("Jupiter swap order is temporarily unavailable.") from error
+        if str(payload.get("inputMint") or "") != input_mint:
+            raise JupiterSwapRejected("Jupiter swap input mint did not match the approved trade side.")
+        if str(payload.get("outputMint") or "") != output_mint:
+            raise JupiterSwapRejected("Jupiter swap output mint did not match the qualified token.")
+        if str(payload.get("inAmount") or "") != str(input_raw):
+            raise JupiterSwapRejected("Jupiter swap input amount did not match the approved amount.")
+        if str(payload.get("taker") or "") != wallet:
+            raise JupiterSwapRejected("Jupiter swap wallet did not match the connected wallet.")
 
-    if not isinstance(payload, dict):
-        raise JupiterQuoteUnavailable("Jupiter could not prepare this swap transaction.")
-    provider_error = _order_error_message(payload, direction)
-    if provider_error is not None:
-        raise JupiterQuoteUnavailable(provider_error)
-    fee_evidence = _fee_evidence(fee_policy, payload, input_mint, output_mint)
-    fee_disclosure = _fee_disclosure(
-        fee_evidence, payload, input_raw, input_mint, output_mint,
-    )
-    if str(payload.get("inputMint") or "") != input_mint:
-        raise JupiterSwapRejected("Jupiter swap input mint did not match the approved trade side.")
-    if str(payload.get("outputMint") or "") != output_mint:
-        raise JupiterSwapRejected("Jupiter swap output mint did not match the qualified token.")
-    if str(payload.get("inAmount") or "") != str(input_raw):
-        raise JupiterSwapRejected("Jupiter swap input amount did not match the approved amount.")
-    if str(payload.get("taker") or "") != wallet:
-        raise JupiterSwapRejected("Jupiter swap wallet did not match the connected wallet.")
+        request_id = str(payload.get("requestId") or "")
+        if REQUEST_ID_PATTERN.fullmatch(request_id) is None:
+            raise JupiterSwapRejected("Jupiter did not return a valid swap request identifier.")
+        unsigned = payload.get("transaction")
+        _, signatures, message, signer_accounts, static_accounts, instructions = _transaction_parts(unsigned)
+        wallet_index = _validate_transaction_policy(
+            signer_accounts,
+            static_accounts,
+            instructions,
+            wallet_bytes,
+            input_raw if direction == "buy" else 0,
+        )
+        if signatures[wallet_index] != bytes(64):
+            raise JupiterSwapRejected("Jupiter unexpectedly returned an already-signed wallet transaction.")
 
-    request_id = str(payload.get("requestId") or "")
-    if REQUEST_ID_PATTERN.fullmatch(request_id) is None:
-        raise JupiterSwapRejected("Jupiter did not return a valid swap request identifier.")
-    unsigned = payload.get("transaction")
-    _, signatures, message, signer_accounts, static_accounts, instructions = _transaction_parts(unsigned)
-    wallet_index = _validate_transaction_policy(
-        signer_accounts,
-        static_accounts,
-        instructions,
-        wallet_bytes,
-        input_raw if direction == "buy" else 0,
-    )
-    if signatures[wallet_index] != bytes(64):
-        raise JupiterSwapRejected("Jupiter unexpectedly returned an already-signed wallet transaction.")
-
-    current = now()
-    expires_at = _expiry(payload, current)
-    if expires_at <= current:
-        raise JupiterSwapExpired("The Jupiter swap order has already expired.")
-    last_height = payload.get("lastValidBlockHeight")
-    last_height_text = str(last_height) if last_height is not None else None
-    pending = _PendingOrder(
-        token_address=token_mint,
-        side=direction,
-        input_mint=input_mint,
-        output_mint=output_mint,
-        input_amount_raw=str(input_raw),
-        wallet_address=wallet,
-        expires_at=expires_at,
-        approved_message=message,
-        message_digest=hashlib.sha256(message).digest(),
-        wallet_signature_index=wallet_index,
-        last_valid_block_height=last_height_text,
-        fee_evidence=fee_evidence,
-        one_shot_gate_path=gate_path,
-    )
-    if gate is not None:
-        try:bind_one_shot(gate_path,gate,request_id,message,
-                          str(payload.get("otherAmountThreshold") or ""))
-        except GateRejected as error:
-            raise JupiterSwapRejected("The one-shot approval changed before order binding.") from error
-    with _pending_lock:
-        _prune_orders(current, wallet)
-        if request_id in _pending_orders:
-            raise JupiterSwapRejected("Jupiter returned a duplicate active swap request.")
-        _pending_orders[request_id] = pending
+        current = now()
+        expires_at = _expiry(payload, current)
+        if expires_at <= current:
+            raise JupiterSwapExpired("The Jupiter swap order has already expired.")
+        last_height = payload.get("lastValidBlockHeight")
+        last_height_text = str(last_height) if last_height is not None else None
+        pending = _PendingOrder(
+            token_address=token_mint,
+            side=direction,
+            input_mint=input_mint,
+            output_mint=output_mint,
+            input_amount_raw=str(input_raw),
+            wallet_address=wallet,
+            expires_at=expires_at,
+            approved_message=message,
+            message_digest=hashlib.sha256(message).digest(),
+            wallet_signature_index=wallet_index,
+            last_valid_block_height=last_height_text,
+            fee_evidence=fee_evidence,
+            one_shot_gate_path=gate_path,
+        )
+        if gate is not None:
+            try:bind_one_shot(gate_path,gate,request_id,message,
+                              str(payload.get("otherAmountThreshold") or ""))
+            except GateRejected as error:
+                raise JupiterSwapRejected("The one-shot approval changed before order binding.") from error
+        _commit_pending_slot(reservation_id, request_id, pending, current)
+    except Exception:
+        _release_pending_slot(reservation_id)
+        raise
 
     platform_fee = _platform_fee(payload)
     if output_mint == WRAPPED_SOL_MINT:
@@ -805,33 +1187,25 @@ def execute_jupiter_swap(
     signed_message_digest = hashlib.sha256(message).digest()
     resolved_key = _api_key(api_key)
     current = now()
-    with _pending_lock:
-        pending = _pending_orders.get(order_id)
-        if pending is None or pending.expires_at <= current or pending.completed:
-            raise JupiterSwapExpired("The Jupiter swap order is unavailable or has expired.")
-        if pending.token_address != token or pending.wallet_address != wallet:
-            raise JupiterSwapRejected("Swap request does not match the approved token and wallet.")
-        if pending.fee_evidence.policy != _fee_policy():
-            raise JupiterSwapRejected("Swap request fee policy changed. Request a new quote and order.")
-        if not hmac.compare_digest(signed_message_digest, pending.message_digest):
-            _validate_lighthouse_augmentation(
-                pending.approved_message,
-                message,
-                wallet_bytes,
-            )
-        index = pending.wallet_signature_index
-        if index >= len(signer_accounts) or signer_accounts[index] != wallet_bytes:
-            raise JupiterSwapRejected("Connected wallet is not the approved transaction signer.")
-        if index >= len(signatures) or signatures[index] == bytes(64):
-            raise JupiterSwapRejected("The connected wallet has not signed this transaction.")
-        if pending.signed_digest is not None and not hmac.compare_digest(
-            pending.signed_digest, signed_digest
-        ):
-            raise JupiterSwapRejected("A retry cannot replace the approved signed transaction.")
-        if pending.executing:
-            raise JupiterSwapRejected("The approved signed transaction is already being submitted.")
-        pending.signed_digest = signed_digest
-        pending.executing = True
+    pending = _load_pending_order(order_id, current)
+    if pending is None:
+        raise JupiterSwapExpired("The Jupiter swap order is unavailable or has expired.")
+    if pending.token_address != token or pending.wallet_address != wallet:
+        raise JupiterSwapRejected("Swap request does not match the approved token and wallet.")
+    if not _pending_policy_matches(pending):
+        raise JupiterSwapRejected("Swap request fee policy changed. Request a new quote and order.")
+    if not hmac.compare_digest(signed_message_digest, pending.message_digest):
+        _validate_lighthouse_augmentation(
+            pending.approved_message,
+            message,
+            wallet_bytes,
+        )
+    index = pending.wallet_signature_index
+    if index >= len(signer_accounts) or signer_accounts[index] != wallet_bytes:
+        raise JupiterSwapRejected("Connected wallet is not the approved transaction signer.")
+    if index >= len(signatures) or signatures[index] == bytes(64):
+        raise JupiterSwapRejected("The connected wallet has not signed this transaction.")
+    execution_owner = _begin_pending_execution(order_id, pending, signed_digest, current)
 
     if pending.one_shot_gate_path:
         try:consume_one_shot(
@@ -841,7 +1215,7 @@ def execute_jupiter_swap(
             signed_digest.hex(),
         )
         except GateRejected as error:
-            with _pending_lock:pending.executing=False
+            _release_pending_execution(order_id, pending, execution_owner)
             raise JupiterSwapRejected("The one-shot approval is unavailable or does not match this transaction.") from error
 
     body: dict[str, str] = {
@@ -862,23 +1236,18 @@ def execute_jupiter_swap(
         response.raise_for_status()
         payload = response.json()
     except (requests.RequestException, RuntimeError, TypeError, ValueError) as error:
-        with _pending_lock:
-            pending.executing = False
+        _release_pending_execution(order_id, pending, execution_owner)
         raise JupiterQuoteUnavailable("Jupiter swap execution is temporarily unavailable.") from error
 
     if not isinstance(payload, dict) or payload.get("status") not in {"Success", "Failed"}:
-        with _pending_lock:
-            pending.executing = False
+        _release_pending_execution(order_id, pending, execution_owner)
         raise JupiterQuoteUnavailable("Jupiter returned an invalid swap execution response.")
     if payload["status"] == "Success":
         signature = str(payload.get("signature") or "")
         if not signature or len(signature) > 128 or not all(c in BASE58_ALPHABET for c in signature):
-            with _pending_lock:
-                pending.executing = False
+            _release_pending_execution(order_id, pending, execution_owner)
             raise JupiterQuoteUnavailable("Jupiter did not return a valid transaction signature.")
-        with _pending_lock:
-            pending.executing = False
-            pending.completed = True
+        _complete_pending_execution(order_id, pending, execution_owner)
         if pending.one_shot_gate_path:record_one_shot(pending.one_shot_gate_path,"Success",signature)
         return {
             "status": "SWAP_CONFIRMED",
@@ -892,7 +1261,7 @@ def execute_jupiter_swap(
                                     or payload.get("totalInputAmount") or "") or None,
             "output_amount_raw": str(payload.get("outputAmountResult")
                                      or payload.get("totalOutputAmount") or "") or None,
-            **pending.fee_evidence.execution_fields(),
+            **_pending_execution_fields(pending),
         }
 
     with _pending_lock:
@@ -907,5 +1276,5 @@ def execute_jupiter_swap(
         "side": pending.side,
         "error": str(payload.get("error") or "Jupiter could not settle this transaction.")[:240],
         "code": payload.get("code") if isinstance(payload.get("code"), int) else None,
-        **pending.fee_evidence.execution_fields(),
+        **_pending_execution_fields(pending),
     }

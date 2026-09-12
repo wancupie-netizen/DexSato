@@ -101,6 +101,14 @@ def _archive_connection(directory: Path) -> sqlite3.Connection:
     return connection
 
 
+def _archive_read_connection(directory: Path) -> sqlite3.Connection:
+    """Open the archive strictly read-only; never create schema from a request path."""
+    database = directory / DISCOVERY_ARCHIVE_DB
+    if not database.is_file():
+        raise FileNotFoundError(database)
+    return sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)
+
+
 def _candidate_timestamp(candidate: dict[str, Any], fallback: str) -> str:
     value = str(
         candidate.get("last_qualified_at")
@@ -274,6 +282,69 @@ def _archive_record(row: tuple[Any, ...]) -> dict[str, Any] | None:
     return record
 
 
+
+def _stale_qualification_diagnostic(generated_at: Any) -> dict[str, Any]:
+    return {
+        "evaluated": False,
+        "qualified": False,
+        "code": "collector_not_fresh",
+        "title": "Collector data is not fresh",
+        "message": "Qualification was not evaluated because the collector snapshot is stale.",
+        "scan_at": str(generated_at or "").strip() or None,
+    }
+
+
+def _read_archive_front_feed(
+    directory: Path,
+    *,
+    fresh: bool,
+    generated_at: Any,
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Read front-feed rows without creating, migrating, qualifying or mutating the archive."""
+    database = directory / DISCOVERY_ARCHIVE_DB
+    if not database.is_file():
+        return [], 0, 0
+
+    try:
+        with _archive_read_connection(directory) as connection:
+            archive_total = int(
+                connection.execute("SELECT COUNT(*) FROM discoveries").fetchone()[0]
+            )
+            qualified_total = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM discoveries WHERE currently_qualified = 1"
+                ).fetchone()[0]
+            )
+            rows = connection.execute(
+                """
+                SELECT payload_json, first_qualified_at, last_qualified_at,
+                       last_seen_at, currently_qualified
+                FROM discoveries
+                ORDER BY currently_qualified DESC,
+                         last_qualified_at DESC,
+                         COALESCE(last_seen_at, '') DESC,
+                         token_address ASC
+                LIMIT ?
+                """,
+                (DISCOVERY_FEED_LIMIT,),
+            ).fetchall()
+    except (FileNotFoundError, sqlite3.Error):
+        return [], 0, 0
+
+    stale_diagnostic = _stale_qualification_diagnostic(generated_at)
+    feed: list[dict[str, Any]] = []
+    for row in rows:
+        record = _archive_record(row)
+        if record is None:
+            continue
+        if not fresh:
+            record["currently_qualified"] = False
+            record["current_qualification"] = dict(stale_diagnostic)
+        feed.append(record)
+
+    return feed, archive_total, qualified_total if fresh else 0
+
+
 def load_solana_discovery_record(
     token_address: str,
     output_dir: Path | str | None = None,
@@ -285,7 +356,7 @@ def load_solana_discovery_record(
     directory = Path(output_dir) if output_dir is not None else discovery_storage_dir(DEFAULT_OUTPUT_DIR)
     if not (directory / DISCOVERY_ARCHIVE_DB).exists():
         return None
-    with _archive_connection(directory) as connection:
+    with _archive_read_connection(directory) as connection:
         row = connection.execute(
             """
             SELECT payload_json, first_qualified_at, last_qualified_at,
@@ -305,14 +376,17 @@ def _terminal_archive_view(
     page_size: int,
     now: datetime,
     query: str = "",
+    fresh: bool = True,
+    generated_at: Any = None,
 ) -> dict[str, Any]:
     selected_view = view if view in TERMINAL_VIEWS else "qualified"
     safe_size = min(100, max(1, _integer(page_size) or TERMINAL_PAGE_SIZE))
     requested_page = max(1, _integer(page) or 1)
     recent_cutoff = (now.astimezone(timezone.utc) - timedelta(hours=24)).isoformat()
     search_query = str(query or "").strip()[:120]
+    qualified_where = "currently_qualified = 1" if fresh else "0 = 1"
     clauses = {
-        "qualified": ("currently_qualified = 1", ()),
+        "qualified": (qualified_where, ()),
         "recent": ("datetime(first_qualified_at) >= datetime(?)", (recent_cutoff,)),
         "archive": ("1 = 1", ()),
     }
@@ -336,10 +410,22 @@ def _terminal_archive_view(
         "archive": "last_qualified_at DESC, COALESCE(last_seen_at, '') DESC, token_address ASC",
     }
 
-    with _archive_connection(directory) as connection:
-        qualified_total = int(connection.execute(
-            "SELECT COUNT(*) FROM discoveries WHERE currently_qualified = 1"
-        ).fetchone()[0])
+    if not (directory / DISCOVERY_ARCHIVE_DB).is_file():
+        return {
+            "candidates": [], "view": selected_view, "page": 1, "page_size": safe_size,
+            "page_count": 1, "view_total": 0, "search_query": search_query,
+            "search_counts": {key: 0 for key in TERMINAL_VIEWS},
+            "qualified_total": 0, "recent_total": 0, "archive_total": 0,
+            "observed_volume_24h_usd": 0, "observed_txns_24h": 0, "observed_dex_ids": [],
+        }
+
+    with _archive_read_connection(directory) as connection:
+        qualified_total = (
+            int(connection.execute(
+                "SELECT COUNT(*) FROM discoveries WHERE currently_qualified = 1"
+            ).fetchone()[0])
+            if fresh else 0
+        )
         recent_total = int(connection.execute(
             "SELECT COUNT(*) FROM discoveries WHERE datetime(first_qualified_at) >= datetime(?)", (recent_cutoff,)
         ).fetchone()[0])
@@ -363,11 +449,19 @@ def _terminal_archive_view(
             """,
             (*parameters, *search_parameters, safe_size, (current_page - 1) * safe_size),
         ).fetchall()
-        current_rows = connection.execute(
-            "SELECT payload_json FROM discoveries WHERE currently_qualified = 1"
-        ).fetchall()
+        current_rows = (
+            connection.execute(
+                "SELECT payload_json FROM discoveries WHERE currently_qualified = 1"
+            ).fetchall()
+            if fresh else []
+        )
 
     candidates = [record for row in rows if (record := _archive_record(row)) is not None]
+    if not fresh:
+        stale_diagnostic = _stale_qualification_diagnostic(generated_at)
+        for record in candidates:
+            record["currently_qualified"] = False
+            record["current_qualification"] = dict(stale_diagnostic)
     current_payloads: list[dict[str, Any]] = []
     for (payload_json,) in current_rows:
         try:
@@ -415,6 +509,56 @@ def _terminal_archive_view(
         "observed_txns_24h": complete_sum("txns_24h"),
         "observed_dex_ids": dex_ids,
     }
+
+
+def refresh_solana_discovery_archive(
+    output_dir: Path | str | None = None,
+    *,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    """Writer path: qualify one completed collector snapshot and persist discovery history."""
+    directory = Path(output_dir) if output_dir is not None else discovery_storage_dir(DEFAULT_OUTPUT_DIR)
+    current_time = now or datetime.now(timezone.utc)
+    state = _read_object(directory / "state.json")
+    status = _read_object(directory / "status.json")
+
+    if not isinstance(state.get("candidates"), dict) or not isinstance(status.get("metrics"), dict):
+        raise ValueError("Collector output schema is not ready for archive refresh.")
+
+    generated_at = status.get("generated_at")
+    _, fresh = _freshness_label(generated_at, now=current_time)
+    diagnostics: dict[str, dict[str, Any]] = {}
+    if fresh:
+        qualified = qualify_discovery_candidates(
+            state["candidates"], now=current_time, diagnostics=diagnostics
+        )
+        default_diagnostic = None
+    else:
+        qualified = []
+        default_diagnostic = _stale_qualification_diagnostic(generated_at)
+
+    qualified_at = (
+        str(generated_at).strip()
+        if isinstance(generated_at, str) and generated_at.strip()
+        else current_time.isoformat()
+    )
+    for diagnostic in diagnostics.values():
+        diagnostic["scan_at"] = qualified_at
+    if default_diagnostic is not None:
+        default_diagnostic["scan_at"] = qualified_at
+
+    _, archive_total = _update_archive(
+        directory,
+        qualified,
+        qualified_at=qualified_at,
+        diagnostics=diagnostics,
+        default_diagnostic=default_diagnostic,
+    )
+    return {
+        "archive_total": archive_total,
+        "qualified_candidates": len(qualified),
+    }
+
 
 def load_solana_discovery_engine_feed(
     output_dir: Path | str | None = None,
@@ -464,14 +608,14 @@ def load_solana_discovery_engine_feed(
                     connection.close()
 
         if refresh_required:
-            try:
-                load_solana_discovery_feed(output_dir=directory)
-            except (OSError, sqlite3.Error, json.JSONDecodeError, ValueError):
-                return {
-                    "connected": False,
-                    "generated_at": generated_at,
-                    "candidates": [],
-                }
+            # Archive persistence belongs to the collector. If status is newer than
+            # the archive, fail closed briefly and retry on the next read.
+            return {
+                "connected": False,
+                "generated_at": generated_at,
+                "candidates": [],
+            }
+        if generated_at:
             _ENGINE_FEED_GENERATED_AT = generated_at
 
         if not database.is_file():
@@ -578,40 +722,15 @@ def load_solana_discovery_feed(
     generated_at = status.get("generated_at")
     updated_label, fresh = _freshness_label(generated_at, now=current_time)
     collector_status = str(status.get("collector_status") or "Unknown").strip().title()
-    diagnostics: dict[str, dict[str, Any]] = {}
-    if fresh:
-        qualified = qualify_discovery_candidates(
-            state["candidates"], now=current_time, diagnostics=diagnostics
-        )
-        default_diagnostic = None
-    else:
-        qualified = []
-        default_diagnostic = {
-            "evaluated": False,
-            "qualified": False,
-            "code": "collector_not_fresh",
-            "title": "Collector data is not fresh",
-            "message": "Qualification was not evaluated because the collector snapshot is stale.",
-        }
-    qualified_at = (
-        str(generated_at).strip()
-        if isinstance(generated_at, str) and generated_at.strip()
-        else current_time.isoformat()
-    )
-    for diagnostic in diagnostics.values():
-        diagnostic["scan_at"] = qualified_at
-    if default_diagnostic is not None:
-        default_diagnostic["scan_at"] = qualified_at
-    archive_feed, archive_total = _update_archive(
+    archive_feed, archive_total, qualified_count = _read_archive_front_feed(
         directory,
-        qualified,
-        qualified_at=qualified_at,
-        diagnostics=diagnostics,
-        default_diagnostic=default_diagnostic,
+        fresh=fresh,
+        generated_at=generated_at,
     )
     terminal_data = (
         _terminal_archive_view(
-            directory, view=view, page=page, page_size=page_size, now=current_time, query=query
+            directory, view=view, page=page, page_size=page_size, now=current_time, query=query,
+            fresh=fresh, generated_at=generated_at
         )
         if view is not None else {}
     )
@@ -622,7 +741,7 @@ def load_solana_discovery_feed(
         "tokens_observed": len(state["candidates"]),
         "pair_resolved": _integer(metrics.get("pair_resolved")),
         "pair_ready_percent": metrics.get("pair_ready_percent"),
-        "qualified_candidates": len(qualified),
+        "qualified_candidates": qualified_count,
         "candidates": terminal_data.get("candidates", archive_feed),
         "archive_total": archive_total,
         "feed_limit": DISCOVERY_FEED_LIMIT,
@@ -630,7 +749,7 @@ def load_solana_discovery_feed(
         "message": (
             "Qualified Now reflects the current scan. Discovery Feed keeps previously qualified "
             "tokens for review; historical inclusion does not mean a token still qualifies now."
-            if qualified else
+            if qualified_count else
             "Collector telemetry is connected. No observed token currently passes the "
             "required identity, liquidity, activity and freshness checks. Previously qualified "
             "discoveries remain in the persistent archive."

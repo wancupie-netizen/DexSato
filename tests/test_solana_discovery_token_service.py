@@ -1,4 +1,9 @@
 from unittest.mock import patch
+from concurrent.futures import ThreadPoolExecutor
+import threading
+import time
+
+import application.solana_discovery_token_service as token_service
 
 from application.solana_discovery_token_service import load_solana_discovery_token
 
@@ -610,7 +615,7 @@ def test_provider_resilience_uses_stale_ohlcv_when_refresh_fails(monkeypatch):
         "volume": 100.0,
     }]
     service._OHLCV_CACHE[("stale-pair", "stale-token", "minute")] = (
-        service.monotonic() - 999.0,
+        service.monotonic() - 90.0,
         cached_rows,
     )
 
@@ -638,7 +643,7 @@ def test_provider_resilience_transactions_fall_back_to_last_valid_payload(monkey
         "source": "GeckoTerminal exact-pool trades",
     }
     service._TRANSACTION_CACHE[token] = (
-        service.monotonic() - 999.0,
+        service.monotonic() - 60.0,
         cached,
     )
 
@@ -813,3 +818,272 @@ def test_market_activity_normalizes_exact_pool_aggregate():
 def test_market_activity_rejects_wrong_pool_payload():
     from application.solana_discovery_token_service import _normalize_market_activity
     assert _normalize_market_activity({"data":{"id":"solana_WRONG","attributes":{"address":"WRONG"}}},POOL)=={}
+
+
+def _tw_sec_004_pair_payload(pair_address="pair-cache", token_address="token-cache", price="1.23"):
+    return {
+        "pairs": [{
+            "pairAddress": pair_address,
+            "baseToken": {"address": token_address},
+            "priceUsd": price,
+        }]
+    }
+
+
+def _tw_sec_004_clear_cache():
+    with token_service._LIVE_PAIR_LOCK:
+        token_service._LIVE_PAIR_CACHE.clear()
+        for event in token_service._LIVE_PAIR_INFLIGHT.values():
+            event.set()
+        token_service._LIVE_PAIR_INFLIGHT.clear()
+
+
+def test_tw_sec_004_fresh_live_pair_cache_avoids_duplicate_provider_call():
+    _tw_sec_004_clear_cache()
+    candidate = {"pair_address": "pair-cache", "token_address": "token-cache"}
+    calls = 0
+
+    def fake_get(url, **kwargs):
+        nonlocal calls
+        calls += 1
+        return Response(_tw_sec_004_pair_payload())
+
+    with patch.object(token_service.requests, "get", side_effect=fake_get):
+        first = token_service._cached_live_pair(candidate, token_service.requests.get)
+        second = token_service._cached_live_pair(candidate, token_service.requests.get)
+
+    assert first["priceUsd"] == "1.23"
+    assert second["priceUsd"] == "1.23"
+    assert calls == 1
+
+
+def test_tw_sec_004_cache_key_isolated_by_pair_and_token():
+    _tw_sec_004_clear_cache()
+    calls = 0
+
+    def fake_get(url, **kwargs):
+        nonlocal calls
+        calls += 1
+        pair_address = url.rsplit("/", 1)[-1]
+        token_address = "token-a" if pair_address == "pair-a" else "token-b"
+        return Response(_tw_sec_004_pair_payload(pair_address, token_address))
+
+    with patch.object(token_service.requests, "get", side_effect=fake_get):
+        a = token_service._cached_live_pair(
+            {"pair_address": "pair-a", "token_address": "token-a"},
+            token_service.requests.get,
+        )
+        b = token_service._cached_live_pair(
+            {"pair_address": "pair-b", "token_address": "token-b"},
+            token_service.requests.get,
+        )
+
+    assert a["pairAddress"] == "pair-a"
+    assert b["pairAddress"] == "pair-b"
+    assert calls == 2
+
+
+def test_tw_sec_004_stale_cache_used_only_within_30_seconds_on_provider_failure():
+    _tw_sec_004_clear_cache()
+    candidate = {"pair_address": "pair-cache", "token_address": "token-cache"}
+    clock = {"value": 100.0}
+    calls = 0
+
+    def fake_monotonic():
+        return clock["value"]
+
+    def fake_get(url, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return Response(_tw_sec_004_pair_payload())
+        raise token_service.requests.RequestException("provider down")
+
+    with patch.object(token_service, "monotonic", side_effect=fake_monotonic), \
+         patch.object(token_service.requests, "get", side_effect=fake_get):
+        first = token_service._cached_live_pair(candidate, token_service.requests.get)
+        clock["value"] = 110.0
+        stale = token_service._cached_live_pair(candidate, token_service.requests.get)
+        clock["value"] = 131.0
+        import pytest
+        with pytest.raises(token_service.requests.RequestException):
+            token_service._cached_live_pair(candidate, token_service.requests.get)
+
+    assert first["priceUsd"] == "1.23"
+    assert stale["priceUsd"] == "1.23"
+
+
+def test_tw_sec_004_wrong_pair_or_token_is_not_cached():
+    _tw_sec_004_clear_cache()
+    candidate = {"pair_address": "pair-cache", "token_address": "token-cache"}
+    calls = 0
+
+    def fake_get(url, **kwargs):
+        nonlocal calls
+        calls += 1
+        return Response(_tw_sec_004_pair_payload("wrong-pair", "wrong-token"))
+
+    with patch.object(token_service.requests, "get", side_effect=fake_get):
+        assert token_service._cached_live_pair(candidate, token_service.requests.get) is None
+        assert token_service._cached_live_pair(candidate, token_service.requests.get) is None
+
+    assert calls == 2
+
+
+def test_tw_sec_004_custom_request_get_bypasses_shared_cache():
+    _tw_sec_004_clear_cache()
+    candidate = {"pair_address": "pair-cache", "token_address": "token-cache"}
+    calls = 0
+
+    def custom_get(url, **kwargs):
+        nonlocal calls
+        calls += 1
+        return Response(_tw_sec_004_pair_payload())
+
+    token_service._cached_live_pair(candidate, custom_get)
+    token_service._cached_live_pair(candidate, custom_get)
+
+    assert calls == 2
+    assert not token_service._LIVE_PAIR_CACHE
+
+
+def test_tw_sec_004_live_pair_cache_is_bounded():
+    _tw_sec_004_clear_cache()
+    clock = {"value": 1000.0}
+
+    def fake_monotonic():
+        value = clock["value"]
+        clock["value"] += 0.001
+        return value
+
+    def fake_get(url, **kwargs):
+        pair_address = url.rsplit("/", 1)[-1]
+        token_address = pair_address.replace("pair-", "token-")
+        return Response(_tw_sec_004_pair_payload(pair_address, token_address))
+
+    with patch.object(token_service, "monotonic", side_effect=fake_monotonic), \
+         patch.object(token_service.requests, "get", side_effect=fake_get):
+        for index in range(token_service.MAX_LIVE_PAIR_CACHE_ENTRIES + 25):
+            result = token_service._cached_live_pair(
+                {"pair_address": f"pair-{index}", "token_address": f"token-{index}"},
+                token_service.requests.get,
+            )
+            assert result is not None
+
+    assert len(token_service._LIVE_PAIR_CACHE) <= token_service.MAX_LIVE_PAIR_CACHE_ENTRIES
+
+
+def test_tw_sec_004_concurrent_same_pair_miss_coalesces_to_one_dexscreener_call():
+    _tw_sec_004_clear_cache()
+    candidate = {"pair_address": "pair-cache", "token_address": "token-cache"}
+    counter_lock = threading.Lock()
+    calls = 0
+
+    def fake_get(url, **kwargs):
+        nonlocal calls
+        with counter_lock:
+            calls += 1
+        time.sleep(0.05)
+        return Response(_tw_sec_004_pair_payload())
+
+    def load_once(_index):
+        return token_service._cached_live_pair(candidate, token_service.requests.get)
+
+    with patch.object(token_service.requests, "get", side_effect=fake_get):
+        with ThreadPoolExecutor(max_workers=20) as pool:
+            results = list(pool.map(load_once, range(20)))
+
+    assert all(result is not None and result["priceUsd"] == "1.23" for result in results)
+    assert calls == 1
+    assert not token_service._LIVE_PAIR_INFLIGHT
+
+# TW-SEC-008 bounded cache hardening
+def test_tw_sec_008_ohlcv_stale_cache_rejected_after_five_minutes(monkeypatch):
+    import pytest
+    import requests
+    import application.solana_discovery_token_service as service
+
+    candidate = {"pair_address": "too-old-pair", "token_address": "too-old-token"}
+    with service._OHLCV_CACHE_LOCK:
+        service._OHLCV_CACHE.clear()
+        service._OHLCV_CACHE[("too-old-pair", "too-old-token", "minute")] = (
+            service.monotonic() - (service.OHLCV_STALE_SECONDS + 1.0),
+            [{"time": 1.0, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}],
+        )
+
+    def failing_provider(candidate, request_get):
+        raise requests.RequestException("provider down")
+
+    monkeypatch.setattr(service, "_minute_candles_provider", failing_provider)
+
+    with pytest.raises(requests.RequestException):
+        service._minute_candles(candidate, requests.get)
+
+
+def test_tw_sec_008_transaction_stale_cache_rejected_after_two_minutes(monkeypatch):
+    import pytest
+    import requests
+    import application.solana_discovery_token_service as service
+
+    token = "TooOldTransactionToken"
+    with service._TRANSACTION_CACHE_LOCK:
+        service._TRANSACTION_CACHE.clear()
+        service._TRANSACTION_CACHE[token] = (
+            service.monotonic() - (service.TRANSACTION_STALE_SECONDS + 1.0),
+            {"token_address": token, "pair_address": "pool", "transactions": [], "as_of": "2026-08-26T00:00:00+00:00", "source": "test"},
+        )
+
+    def failing_provider(*args, **kwargs):
+        raise requests.RequestException("provider down")
+
+    monkeypatch.setattr(service, "_load_solana_discovery_transactions_provider", failing_provider)
+
+    with pytest.raises(requests.RequestException):
+        service.load_solana_discovery_transactions(token)
+
+
+def test_tw_sec_008_ohlcv_cache_is_bounded_oldest_first():
+    import application.solana_discovery_token_service as service
+
+    now = service.monotonic()
+    with service._OHLCV_CACHE_LOCK:
+        service._OHLCV_CACHE.clear()
+        for index in range(305):
+            service._OHLCV_CACHE[(f"pair-{index}", f"token-{index}", "minute")] = (
+                now - (305 - index) * 0.01,
+                [],
+            )
+        service._prune_ohlcv_cache(now)
+        assert len(service._OHLCV_CACHE) == 300
+        assert ("pair-0", "token-0", "minute") not in service._OHLCV_CACHE
+        assert ("pair-304", "token-304", "minute") in service._OHLCV_CACHE
+
+
+def test_tw_sec_008_transaction_cache_is_bounded_oldest_first():
+    import application.solana_discovery_token_service as service
+
+    now = service.monotonic()
+    with service._TRANSACTION_CACHE_LOCK:
+        service._TRANSACTION_CACHE.clear()
+        for index in range(305):
+            service._TRANSACTION_CACHE[f"token-{index}"] = (
+                now - (305 - index) * 0.01,
+                {"token_address": f"token-{index}", "transactions": []},
+            )
+        service._prune_transaction_cache(now)
+        assert len(service._TRANSACTION_CACHE) == 300
+        assert "token-0" not in service._TRANSACTION_CACHE
+        assert "token-304" in service._TRANSACTION_CACHE
+
+
+def test_tw_sec_008_policy_and_tw_sec_004_invariants():
+    import application.solana_discovery_token_service as service
+
+    assert service.MAX_OHLCV_CACHE_ENTRIES == 300
+    assert service.OHLCV_STALE_SECONDS == 300.0
+    assert service.MAX_TRANSACTION_CACHE_ENTRIES == 300
+    assert service.TRANSACTION_STALE_SECONDS == 120.0
+    assert service.MAX_LIVE_PAIR_CACHE_ENTRIES == 500
+    assert service.LIVE_PAIR_STALE_SECONDS == 30.0
+    assert service.LIVE_PAIR_TTL_SECONDS == 5.0
+

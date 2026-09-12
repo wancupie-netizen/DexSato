@@ -41,6 +41,11 @@ from fastapi.responses import (
     JSONResponse,
 )
 from fastapi.staticfiles import StaticFiles
+
+from application.token_workspace_rate_limit import (
+    TokenWorkspaceRateLimitMiddleware,
+    configure_rate_limit_store,
+)
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -101,6 +106,8 @@ from application.production_readiness import (
     production_configuration_ready,
     validate_production_configuration,
 )
+from application.jupiter_swap_service import configure_jupiter_pending_store
+from application.jupiter_pending_store import JupiterPendingStoreUnavailable
 
 from presentation.content_control_presenter import (
     render_content_control,
@@ -139,6 +146,10 @@ validate_production_runtime()
 
 validate_production_configuration()
 
+configure_jupiter_pending_store()
+
+configure_rate_limit_store()
+
 
 app = FastAPI(
     title=APP_TITLE,
@@ -147,10 +158,14 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# Middleware registration order matters: Starlette executes the last-added
+# middleware outermost. Keep SecurityHeaders outermost and enforce the request
+# body boundary before TokenWorkspaceRateLimitMiddleware reads JSON bodies.
+app.add_middleware(TokenWorkspaceRateLimitMiddleware)
 app.add_middleware(ApplicationBoundaryMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
 app.add_middleware(ProductionLoggingMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.mount(
     "/static",
@@ -383,6 +398,7 @@ async def solana_discovery_jupiter_order(
     from application.jupiter_quote_service import JupiterQuoteNotConfigured, JupiterQuoteUnavailable
     from application.jupiter_swap_service import (
         JupiterSwapExpired,
+        JupiterSwapPendingLimit,
         JupiterSwapRejected,
         prepare_jupiter_swap,
     )
@@ -415,10 +431,14 @@ async def solana_discovery_jupiter_order(
         )
     except JupiterSwapExpired as error:
         raise HTTPException(status_code=410, detail=str(error)) from error
+    except JupiterSwapPendingLimit as error:
+        raise HTTPException(status_code=429, detail=str(error)) from error
     except (JupiterSwapRejected, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except SolanaWalletBalanceUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
+    except JupiterPendingStoreUnavailable as error:
+        raise HTTPException(status_code=503, detail="Swap coordination is temporarily unavailable.") from error
     except JupiterQuoteNotConfigured as error:
         raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
     except JupiterQuoteUnavailable as error:
@@ -454,6 +474,8 @@ async def solana_discovery_jupiter_execute(
         raise HTTPException(status_code=410, detail=str(error)) from error
     except (JupiterSwapRejected, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    except JupiterPendingStoreUnavailable as error:
+        raise HTTPException(status_code=503, detail="Swap coordination is temporarily unavailable.") from error
     except JupiterQuoteNotConfigured as error:
         raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
     except JupiterQuoteUnavailable as error:

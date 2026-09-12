@@ -1,6 +1,7 @@
 import base64
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -15,11 +16,18 @@ from application.jupiter_swap_service import (
     PHANTOM_LIGHTHOUSE_PROGRAM,
     SYSTEM_PROGRAM,
     MAX_PENDING_ORDERS_PER_WALLET,
+    MAX_PENDING_ORDERS_PER_WALLET_TOKEN,
+    PENDING_ADMISSION_LIMIT,
+    PENDING_RESERVATION_SECONDS,
     JUPITER_EXECUTE_URL,
     JUPITER_ORDER_URL,
     JupiterSwapExpired,
+    JupiterSwapPendingLimit,
     JupiterSwapRejected,
     _pending_orders,
+    _pending_reservations,
+    _reserve_pending_slot,
+    _release_pending_slot,
     _base58_bytes,
     _CompiledInstruction,
     _transaction_parts,
@@ -362,16 +370,18 @@ def test_surfaces_insufficient_sol_balance_as_actionable_message():
         _prepare(payload)
 
 
-def test_one_wallet_cannot_fill_the_global_pending_order_store():
+def test_same_wallet_and_token_cannot_hold_multiple_active_reviews():
     _pending_orders.clear()
-    for index in range(MAX_PENDING_ORDERS_PER_WALLET):
-        order = _prepare(_order(request_id=f"wallet-quota-{index}"))
-        assert order["status"] == "WALLET_APPROVAL_REQUIRED"
+    _pending_reservations.clear()
 
-    with pytest.raises(JupiterQuoteUnavailable, match="too many pending swap reviews"):
-        _prepare(_order(request_id="wallet-quota-overflow"))
+    first = _prepare(_order(request_id="wallet-token-first"))
+    assert first["status"] == "WALLET_APPROVAL_REQUIRED"
 
-    assert len(_pending_orders) == MAX_PENDING_ORDERS_PER_WALLET
+    with pytest.raises(JupiterSwapPendingLimit, match="wallet and token"):
+        _prepare(_order(request_id="wallet-token-second"))
+
+    assert len(_pending_orders) == MAX_PENDING_ORDERS_PER_WALLET_TOKEN
+    assert not _pending_reservations
 
 
 def test_rejects_provider_token_wallet_amount_and_transaction_mismatches():
@@ -629,3 +639,94 @@ def test_rejects_a_second_submission_while_the_same_transaction_is_in_flight():
         api_key="key", feed=FEED, request_post=submit_once, now=lambda: NOW,
     )
     assert result["status"] == "SWAP_CONFIRMED"
+
+
+def test_tw_sec_003_failed_provider_prepare_releases_reservation():
+    _pending_orders.clear()
+    _pending_reservations.clear()
+    unavailable = Mock(side_effect=RuntimeError("provider timeout"))
+
+    with pytest.raises(JupiterQuoteUnavailable, match="temporarily unavailable"):
+        prepare_jupiter_swap(
+            TOKEN,
+            "0.1",
+            WALLET,
+            risk_acknowledged=True,
+            api_key="server-secret",
+            feed=FEED,
+            request_get=unavailable,
+            now=lambda: NOW,
+        )
+
+    assert not _pending_orders
+    assert not _pending_reservations
+
+
+def test_tw_sec_003_wallet_can_hold_two_different_token_reservations_but_not_three():
+    _pending_orders.clear()
+    _pending_reservations.clear()
+    token_b = OTHER_TOKEN
+    token_c = "44444444444444444444444444444444"
+
+    first = _reserve_pending_slot(TOKEN, WALLET, NOW)
+    second = _reserve_pending_slot(token_b, WALLET, NOW)
+
+    assert len(_pending_reservations) == MAX_PENDING_ORDERS_PER_WALLET == 2
+
+    with pytest.raises(JupiterSwapPendingLimit, match="maximum number"):
+        _reserve_pending_slot(token_c, WALLET, NOW)
+
+    _release_pending_slot(first)
+    _release_pending_slot(second)
+
+
+def test_tw_sec_003_expired_reservation_does_not_consume_wallet_capacity():
+    _pending_orders.clear()
+    _pending_reservations.clear()
+
+    _reserve_pending_slot(TOKEN, WALLET, NOW)
+
+    later = NOW + timedelta(seconds=PENDING_RESERVATION_SECONDS + 1)
+    replacement = _reserve_pending_slot(TOKEN, WALLET, later)
+
+    assert len(_pending_reservations) == 1
+    assert replacement in _pending_reservations
+
+
+def test_tw_sec_003_global_admission_threshold_includes_reservations():
+    _pending_orders.clear()
+    _pending_reservations.clear()
+
+    for index in range(PENDING_ADMISSION_LIMIT):
+        _reserve_pending_slot(
+            f"token-{index}",
+            f"wallet-{index}",
+            NOW,
+        )
+
+    assert len(_pending_reservations) == PENDING_ADMISSION_LIMIT
+
+    with pytest.raises(JupiterQuoteUnavailable, match="temporarily busy"):
+        _reserve_pending_slot("overflow-token", "overflow-wallet", NOW)
+
+    _pending_reservations.clear()
+
+
+def test_tw_sec_003_concurrent_same_wallet_token_gets_exactly_one_reservation():
+    _pending_orders.clear()
+    _pending_reservations.clear()
+
+    def reserve_once(_index):
+        try:
+            return _reserve_pending_slot(TOKEN, WALLET, NOW)
+        except JupiterSwapPendingLimit:
+            return None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(reserve_once, range(16)))
+
+    accepted = [value for value in results if value]
+    assert len(accepted) == 1
+    assert len(_pending_reservations) == 1
+
+    _release_pending_slot(accepted[0])

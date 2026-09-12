@@ -3,7 +3,11 @@ import sqlite3
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from application.solana_discovery_feed_service import load_solana_discovery_feed, load_solana_discovery_record
+from application.solana_discovery_feed_service import (
+    load_solana_discovery_feed,
+    load_solana_discovery_record,
+    refresh_solana_discovery_archive,
+)
 
 
 NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
@@ -32,6 +36,7 @@ def test_fails_closed_when_output_is_missing(tmp_path):
 def test_default_feed_uses_configured_persistent_storage(tmp_path):
     _write_feed_files(tmp_path, {})
     with patch.dict("os.environ", {"DEXSATO_DISCOVERY_STORAGE_DIR": str(tmp_path)}, clear=True):
+        refresh_solana_discovery_archive(now=NOW)
         result = load_solana_discovery_feed(now=NOW)
     assert result["connected"] is True
     assert (tmp_path / "discovery_archive.sqlite3").is_file()
@@ -60,6 +65,65 @@ def _write_feed_files(tmp_path, candidates, generated_at="2026-08-22T11:55:00+00
     )
 
 
+def _refresh_and_load(tmp_path, *, now=NOW, **load_kwargs):
+    refresh_solana_discovery_archive(tmp_path, now=now)
+    return load_solana_discovery_feed(tmp_path, now=now, **load_kwargs)
+
+
+def test_public_feed_read_does_not_create_archive(tmp_path):
+    _write_feed_files(tmp_path, {})
+
+    result = load_solana_discovery_feed(tmp_path, now=NOW)
+
+    assert result["connected"] is True
+    assert result["archive_total"] == 0
+    assert result["candidates"] == []
+    assert not (tmp_path / "discovery_archive.sqlite3").exists()
+
+
+@patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
+def test_public_feed_read_does_not_mutate_existing_archive(mock_qualify, tmp_path):
+    candidate = {
+        "token_address": "token-a",
+        "pair_address": "pair-a",
+        "symbol": "AAA",
+        "last_seen_at": "2026-08-22T11:54:00+00:00",
+    }
+    _write_feed_files(tmp_path, {"a": candidate})
+    mock_qualify.return_value = [candidate]
+    refresh_solana_discovery_archive(tmp_path, now=NOW)
+
+    archive = tmp_path / "discovery_archive.sqlite3"
+    before = archive.read_bytes()
+    for _ in range(20):
+        result = load_solana_discovery_feed(tmp_path, now=NOW)
+        assert result["qualified_candidates"] == 1
+    after = archive.read_bytes()
+
+    assert after == before
+
+
+def test_discovery_record_read_does_not_mutate_archive(tmp_path):
+    candidate = {
+        "token_address": "token-a",
+        "pair_address": "pair-a",
+        "symbol": "AAA",
+        "last_seen_at": "2026-08-22T11:54:00+00:00",
+    }
+    _write_feed_files(tmp_path, {"a": candidate})
+    with patch("application.solana_discovery_feed_service.qualify_discovery_candidates") as mock_qualify:
+        mock_qualify.return_value = [candidate]
+        refresh_solana_discovery_archive(tmp_path, now=NOW)
+
+    archive = tmp_path / "discovery_archive.sqlite3"
+    before = archive.read_bytes()
+    record = load_solana_discovery_record("token-a", tmp_path)
+    after = archive.read_bytes()
+
+    assert record is not None
+    assert after == before
+
+
 @patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
 def test_persists_previously_qualified_candidates_across_scans(mock_qualify, tmp_path):
     first = {
@@ -77,7 +141,7 @@ def test_persists_previously_qualified_candidates_across_scans(mock_qualify, tmp
 
     _write_feed_files(tmp_path, {"a": first})
     mock_qualify.return_value = [first]
-    first_result = load_solana_discovery_feed(tmp_path, now=NOW)
+    first_result = _refresh_and_load(tmp_path)
 
     assert first_result["qualified_candidates"] == 1
     assert [item["token_address"] for item in first_result["candidates"]] == ["token-a"]
@@ -86,7 +150,7 @@ def test_persists_previously_qualified_candidates_across_scans(mock_qualify, tmp
 
     _write_feed_files(tmp_path, {"b": second}, "2026-08-22T11:58:00+00:00")
     mock_qualify.return_value = [second]
-    second_result = load_solana_discovery_feed(tmp_path, now=NOW)
+    second_result = _refresh_and_load(tmp_path)
 
     assert second_result["qualified_candidates"] == 1
     assert [item["token_address"] for item in second_result["candidates"]] == ["token-b", "token-a"]
@@ -107,11 +171,11 @@ def test_requalified_candidate_updates_without_duplicate_history_row(mock_qualif
 
     _write_feed_files(tmp_path, {"a": old})
     mock_qualify.return_value = [old]
-    load_solana_discovery_feed(tmp_path, now=NOW)
+    _refresh_and_load(tmp_path)
 
     _write_feed_files(tmp_path, {"a": updated}, "2026-08-22T11:59:00+00:00")
     mock_qualify.return_value = [updated]
-    result = load_solana_discovery_feed(tmp_path, now=NOW)
+    result = _refresh_and_load(tmp_path)
 
     assert len(result["candidates"]) == 1
     assert result["candidates"][0]["token_address"] == "token-a"
@@ -130,10 +194,10 @@ def test_history_survives_scan_with_zero_current_qualifications(mock_qualify, tm
 
     _write_feed_files(tmp_path, {"a": candidate})
     mock_qualify.return_value = [candidate]
-    load_solana_discovery_feed(tmp_path, now=NOW)
+    _refresh_and_load(tmp_path)
 
     mock_qualify.return_value = []
-    result = load_solana_discovery_feed(tmp_path, now=NOW)
+    result = _refresh_and_load(tmp_path)
 
     assert result["qualified_candidates"] == 0
     assert [item["token_address"] for item in result["candidates"]] == ["token-a"]
@@ -174,7 +238,7 @@ def test_persists_actual_current_scan_qualification_diagnostic(mock_qualify, tmp
             ("token-a", "pair-a", json.dumps(candidate), NOW.isoformat(), NOW.isoformat(), candidate["last_seen_at"]),
         )
 
-    result = load_solana_discovery_feed(tmp_path, now=NOW)
+    result = _refresh_and_load(tmp_path)
     assessment = result["candidates"][0]["current_qualification"]
     assert assessment["code"] == "volume_below_threshold"
     assert assessment["message"] == "Observed 24h volume $900.00 is below the required $1,000.00."
@@ -195,7 +259,7 @@ def test_archive_is_unbounded_while_front_feed_is_limited_to_100(mock_qualify, t
     _write_feed_files(tmp_path, {"seed": qualified[0]})
     mock_qualify.return_value = qualified
 
-    result = load_solana_discovery_feed(tmp_path, now=NOW)
+    result = _refresh_and_load(tmp_path)
 
     assert result["archive_total"] == 125
     assert result["feed_limit"] == 100
@@ -221,7 +285,7 @@ def test_old_discoveries_remain_archived_when_pushed_off_front_page(mock_qualify
     ]
     _write_feed_files(tmp_path, {"seed": original[0]})
     mock_qualify.return_value = original
-    first = load_solana_discovery_feed(tmp_path, now=NOW)
+    first = _refresh_and_load(tmp_path)
 
     assert first["archive_total"] == 100
     assert len(first["candidates"]) == 100
@@ -234,7 +298,7 @@ def test_old_discoveries_remain_archived_when_pushed_off_front_page(mock_qualify
     }
     _write_feed_files(tmp_path, {"seed": newest}, "2026-08-22T11:59:00+00:00")
     mock_qualify.return_value = [newest]
-    second = load_solana_discovery_feed(tmp_path, now=NOW)
+    second = _refresh_and_load(tmp_path)
 
     assert second["archive_total"] == 101
     assert len(second["candidates"]) == 100
@@ -268,7 +332,7 @@ def test_legacy_v36_json_history_is_migrated_without_deletion(mock_qualify, tmp_
     _write_feed_files(tmp_path, {})
     mock_qualify.return_value = []
 
-    result = load_solana_discovery_feed(tmp_path, now=NOW)
+    result = _refresh_and_load(tmp_path)
 
     assert result["archive_total"] == 1
     assert result["candidates"][0]["token_address"] == "legacy-token"
@@ -284,7 +348,7 @@ def test_terminal_searches_archive_before_pagination(mock_qualify, tmp_path):
     ]
     _write_feed_files(tmp_path, {"seed": qualified[0]})
     mock_qualify.return_value = qualified
-    result = load_solana_discovery_feed(tmp_path, now=NOW, view="archive", query="ber")
+    result = _refresh_and_load(tmp_path, view="archive", query="ber")
     assert result["search_query"] == "ber"
     assert result["view_total"] == 1
     assert [item["token_address"] for item in result["candidates"]] == ["ber-mint"]
@@ -296,8 +360,8 @@ def test_terminal_recent_sort_uses_first_qualified_time(mock_qualify, tmp_path):
     newer = {"token_address": "newer", "pair_address": "pair-new", "last_seen_at": "2026-08-22T11:50:00+00:00"}
     _write_feed_files(tmp_path, {"seed": older}, "2026-08-22T11:50:00+00:00")
     mock_qualify.return_value = [older]
-    load_solana_discovery_feed(tmp_path, now=NOW)
+    _refresh_and_load(tmp_path)
     _write_feed_files(tmp_path, {"seed": newer}, "2026-08-22T11:59:00+00:00")
     mock_qualify.return_value = [newer]
-    result = load_solana_discovery_feed(tmp_path, now=NOW, view="recent")
+    result = _refresh_and_load(tmp_path, view="recent")
     assert [item["token_address"] for item in result["candidates"]] == ["newer", "older"]

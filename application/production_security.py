@@ -7,10 +7,7 @@ import json
 import logging
 import os
 import secrets
-import threading
 import time
-from collections import defaultdict, deque
-from dataclasses import dataclass
 
 from fastapi import HTTPException, Request
 
@@ -219,91 +216,14 @@ def require_internal_access(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Operator authentication required.")
 
 
-@dataclass(frozen=True)
-class _RateRule:
-    name: str
-    limit: int
-    seconds: int
-
-
-_CONTENT_LOGIN_RULE = _RateRule("content-login", 5, 900)
-_CONTENT_GENERATE_RULE = _RateRule("content-generate", 20, 60)
-_TELEGRAM_RULE = _RateRule("telegram-send", 3, 60)
-_JUPITER_QUOTE_RULE = _RateRule("jupiter-quote", 30, 60)
-_JUPITER_ORDER_RULE = _RateRule("jupiter-order", 10, 60)
-_JUPITER_EXECUTE_RULE = _RateRule("jupiter-execute", 10, 60)
-_SOLANA_API_RULE = _RateRule("solana-api", 90, 60)
-_GENERAL_API_RULE = _RateRule("api", 120, 60)
-
-
-class _SlidingWindowLimiter:
-    _STALE_AFTER_SECONDS = 900
-    _SWEEP_INTERVAL_SECONDS = 60
-
-    def __init__(self, *, maximum_buckets: int | None = None) -> None:
-        self._events: dict[tuple[str, str], deque[float]] = defaultdict(deque)
-        self._last_seen: dict[tuple[str, str], float] = {}
-        self._lock = threading.Lock()
-        self._maximum_buckets = maximum_buckets or maximum_rate_limit_buckets()
-        self._last_sweep = 0.0
-
-    def _sweep(self, now: float) -> None:
-        if now - self._last_sweep < self._SWEEP_INTERVAL_SECONDS:
-            return
-        cutoff = now - self._STALE_AFTER_SECONDS
-        stale = [key for key, last_seen in self._last_seen.items() if last_seen <= cutoff]
-        for key in stale:
-            self._events.pop(key, None)
-            self._last_seen.pop(key, None)
-        self._last_sweep = now
-
-    def allow(self, client: str, rule: _RateRule, now: float) -> bool:
-        key = (client, rule.name)
-        cutoff = now - rule.seconds
-        with self._lock:
-            self._sweep(now)
-            if key not in self._events and len(self._events) >= self._maximum_buckets:
-                return False
-            events = self._events[key]
-            while events and events[0] <= cutoff:
-                events.popleft()
-            if len(events) >= rule.limit:
-                self._last_seen[key] = now
-                return False
-            events.append(now)
-            self._last_seen[key] = now
-            return True
-
-
 class ApplicationBoundaryMiddleware:
-    """Apply bounded bodies and conservative per-process request throttles."""
+    """Apply bounded request-body controls before downstream body inspection."""
 
     def __init__(self, app: object) -> None:
         self.app = app
-        self._limiter = _SlidingWindowLimiter()
 
     @staticmethod
-    def _rule(path: str, method: str) -> _RateRule | None:
-        if path == "/content-control/login" and method == "POST":
-            return _CONTENT_LOGIN_RULE
-        if path == "/content-control/generate" and method == "POST":
-            return _CONTENT_GENERATE_RULE
-        if path == "/telegram/send" and method == "POST":
-            return _TELEGRAM_RULE
-        if path.startswith("/api/discovery/solana/"):
-            if path.endswith("/jupiter-quote"):
-                return _JUPITER_QUOTE_RULE
-            if path.endswith("/jupiter-order") and method == "POST":
-                return _JUPITER_ORDER_RULE
-            if path.endswith("/jupiter-execute") and method == "POST":
-                return _JUPITER_EXECUTE_RULE
-            return _SOLANA_API_RULE
-        if path.startswith("/api/"):
-            return _GENERAL_API_RULE
-        return None
-
-    @staticmethod
-    async def _json_response(send: object, status: int, detail: str, headers: list[tuple[bytes, bytes]] | None = None) -> None:
+    async def _json_response(send: object, status: int, detail: str, headers=None) -> None:
         body = ('{"detail":"' + detail + '"}').encode("utf-8")
         response_headers = [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode("ascii"))]
         response_headers.extend(headers or [])
@@ -313,15 +233,6 @@ class ApplicationBoundaryMiddleware:
     async def __call__(self, scope: dict[str, object], receive: object, send: object) -> None:
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
-            return
-
-        path = str(scope.get("path") or "")
-        method = str(scope.get("method") or "GET").upper()
-        client_value = scope.get("client")
-        client = str(client_value[0]) if isinstance(client_value, tuple) and client_value else "unknown"
-        rule = self._rule(path, method)
-        if rule is not None and not self._limiter.allow(client, rule, time.monotonic()):
-            await self._json_response(send, 429, "Too many requests.", [(b"retry-after", str(rule.seconds).encode("ascii"))])
             return
 
         limit = maximum_request_bytes()
@@ -366,7 +277,7 @@ class SecurityHeadersMiddleware:
         "object-src 'none'; "
         "frame-ancestors 'none'; "
         "form-action 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https:; "
         "font-src 'self' data:; "
@@ -382,7 +293,7 @@ class SecurityHeadersMiddleware:
             return True
         if not path.startswith("/api/discovery/solana/"):
             return False
-        return path.endswith(("/jupiter-quote", "/jupiter-order", "/jupiter-execute"))
+        return path.endswith(("/wallet-balance", "/jupiter-quote", "/jupiter-order", "/jupiter-execute"))
 
     async def __call__(self, scope: dict[str, object], receive: object, send: object) -> None:
         if scope.get("type") != "http":

@@ -28,6 +28,22 @@ def _https_url(name: str, default: str = "") -> None:
         raise RuntimeError(f"{name} must be an HTTPS URL without embedded credentials.")
 
 
+
+def _redis_pending_store_configuration() -> None:
+    mode = os.getenv("DEXSATO_PENDING_STORE", "").strip().lower()
+    if mode != "redis":
+        raise RuntimeError("DEXSATO_PENDING_STORE=redis is required in production.")
+    value = os.getenv("REDIS_URL", "").strip()
+    parsed = urlparse(value)
+    if parsed.scheme not in {"redis", "rediss"} or not parsed.hostname:
+        raise RuntimeError("REDIS_URL must be a valid redis:// or rediss:// URL in production.")
+
+def _redis_rate_limit_configuration() -> None:
+    mode = os.getenv("DEXSATO_RATE_LIMIT_STORE", "").strip().lower()
+    if mode != "redis":
+        raise RuntimeError("DEXSATO_RATE_LIMIT_STORE=redis is required in production.")
+
+
 def validate_production_configuration() -> None:
     """Reject missing core provider configuration without returning secret values."""
     # Validate even in development; malformed enable flags must not disable fees silently.
@@ -38,6 +54,8 @@ def validate_production_configuration() -> None:
     _required_secret("JUPITER_API_KEY")
     _required_secret("BIRDEYE_API_KEY")
     _https_url("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
+    _redis_pending_store_configuration()
+    _redis_rate_limit_configuration()
     if internal_endpoints_enabled():
         operator_token = os.getenv("DEXSATO_OPERATOR_TOKEN", "").strip()
         if len(operator_token) < 32:

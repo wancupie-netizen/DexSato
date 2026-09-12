@@ -19,6 +19,12 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from application.solana_discovery_feed_service import refresh_solana_discovery_archive
+
 try:
     from .phase0_solana_discovery_probe_v2 import (
         collect_birdeye,
@@ -421,6 +427,7 @@ def main() -> int:
         }
         atomic_json(state_path, state)
         atomic_json(output / "status.json", summary)
+        refresh_solana_discovery_archive(output, now=current)
         write_latest_run(output / "latest-run.txt", state, summary)
         write_html(output / "status.html", state, summary)
         print(f"MI v4.1 continuous run {state['run_count']}: {summary['collector_status']}")

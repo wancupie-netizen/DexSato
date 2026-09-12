@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import math
 import os
+import threading
 from time import monotonic
 from typing import Any, Callable
 
@@ -159,7 +160,10 @@ def _live_pair_age(created_at: Any, *, now: datetime | None = None) -> tuple[str
     return label, hours
 
 
-def _live_pair(candidate: dict[str, Any], request_get: Callable[..., Any]) -> dict[str, Any] | None:
+def _live_pair_provider(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+) -> dict[str, Any] | None:
     pair_address = str(candidate.get("pair_address") or "")
     token_address = str(candidate.get("token_address") or "")
     if not pair_address or not token_address:
@@ -180,6 +184,110 @@ def _live_pair(candidate: dict[str, Any], request_get: Callable[..., Any]) -> di
             continue
         return pair
     return None
+
+
+LIVE_PAIR_TTL_SECONDS = 5.0
+LIVE_PAIR_STALE_SECONDS = 30.0
+MAX_LIVE_PAIR_CACHE_ENTRIES = 500
+
+_LIVE_PAIR_CACHE: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+_LIVE_PAIR_INFLIGHT: dict[tuple[str, str], threading.Event] = {}
+_LIVE_PAIR_LOCK = threading.RLock()
+
+
+def _copy_live_pair(pair: dict[str, Any]) -> dict[str, Any]:
+    return dict(pair)
+
+
+def _prune_live_pair_cache(now: float) -> None:
+    stale_keys = [
+        key
+        for key, (stored_at, _pair) in _LIVE_PAIR_CACHE.items()
+        if (now - stored_at) > LIVE_PAIR_STALE_SECONDS
+    ]
+    for key in stale_keys:
+        _LIVE_PAIR_CACHE.pop(key, None)
+
+    if len(_LIVE_PAIR_CACHE) <= MAX_LIVE_PAIR_CACHE_ENTRIES:
+        return
+
+    oldest = sorted(_LIVE_PAIR_CACHE.items(), key=lambda item: item[1][0])
+    remove_count = len(_LIVE_PAIR_CACHE) - MAX_LIVE_PAIR_CACHE_ENTRIES
+    for key, _value in oldest[:remove_count]:
+        _LIVE_PAIR_CACHE.pop(key, None)
+
+
+def _cached_live_pair(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+) -> dict[str, Any] | None:
+    """Coalesce production DexScreener reads and use bounded stale fallback."""
+    if request_get is not requests.get:
+        return _live_pair_provider(candidate, request_get)
+
+    pair_address = str(candidate.get("pair_address") or "")
+    token_address = str(candidate.get("token_address") or "")
+    if not pair_address or not token_address:
+        return None
+
+    key = (pair_address, token_address)
+    now_value = monotonic()
+
+    with _LIVE_PAIR_LOCK:
+        _prune_live_pair_cache(now_value)
+        cached = _LIVE_PAIR_CACHE.get(key)
+        if cached is not None and (now_value - cached[0]) < LIVE_PAIR_TTL_SECONDS:
+            return _copy_live_pair(cached[1])
+
+        event = _LIVE_PAIR_INFLIGHT.get(key)
+        if event is None:
+            event = threading.Event()
+            _LIVE_PAIR_INFLIGHT[key] = event
+            refresher = True
+        else:
+            refresher = False
+
+    if not refresher:
+        event.wait(timeout=10.5)
+        current = monotonic()
+        with _LIVE_PAIR_LOCK:
+            cached = _LIVE_PAIR_CACHE.get(key)
+            if cached is not None and (current - cached[0]) <= LIVE_PAIR_STALE_SECONDS:
+                return _copy_live_pair(cached[1])
+        return None
+
+    try:
+        pair = _live_pair_provider(candidate, request_get)
+        current = monotonic()
+        with _LIVE_PAIR_LOCK:
+            if pair is not None:
+                _LIVE_PAIR_CACHE[key] = (current, _copy_live_pair(pair))
+                _prune_live_pair_cache(current)
+                return _copy_live_pair(pair)
+
+            cached = _LIVE_PAIR_CACHE.get(key)
+            if cached is not None and (current - cached[0]) <= LIVE_PAIR_STALE_SECONDS:
+                return _copy_live_pair(cached[1])
+            return None
+    except (requests.RequestException, RuntimeError, ValueError, TypeError):
+        current = monotonic()
+        with _LIVE_PAIR_LOCK:
+            cached = _LIVE_PAIR_CACHE.get(key)
+            if cached is not None and (current - cached[0]) <= LIVE_PAIR_STALE_SECONDS:
+                return _copy_live_pair(cached[1])
+        raise
+    finally:
+        with _LIVE_PAIR_LOCK:
+            completed = _LIVE_PAIR_INFLIGHT.pop(key, None)
+            if completed is not None:
+                completed.set()
+
+
+def _live_pair(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+) -> dict[str, Any] | None:
+    return _cached_live_pair(candidate, request_get)
 
 
 def _chart_provider(candidate: dict[str, Any], request_get: Callable[..., Any]) -> list[dict[str, float]]:
@@ -349,6 +457,50 @@ _OHLCV_TTL_SECONDS = {
 }
 _TRANSACTION_TTL_SECONDS = 20.0
 
+OHLCV_STALE_SECONDS = 300.0
+TRANSACTION_STALE_SECONDS = 120.0
+MAX_OHLCV_CACHE_ENTRIES = 300
+MAX_TRANSACTION_CACHE_ENTRIES = 300
+
+_OHLCV_CACHE_LOCK = threading.RLock()
+_TRANSACTION_CACHE_LOCK = threading.RLock()
+
+
+def _prune_ohlcv_cache(now: float) -> None:
+    stale_keys = [
+        key
+        for key, (stored_at, _rows) in _OHLCV_CACHE.items()
+        if (now - stored_at) > OHLCV_STALE_SECONDS
+    ]
+    for key in stale_keys:
+        _OHLCV_CACHE.pop(key, None)
+
+    if len(_OHLCV_CACHE) <= MAX_OHLCV_CACHE_ENTRIES:
+        return
+
+    oldest = sorted(_OHLCV_CACHE.items(), key=lambda item: item[1][0])
+    remove_count = len(_OHLCV_CACHE) - MAX_OHLCV_CACHE_ENTRIES
+    for key, _value in oldest[:remove_count]:
+        _OHLCV_CACHE.pop(key, None)
+
+
+def _prune_transaction_cache(now: float) -> None:
+    stale_keys = [
+        key
+        for key, (stored_at, _payload) in _TRANSACTION_CACHE.items()
+        if (now - stored_at) > TRANSACTION_STALE_SECONDS
+    ]
+    for key in stale_keys:
+        _TRANSACTION_CACHE.pop(key, None)
+
+    if len(_TRANSACTION_CACHE) <= MAX_TRANSACTION_CACHE_ENTRIES:
+        return
+
+    oldest = sorted(_TRANSACTION_CACHE.items(), key=lambda item: item[1][0])
+    remove_count = len(_TRANSACTION_CACHE) - MAX_TRANSACTION_CACHE_ENTRIES
+    for key, _value in oldest[:remove_count]:
+        _TRANSACTION_CACHE.pop(key, None)
+
 
 def _copy_candles(rows: list[dict[str, float]]) -> list[dict[str, float]]:
     return [dict(row) for row in rows]
@@ -370,21 +522,31 @@ def _cached_ohlcv(
 
     key = (pair_address, token_address, cache_kind)
     now = monotonic()
-    cached = _OHLCV_CACHE.get(key)
     ttl = _OHLCV_TTL_SECONDS[cache_kind]
 
-    if cached is not None and (now - cached[0]) < ttl:
-        return _copy_candles(cached[1])
+    with _OHLCV_CACHE_LOCK:
+        _prune_ohlcv_cache(now)
+        cached = _OHLCV_CACHE.get(key)
+        if cached is not None and (now - cached[0]) < ttl:
+            return _copy_candles(cached[1])
 
     try:
         rows = provider(candidate, request_get)
     except requests.RequestException:
-        if cached is not None:
-            return _copy_candles(cached[1])
+        current = monotonic()
+        with _OHLCV_CACHE_LOCK:
+            _prune_ohlcv_cache(current)
+            cached = _OHLCV_CACHE.get(key)
+            if cached is not None and (current - cached[0]) <= OHLCV_STALE_SECONDS:
+                return _copy_candles(cached[1])
         raise
 
-    _OHLCV_CACHE[key] = (now, _copy_candles(rows))
-    return _copy_candles(rows)
+    current = monotonic()
+    copied = _copy_candles(rows)
+    with _OHLCV_CACHE_LOCK:
+        _OHLCV_CACHE[key] = (current, copied)
+        _prune_ohlcv_cache(current)
+    return _copy_candles(copied)
 
 
 def _chart(
@@ -821,14 +983,11 @@ def load_solana_discovery_transactions(
 
     address = str(token_address or "").strip()
     now = monotonic()
-    cached = _TRANSACTION_CACHE.get(address)
-
-    if cached is not None and (now - cached[0]) < _TRANSACTION_TTL_SECONDS:
-        return _with_transaction_freshness(
-            cached[1],
-            cache_hit=True,
-            stale=False,
-        )
+    with _TRANSACTION_CACHE_LOCK:
+        _prune_transaction_cache(now)
+        cached = _TRANSACTION_CACHE.get(address)
+        if cached is not None and (now - cached[0]) < _TRANSACTION_TTL_SECONDS:
+            return _with_transaction_freshness(cached[1], cache_hit=True, stale=False)
 
     try:
         payload = _load_solana_discovery_transactions_provider(
@@ -837,24 +996,23 @@ def load_solana_discovery_transactions(
             request_get=request_get,
         )
     except requests.RequestException:
-        if cached is not None:
-            return _with_transaction_freshness(
-                cached[1],
-                cache_hit=True,
-                stale=True,
-            )
+        current = monotonic()
+        with _TRANSACTION_CACHE_LOCK:
+            _prune_transaction_cache(current)
+            cached = _TRANSACTION_CACHE.get(address)
+            if cached is not None and (current - cached[0]) <= TRANSACTION_STALE_SECONDS:
+                return _with_transaction_freshness(cached[1], cache_hit=True, stale=True)
         raise
 
     if payload is None:
         return None
 
     stored = _copy_transaction_payload(payload)
-    _TRANSACTION_CACHE[address] = (now, stored)
-    return _with_transaction_freshness(
-        stored,
-        cache_hit=False,
-        stale=False,
-    )
+    current = monotonic()
+    with _TRANSACTION_CACHE_LOCK:
+        _TRANSACTION_CACHE[address] = (current, stored)
+        _prune_transaction_cache(current)
+    return _with_transaction_freshness(stored, cache_hit=False, stale=False)
 
 
 def load_solana_discovery_token(
