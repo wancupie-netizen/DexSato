@@ -2,14 +2,15 @@
 
 Production uses one Redis-backed atomic sliding-window store across all replicas.
 Local development and tests may explicitly use the bounded in-memory store.
-Client identity intentionally remains the ASGI peer address; user-controlled
-forwarding headers are not trusted by this middleware.
+Client identity defaults to the ASGI peer address. Forwarded client identity is
+accepted only when trusted proxy handling is explicitly enabled.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
 import json
 import math
 import os
@@ -21,10 +22,14 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from application.production_security import trusted_proxy_headers
+
 
 MAX_BUCKETS = 10_000
 WINDOW_SECONDS = 60.0
 REDIS_PREFIX = "dexsato:ratelimit"
+MAX_FORWARDED_FOR_BYTES = 1024
+MAX_FORWARDED_FOR_HOPS = 16
 
 _TOKEN_WORKSPACE_ROUTE = re.compile(r"^/discovery/solana/([^/]+)$")
 _API_ROUTE = re.compile(
@@ -303,14 +308,74 @@ def _hash_identity(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _client_ip(scope: dict[str, Any]) -> str:
-    """Use the ASGI peer only. Never trust user-controlled forwarding headers."""
+def _peer_ip(scope: dict[str, Any]) -> str:
+    """Return the direct ASGI peer identity."""
     client = scope.get("client")
     if isinstance(client, (tuple, list)) and client:
         value = str(client[0] or "").strip()
         if value:
             return value
     return "unknown"
+
+
+def _forwarded_for_ip(scope: dict[str, Any]) -> str | None:
+    """Return a validated right-most X-Forwarded-For address.
+
+    This is used only when trusted proxy handling is explicitly enabled.
+    Ambiguous, oversized, malformed, or excessively deep forwarding chains
+    are rejected so the caller can safely fall back to the ASGI peer.
+    """
+    headers = scope.get("headers")
+    if not isinstance(headers, (tuple, list)):
+        return None
+
+    forwarded_values: list[bytes] = []
+    for item in headers:
+        if not isinstance(item, (tuple, list)) or len(item) != 2:
+            continue
+        key, value = item
+        try:
+            name = bytes(key).lower()
+            raw_value = bytes(value)
+        except (TypeError, ValueError):
+            continue
+        if name == b"x-forwarded-for":
+            forwarded_values.append(raw_value)
+
+    if len(forwarded_values) != 1:
+        return None
+
+    raw = forwarded_values[0]
+    if not raw or len(raw) > MAX_FORWARDED_FOR_BYTES:
+        return None
+
+    try:
+        text = raw.decode("ascii")
+    except UnicodeDecodeError:
+        return None
+
+    hops = [part.strip() for part in text.split(",")]
+    if (
+        not hops
+        or len(hops) > MAX_FORWARDED_FOR_HOPS
+        or any(not hop for hop in hops)
+    ):
+        return None
+
+    candidate = hops[-1]
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        return None
+
+
+def _client_ip(scope: dict[str, Any]) -> str:
+    """Resolve client identity without trusting proxy headers by default."""
+    if trusted_proxy_headers():
+        forwarded = _forwarded_for_ip(scope)
+        if forwarded is not None:
+            return forwarded
+    return _peer_ip(scope)
 
 
 async def _read_body(receive: Callable[..., Any]) -> bytes:

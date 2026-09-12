@@ -131,7 +131,8 @@ def test_different_tokens_have_isolated_poll_buckets():
     ))) == 200
 
 
-def test_spoofed_forwarded_for_does_not_bypass_peer_ip_limit():
+def test_spoofed_forwarded_for_does_not_bypass_peer_ip_limit(monkeypatch):
+    monkeypatch.setenv("DEXSATO_TRUST_PROXY_HEADERS", "false")
     app = _App()
     middleware = TokenWorkspaceRateLimitMiddleware(app)
 
@@ -152,6 +153,117 @@ def test_spoofed_forwarded_for_does_not_bypass_peer_ip_limit():
         ),
     ))
     assert _status(blocked) == 429
+
+
+def test_trusted_proxy_groups_rotating_peers_by_forwarded_client_ip(monkeypatch):
+    monkeypatch.setenv("DEXSATO_TRUST_PROXY_HEADERS", "true")
+    app = _App()
+    middleware = TokenWorkspaceRateLimitMiddleware(app)
+
+    for index in range(12):
+        assert _status(asyncio.run(_request(
+            middleware,
+            _scope(
+                "/api/discovery/solana/token-a/candles",
+                ip=f"10.0.0.{index + 1}",
+                headers={"x-forwarded-for": "198.51.100.25"},
+            ),
+        ))) == 200
+
+    blocked = asyncio.run(_request(
+        middleware,
+        _scope(
+            "/api/discovery/solana/token-a/candles",
+            ip="10.0.0.250",
+            headers={"x-forwarded-for": "198.51.100.25"},
+        ),
+    ))
+    assert _status(blocked) == 429
+    assert app.calls == 12
+
+
+def test_trusted_proxy_ignores_attacker_controlled_left_xff_prefix(monkeypatch):
+    monkeypatch.setenv("DEXSATO_TRUST_PROXY_HEADERS", "true")
+    app = _App()
+    middleware = TokenWorkspaceRateLimitMiddleware(app)
+
+    for index in range(12):
+        assert _status(asyncio.run(_request(
+            middleware,
+            _scope(
+                "/api/discovery/solana/token-a/candles",
+                ip=f"10.0.1.{index + 1}",
+                headers={
+                    "x-forwarded-for":
+                        f"203.0.113.{index + 1}, 198.51.100.25"
+                },
+            ),
+        ))) == 200
+
+    blocked = asyncio.run(_request(
+        middleware,
+        _scope(
+            "/api/discovery/solana/token-a/candles",
+            ip="10.0.1.250",
+            headers={"x-forwarded-for": "192.0.2.200, 198.51.100.25"},
+        ),
+    ))
+    assert _status(blocked) == 429
+    assert app.calls == 12
+
+
+def test_trusted_proxy_accepts_valid_ipv6_client_identity(monkeypatch):
+    monkeypatch.setenv("DEXSATO_TRUST_PROXY_HEADERS", "true")
+    app = _App()
+    middleware = TokenWorkspaceRateLimitMiddleware(app)
+
+    for index in range(12):
+        assert _status(asyncio.run(_request(
+            middleware,
+            _scope(
+                "/api/discovery/solana/token-a/candles",
+                ip=f"10.0.2.{index + 1}",
+                headers={"x-forwarded-for": "2001:db8::25"},
+            ),
+        ))) == 200
+
+    blocked = asyncio.run(_request(
+        middleware,
+        _scope(
+            "/api/discovery/solana/token-a/candles",
+            ip="10.0.2.250",
+            headers={"x-forwarded-for": "2001:db8::25"},
+        ),
+    ))
+    assert _status(blocked) == 429
+    assert app.calls == 12
+
+
+def test_malformed_trusted_proxy_header_falls_back_to_peer(monkeypatch):
+    monkeypatch.setenv("DEXSATO_TRUST_PROXY_HEADERS", "true")
+    app = _App()
+    middleware = TokenWorkspaceRateLimitMiddleware(app)
+
+    for index in range(12):
+        assert _status(asyncio.run(_request(
+            middleware,
+            _scope(
+                "/api/discovery/solana/token-a/candles",
+                ip="10.0.3.25",
+                headers={"x-forwarded-for": f"not-an-ip-{index}"},
+            ),
+        ))) == 200
+
+    blocked = asyncio.run(_request(
+        middleware,
+        _scope(
+            "/api/discovery/solana/token-a/candles",
+            ip="10.0.3.25",
+            headers={"x-forwarded-for": "still-not-an-ip"},
+        ),
+    ))
+    assert _status(blocked) == 429
+    assert app.calls == 12
 
 
 def test_order_wallet_limit_blocks_before_app_and_body_is_replayed():
