@@ -728,6 +728,7 @@ def render_solana_discovery_token_page(
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
 <script>try{const t=localStorage.getItem("dexsato-theme");if(t==="plain"||t==="intel")document.documentElement.dataset.theme=t;}catch(error){}</script>
+<script>try{if(sessionStorage.getItem("dexsato-navigation-open")==="1")document.documentElement.dataset.navigationOpen="true";}catch(error){}</script>
 <style>
 :root{color-scheme:dark;--bg:#050b13;--panel:#091422;--panel2:#0d1b2d;--line:#20344b;--text:#f4f7fb;--muted:#91a8c5;--cyan:#0de6d1;--blue:#5a98ff;--amber:#ffb800;--green:#26d49a;--red:#ff5675;--display:"Bahnschrift SemiBold","Bahnschrift","Arial Narrow","Segoe UI",sans-serif;--ui:"Segoe UI Variable Text","Segoe UI",sans-serif;--mono:"Cascadia Mono","Consolas",monospace}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);font-size:15px;line-height:1.55}.shell{width:min(1180px,calc(100% - 32px));margin:auto;padding:20px 0 34px}.topbar{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:14px}.brand img{width:138px}.brand strong,h1,h2,h3,.value{font-family:var(--display)}a{color:#8ab9ff}.back{padding:8px 12px;border:1px solid var(--line);border-radius:6px;text-decoration:none;color:var(--text)}.hero{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:end;padding:28px 0 20px}.eyebrow{color:var(--cyan);font:700 11px var(--mono);letter-spacing:.12em;text-transform:uppercase}.hero h1{margin:5px 0 0;font-size:38px;line-height:1.05}.hero p{margin:8px 0 0;color:var(--muted)}.status{padding:12px 15px;border:1px solid var(--line);border-left:3px solid var(--green);background:var(--panel)}.status b,.status small{display:block}.status b{font-family:var(--mono)}.status small{color:var(--muted)}.identity,.chart-panel,.card{border:1px solid var(--line);background:var(--panel)}.identity{padding:20px}.identity-head{display:flex;justify-content:space-between;gap:18px}.identity h2{margin:0;font-size:25px}.identity .name{color:var(--muted)}.addresses{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:17px}.address{padding:12px;background:var(--panel2)}.address span,.metric span{display:block;color:var(--muted);font:700 10px var(--mono);text-transform:uppercase}.address code{display:block;margin-top:5px;font:12px var(--mono);overflow-wrap:anywhere}.chart-panel{margin-top:14px;padding:20px}.section-head{display:flex;justify-content:space-between;gap:15px;align-items:end}.section-head h2{margin:4px 0 0;font-size:23px}.section-head p{margin:4px 0 0;color:var(--muted)}.chart{display:block;width:100%;height:270px;margin-top:15px;background:var(--panel2);border:1px solid var(--line)}.chart line{stroke:var(--line);stroke-width:1}.chart polyline{fill:none;stroke:var(--cyan);stroke-width:3;vector-effect:non-scaling-stroke}.chart-empty{display:grid;place-items:center;min-height:240px;margin-top:15px;border:1px dashed var(--line);color:var(--amber);background:var(--panel2)}.grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-top:14px}.card{padding:18px}.card h3{margin:0 0 12px;font-size:18px}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{padding:13px;background:var(--panel2)}.metric .value{display:block;margin-top:5px;font-size:19px}.change.up{color:var(--green)}.change.down{color:var(--red)}.evidence{margin-top:14px;padding:15px;border-left:2px solid var(--cyan);background:var(--panel2)}.evidence strong{display:block;margin-bottom:5px}.risk{margin-top:12px;padding:15px;border-left:2px solid var(--amber);background:rgba(255,184,0,.06)}.risk strong{color:var(--amber)}.check{padding:9px 0;border-top:1px solid var(--line)}.check:before{content:"\\2713";margin-right:8px;color:var(--green)}.jupiter{border-left:2px solid #9b5cff}.jupiter .badge{display:inline-block;padding:5px 8px;border:1px solid #7c45c8;border-radius:999px;color:#c9a8ff;font:700 10px var(--mono)}.source{margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}footer{display:flex;justify-content:space-between;gap:20px;margin-top:18px;color:var(--muted);font-size:11px}
 html[data-theme="plain"]{color-scheme:light;--bg:#f5f7fa;--panel:#fff;--panel2:#eef3f8;--line:#c8d3df;--text:#102035;--muted:#526981;--cyan:#087f8c;--blue:#276dcc;--amber:#9a6200;--green:#147c54;--red:#ba3654}
@@ -4180,12 +4181,99 @@ html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-p
 html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-change{
   font-size:11px!important;
 }
+
+/* TW-UI-02A.2 — Collapsible navigation rail.
+   UI state only: existing destinations, workspace data and application behavior remain unchanged. */
+.tw-navigation-toggle-v02a2{display:none}
+@media(min-width:821px){
+  .tw-dex-app{
+    grid-template-columns:52px minmax(0,1fr)!important;
+    transition:grid-template-columns 180ms ease;
+  }
+  .tw-dex-side{
+    width:52px!important;
+    padding:12px 8px!important;
+    overflow:hidden;
+    transition:width 180ms ease,padding 180ms ease;
+  }
+  .tw-navigation-toggle-v02a2{
+    display:grid;
+    place-items:center;
+    width:36px;
+    height:32px;
+    flex:0 0 32px;
+    margin-top:10px;
+    padding:0;
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:var(--bg-2);
+    color:var(--text-mid);
+    cursor:pointer;
+  }
+  .tw-navigation-toggle-v02a2:hover,
+  .tw-navigation-toggle-v02a2:focus-visible{
+    border-color:var(--line-strong);
+    background:var(--brand-dim);
+    color:var(--brand);
+    outline:0;
+  }
+  .tw-navigation-toggle-v02a2 svg{
+    width:14px;
+    height:14px;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:1.8;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    transition:transform 180ms ease;
+  }
+  .tw-dex-side-nav-v08c{
+    margin-top:12px!important;
+    opacity:0;
+    visibility:hidden;
+    transform:translateX(-8px);
+    pointer-events:none;
+    transition:opacity 120ms ease,transform 180ms ease,visibility 0s linear 180ms;
+  }
+  html[data-navigation-open="true"] .tw-dex-app{
+    grid-template-columns:76px minmax(0,1fr)!important;
+  }
+  html[data-navigation-open="true"] .tw-dex-side{
+    width:76px!important;
+    padding:12px 10px!important;
+  }
+  html[data-navigation-open="true"] .tw-navigation-toggle-v02a2{
+    width:42px;
+    margin:10px auto 0;
+    color:var(--brand);
+    background:var(--brand-dim);
+  }
+  html[data-navigation-open="true"] .tw-navigation-toggle-v02a2 svg{
+    transform:rotate(180deg);
+  }
+  html[data-navigation-open="true"] .tw-dex-side-nav-v08c{
+    opacity:1;
+    visibility:visible;
+    transform:none;
+    pointer-events:auto;
+    transition-delay:60ms,0s,0s;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .tw-dex-app,
+  .tw-dex-side,
+  .tw-navigation-toggle-v02a2 svg,
+  .tw-dex-side-nav-v08c{transition:none!important}
+}
 </style>
 <script src="/static/vendor/lightweight-charts.standalone.production.js?v=5.2.1"></script>
 </head><body><div class="tw-dex-app">
 <aside class="tw-dex-side" aria-label="DexSato navigation">
   <a class="tw-dex-side-brand" href="/" aria-label="DexSato home"><img src="/static/branding/dexsato-mark.png" alt=""><span><strong>dexsato</strong><small>DEX INTELLIGENCE</small></span></a>
-  <nav class="tw-dex-side-nav tw-dex-side-nav-v08c" aria-label="Market navigation">
+  <button class="tw-navigation-toggle-v02a2" type="button" aria-expanded="false" aria-controls="dexsato-primary-navigation" aria-label="Show market navigation" title="Show market navigation" data-navigation-toggle>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg>
+  </button>
+  <nav class="tw-dex-side-nav tw-dex-side-nav-v08c" id="dexsato-primary-navigation" aria-label="Market navigation" aria-hidden="true">
     <a class="tw-side-icon-v08c active" href="/discovery/solana" aria-label="Solana" title="Solana">
       <svg class="tw-side-solana-v08c" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M5.2 5.2h12.9l-2.7 2.7H2.5l2.7-2.7Zm0 5.45h12.9l2.7 2.7H7.9l-2.7-2.7Zm0 5.45h12.9l-2.7 2.7H2.5l2.7-2.7Z"/>
@@ -6223,6 +6311,35 @@ __QUALIFICATION_PANEL__
 
   document.addEventListener("visibilitychange",()=>{
     if(!document.hidden) loadTransactions(true);
+  });
+})();
+</script>
+
+<script>
+/* TW-UI-02A.2 — accessible, session-scoped navigation rail state */
+(()=>{
+  const root=document.documentElement;
+  const toggle=document.querySelector("[data-navigation-toggle]");
+  const navigation=document.getElementById("dexsato-primary-navigation");
+  if(!toggle||!navigation)return;
+
+  const render=open=>{
+    if(open)root.dataset.navigationOpen="true";
+    else delete root.dataset.navigationOpen;
+    toggle.setAttribute("aria-expanded",String(open));
+    toggle.setAttribute("aria-label",open?"Hide market navigation":"Show market navigation");
+    toggle.setAttribute("title",open?"Hide market navigation":"Show market navigation");
+    navigation.setAttribute("aria-hidden",String(!open));
+    try{sessionStorage.setItem("dexsato-navigation-open",open?"1":"0");}catch(error){}
+  };
+
+  render(root.dataset.navigationOpen==="true");
+  toggle.addEventListener("click",()=>render(toggle.getAttribute("aria-expanded")!=="true"));
+  document.addEventListener("keydown",event=>{
+    if(event.key==="Escape"&&toggle.getAttribute("aria-expanded")==="true"){
+      render(false);
+      toggle.focus();
+    }
   });
 })();
 </script>

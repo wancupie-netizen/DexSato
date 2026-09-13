@@ -1517,9 +1517,7 @@ def test_tw_ui_02a1_enlarges_left_workspace_and_applies_documented_fonts_only():
     assert 'font-size:14px!important;' in html
     assert 'min-height:58px!important;' in html
 
-    # UI-02A.1 must not introduce the navigation drawer or alter app integrations.
-    assert "TW-UI-02A.2" not in html
-    assert 'data-navigation-toggle' not in html
+    # UI-02A.1 must preserve application integrations.
     assert 'data-jupiter-sandbox' in html
     assert 'data-connect-wallet' in html
     assert 'data-get-quote' in html
@@ -1539,8 +1537,33 @@ def test_tw_ui_02a1b_makes_left_workspace_change_visually_distinct_only():
     assert 'padding:10px 15px!important;' in html
 
     # UI-02A.1B remains a CSS-only correction and preserves production hooks.
-    assert "TW-UI-02A.2" not in html
-    assert 'data-navigation-toggle' not in html
+    assert 'data-jupiter-sandbox' in html
+    assert 'data-connect-wallet' in html
+    assert 'data-get-quote' in html
+    assert 'data-execute-swap disabled' in html
+    assert 'data-candlestick-panel' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
+
+
+def test_tw_ui_02a2_adds_collapsible_navigation_without_contract_changes():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-UI-02A.2 — Collapsible navigation rail" in html
+    assert 'data-navigation-toggle' in html
+    assert 'aria-expanded="false"' in html
+    assert 'aria-controls="dexsato-primary-navigation"' in html
+    assert 'id="dexsato-primary-navigation"' in html
+    assert 'aria-hidden="true"' in html
+    assert 'grid-template-columns:52px minmax(0,1fr)!important;' in html
+    assert 'grid-template-columns:76px minmax(0,1fr)!important;' in html
+    assert 'sessionStorage.getItem("dexsato-navigation-open")' in html
+    assert 'toggle.addEventListener("click"' in html
+    assert 'event.key==="Escape"' in html
+
+    # Existing destinations and production integration hooks remain intact.
+    assert 'href="/discovery/solana"' in html
+    assert 'href="/major-assets"' in html
+    assert 'aria-label="Watchlist"' in html
     assert 'data-jupiter-sandbox' in html
     assert 'data-connect-wallet' in html
     assert 'data-get-quote' in html
