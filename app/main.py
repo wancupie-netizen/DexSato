@@ -17,15 +17,16 @@ Responsibilities
 - Send snapshot data to Telegram
 - Expose application health
 - Expose the founder-only Content Control Center
+- Supervise the optional one-shot discovery collector scheduler
 
 This module does NOT:
 - run scans when pages are opened
-- schedule scans
 - calculate market decisions
 """
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import requests
@@ -101,11 +102,13 @@ from application.production_security import (
 )
 from application.discovery_storage import discovery_storage_dir, validate_production_runtime
 from application.production_readiness import (
+    collector_fresh,
     collector_storage_ready,
     discovery_archive_ready,
     production_configuration_ready,
     validate_production_configuration,
 )
+from application.collector_scheduler import CollectorScheduler, collector_enabled
 from application.jupiter_swap_service import configure_jupiter_pending_store
 from application.jupiter_pending_store import JupiterPendingStoreUnavailable
 
@@ -151,11 +154,24 @@ configure_jupiter_pending_store()
 configure_rate_limit_store()
 
 
+@asynccontextmanager
+async def application_lifespan(application: FastAPI):
+    """Own the optional collector scheduler for the application lifetime."""
+    scheduler = CollectorScheduler.from_environment()
+    application.state.collector_scheduler = scheduler
+    await scheduler.start()
+    try:
+        yield
+    finally:
+        await scheduler.stop()
+
+
 app = FastAPI(
     title=APP_TITLE,
     version=APP_VERSION,
     docs_url=None,
     redoc_url=None,
+    lifespan=application_lifespan,
 )
 
 # Middleware registration order matters: Starlette executes the last-added
@@ -778,11 +794,14 @@ def readiness_status() -> tuple[bool, dict[str, str]]:
     discovery_dir = discovery_storage_dir(DEFAULT_OUTPUT_DIR)
     collector_ready = collector_storage_ready(discovery_dir)
     archive_ready = discovery_archive_ready(discovery_dir, DISCOVERY_ARCHIVE_DB)
+    enabled = collector_enabled()
+    fresh = collector_fresh(discovery_dir) if enabled else True
     configuration_ready = production_configuration_ready()
     checks = {
         "static": "ready" if static_ready else "unavailable",
-        "collector": "ready" if collector_ready else "unavailable",
-        "archive": "ready" if archive_ready else "unavailable",
+        "collector_storage": "ready" if collector_ready else "unavailable",
+        "discovery_archive": "ready" if archive_ready else "unavailable",
+        "collector_fresh": "ready" if fresh else "stale",
         "configuration": "ready" if configuration_ready else "unavailable",
     }
     return all(value == "ready" for value in checks.values()), checks

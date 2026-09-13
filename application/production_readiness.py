@@ -5,12 +5,20 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from application.collector_scheduler import (
+    discovery_stale_minutes,
+    validate_collector_configuration,
+)
+from application.jupiter_fee_policy import (
+    FeePolicyConfigurationError,
+    get_fee_policy,
+    read_fee_policy,
+)
 from application.production_security import internal_endpoints_enabled, production_mode
-from application.jupiter_fee_policy import FeePolicyConfigurationError, get_fee_policy, read_fee_policy
-
 
 _PLACEHOLDER_PREFIXES = ("your-", "replace-with-", "changeme")
 
@@ -49,6 +57,7 @@ def validate_production_configuration() -> None:
     # Validate even in development; malformed enable flags must not disable fees silently.
     if read_fee_policy() != get_fee_policy():
         raise FeePolicyConfigurationError("Jupiter fee configuration changed; restart the server.")
+    validate_collector_configuration()
     if not production_mode():
         return
     _required_secret("JUPITER_API_KEY")
@@ -85,6 +94,31 @@ def collector_storage_ready(directory: Path) -> bool:
     return _valid_json_object(directory / "state.json", required_mapping="candidates") and _valid_json_object(
         directory / "status.json", required_mapping="metrics"
     )
+
+
+def collector_fresh(
+    directory: Path,
+    *,
+    stale_minutes: int | None = None,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether status.json was generated within the configured window."""
+    try:
+        payload = json.loads((directory / "status.json").read_text(encoding="utf-8"))
+        generated_at = payload.get("generated_at")
+        if not isinstance(generated_at, str):
+            return False
+        generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        if generated.tzinfo is None:
+            return False
+        current = now or datetime.now(timezone.utc)
+        age = current.astimezone(timezone.utc) - generated.astimezone(timezone.utc)
+        maximum_age = timedelta(
+            minutes=stale_minutes if stale_minutes is not None else discovery_stale_minutes()
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        return False
+    return timedelta(0) <= age <= maximum_age
 
 
 def discovery_archive_ready(directory: Path, archive_filename: str) -> bool:

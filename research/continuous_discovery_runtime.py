@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """DexSato MI v4.1 continuous Solana discovery runtime.
 
-Runs once per invocation. Windows Task Scheduler invokes it every 15
-minutes. It resumes the existing Phase 0 state without resetting observations,
-and keeps discovery acquisition/pair resolution bounded per cycle.
+Runs once per invocation. An external scheduler or the staging web supervisor
+may invoke it every 15 minutes. It resumes the existing Phase 0 state without
+resetting observations, and keeps discovery acquisition/pair resolution bounded
+per cycle.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import argparse
 import html
 import json
 import os
+import signal
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -46,6 +48,11 @@ MAX_DAYS = 7
 MAX_RUNS = 672
 PAIR_RETRY_MINUTES = (0, 15, 30, 60)
 DEFAULT_OUTPUT = "output/research/solana-discovery-phase0-seven-day"
+
+
+def _graceful_termination(signum: int, _frame: object) -> None:
+    """Let the outer finally block remove collector.lock on pod shutdown."""
+    raise SystemExit(128 + signum)
 
 
 def now_utc() -> datetime:
@@ -330,6 +337,8 @@ def acquire_lock(path: Path) -> int | None:
 
 
 def main() -> int:
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _graceful_termination)
     parser = argparse.ArgumentParser(description="Run one scheduled DexSato MI v4.1 continuous discovery cycle.")
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT)
     parser.add_argument("--env-file", default=".env.phase0.local")

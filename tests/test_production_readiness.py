@@ -1,8 +1,10 @@
 import json
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from application.production_readiness import (
+    collector_fresh,
     collector_storage_ready,
     discovery_archive_ready,
     production_configuration_ready,
@@ -16,6 +18,9 @@ def _production_environment(**overrides):
         "JUPITER_API_KEY": "jupiter-server-key",
         "BIRDEYE_API_KEY": "birdeye-server-key",
         "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com",
+        "DEXSATO_PENDING_STORE": "redis",
+        "DEXSATO_RATE_LIMIT_STORE": "redis",
+        "REDIS_URL": "redis://redis.internal:6379/0",
     }
     environment.update(overrides)
     return environment
@@ -32,9 +37,15 @@ def _expect_configuration_error(environment, expected):
 
 
 def test_development_does_not_require_production_provider_keys():
-    with patch.dict("os.environ", {}, clear=True):
-        assert validate_production_configuration() is None
-        assert production_configuration_ready() is True
+    from application.jupiter_fee_policy import get_fee_policy
+
+    get_fee_policy.cache_clear()
+    try:
+        with patch.dict("os.environ", {}, clear=True):
+            assert validate_production_configuration() is None
+            assert production_configuration_ready() is True
+    finally:
+        get_fee_policy.cache_clear()
 
 
 def test_fee_configuration_rejects_invalid_enabled_policy():
@@ -115,6 +126,28 @@ def test_collector_integrity_requires_expected_json_mappings(tmp_path):
     assert collector_storage_ready(tmp_path) is True
     (tmp_path / "state.json").write_text('{"candidates": []}', encoding="utf-8")
     assert collector_storage_ready(tmp_path) is False
+
+
+def test_collector_freshness_accepts_recent_generated_at(tmp_path):
+    now = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc)
+    (tmp_path / "status.json").write_text(
+        json.dumps({"generated_at": (now - timedelta(minutes=15)).isoformat()}),
+        encoding="utf-8",
+    )
+    assert collector_fresh(tmp_path, stale_minutes=45, now=now) is True
+
+
+def test_collector_freshness_rejects_stale_or_invalid_status(tmp_path):
+    now = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc)
+    (tmp_path / "status.json").write_text(
+        json.dumps({"generated_at": (now - timedelta(minutes=46)).isoformat()}),
+        encoding="utf-8",
+    )
+    assert collector_fresh(tmp_path, stale_minutes=45, now=now) is False
+    (tmp_path / "status.json").write_text(
+        json.dumps({"generated_at": "not-a-time"}), encoding="utf-8"
+    )
+    assert collector_fresh(tmp_path, stale_minutes=45, now=now) is False
 
 
 def test_archive_integrity_is_read_only_and_requires_discoveries_table(tmp_path):
