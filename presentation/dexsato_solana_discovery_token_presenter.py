@@ -724,6 +724,9 @@ def render_solana_discovery_token_page(
     )
     html = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>__SYMBOL__ · Solana Discovery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
 <script>try{const t=localStorage.getItem("dexsato-theme");if(t==="plain"||t==="intel")document.documentElement.dataset.theme=t;}catch(error){}</script>
 <style>
 :root{color-scheme:dark;--bg:#050b13;--panel:#091422;--panel2:#0d1b2d;--line:#20344b;--text:#f4f7fb;--muted:#91a8c5;--cyan:#0de6d1;--blue:#5a98ff;--amber:#ffb800;--green:#26d49a;--red:#ff5675;--display:"Bahnschrift SemiBold","Bahnschrift","Arial Narrow","Segoe UI",sans-serif;--ui:"Segoe UI Variable Text","Segoe UI",sans-serif;--mono:"Cascadia Mono","Consolas",monospace}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);font-size:15px;line-height:1.55}.shell{width:min(1180px,calc(100% - 32px));margin:auto;padding:20px 0 34px}.topbar{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:14px}.brand img{width:138px}.brand strong,h1,h2,h3,.value{font-family:var(--display)}a{color:#8ab9ff}.back{padding:8px 12px;border:1px solid var(--line);border-radius:6px;text-decoration:none;color:var(--text)}.hero{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:end;padding:28px 0 20px}.eyebrow{color:var(--cyan);font:700 11px var(--mono);letter-spacing:.12em;text-transform:uppercase}.hero h1{margin:5px 0 0;font-size:38px;line-height:1.05}.hero p{margin:8px 0 0;color:var(--muted)}.status{padding:12px 15px;border:1px solid var(--line);border-left:3px solid var(--green);background:var(--panel)}.status b,.status small{display:block}.status b{font-family:var(--mono)}.status small{color:var(--muted)}.identity,.chart-panel,.card{border:1px solid var(--line);background:var(--panel)}.identity{padding:20px}.identity-head{display:flex;justify-content:space-between;gap:18px}.identity h2{margin:0;font-size:25px}.identity .name{color:var(--muted)}.addresses{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:17px}.address{padding:12px;background:var(--panel2)}.address span,.metric span{display:block;color:var(--muted);font:700 10px var(--mono);text-transform:uppercase}.address code{display:block;margin-top:5px;font:12px var(--mono);overflow-wrap:anywhere}.chart-panel{margin-top:14px;padding:20px}.section-head{display:flex;justify-content:space-between;gap:15px;align-items:end}.section-head h2{margin:4px 0 0;font-size:23px}.section-head p{margin:4px 0 0;color:var(--muted)}.chart{display:block;width:100%;height:270px;margin-top:15px;background:var(--panel2);border:1px solid var(--line)}.chart line{stroke:var(--line);stroke-width:1}.chart polyline{fill:none;stroke:var(--cyan);stroke-width:3;vector-effect:non-scaling-stroke}.chart-empty{display:grid;place-items:center;min-height:240px;margin-top:15px;border:1px dashed var(--line);color:var(--amber);background:var(--panel2)}.grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-top:14px}.card{padding:18px}.card h3{margin:0 0 12px;font-size:18px}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{padding:13px;background:var(--panel2)}.metric .value{display:block;margin-top:5px;font-size:19px}.change.up{color:var(--green)}.change.down{color:var(--red)}.evidence{margin-top:14px;padding:15px;border-left:2px solid var(--cyan);background:var(--panel2)}.evidence strong{display:block;margin-bottom:5px}.risk{margin-top:12px;padding:15px;border-left:2px solid var(--amber);background:rgba(255,184,0,.06)}.risk strong{color:var(--amber)}.check{padding:9px 0;border-top:1px solid var(--line)}.check:before{content:"\\2713";margin-right:8px;color:var(--green)}.jupiter{border-left:2px solid #9b5cff}.jupiter .badge{display:inline-block;padding:5px 8px;border:1px solid #7c45c8;border-radius:999px;color:#c9a8ff;font:700 10px var(--mono)}.source{margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}footer{display:flex;justify-content:space-between;gap:20px;margin-top:18px;color:var(--muted);font-size:11px}
@@ -3623,6 +3626,93 @@ a.tw-market-dex:hover{color:#4CF4D6!important}
     animation:none!important;
   }
 }
+
+/* TW-UI-01 — Token Workspace typography and semantic design tokens.
+   Presentation-only: existing DOM, data hooks, chart, wallet and Jupiter behavior stay unchanged. */
+html{
+  --font-ui:"Inter","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --font-num:"JetBrains Mono","Cascadia Mono",Consolas,ui-monospace,monospace;
+}
+html:not([data-theme="plain"]){
+  --bg-0:#0A0D13;
+  --bg-1:#10141C;
+  --bg-2:#151B25;
+  --bg-3:#1B2230;
+  --line:rgba(255,255,255,.07);
+  --line-strong:rgba(255,255,255,.13);
+  --text-hi:#EDEFF3;
+  --text-mid:#A8AFBD;
+  --text-lo:#5E6577;
+  --brand:#4C8DFF;
+  --brand-dim:rgba(76,141,255,.20);
+  --buy:#2FD98A;
+  --buy-dim:rgba(47,217,138,.12);
+  --sell:#F65E6E;
+  --sell-dim:rgba(246,94,110,.12);
+  --radius-s:6px;
+  --radius-m:10px;
+}
+html:not([data-theme="plain"]) .tw-dex-app{
+  /* Map the existing presentation vocabulary onto the UI-01 semantic tokens. */
+  --bg:var(--bg-0);
+  --panel:var(--bg-2);
+  --panel2:var(--bg-3);
+  --text:var(--text-hi);
+  --muted:var(--text-mid);
+  --blue:var(--brand);
+  --cyan:var(--brand);
+  --green:var(--buy);
+  --red:var(--sell);
+  --display:var(--font-ui);
+  --ui:var(--font-ui);
+  --mono:var(--font-num);
+  color:var(--text-hi);
+}
+.tw-dex-app{
+  font-family:var(--font-ui);
+  font-synthesis:none;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+html:not([data-theme="plain"]) body{background:var(--bg-0);color:var(--text-hi);font-family:var(--font-ui)}
+.tw-dex-app button,
+.tw-dex-app input,
+.tw-dex-app select,
+.tw-dex-app textarea{font-family:var(--font-ui)}
+.tw-dex-app h1,
+.tw-dex-app h2,
+.tw-dex-app h3,
+.tw-dex-app .brand strong,
+.tw-dex-app .value{font-family:var(--font-ui)}
+.tw-dex-app .num,
+.tw-dex-app code,
+.tw-dex-app .tw-market-price strong,
+.tw-dex-app .tw-market-price .token-change,
+.tw-dex-app .tw-market-kpi strong,
+.tw-dex-app .tw-market-meta-cell code,
+.tw-dex-app .trader-tf-value,
+.tw-dex-app .coin-list-change,
+.tw-dex-app .candle-tf-button,
+.tw-dex-app .candle-ohlc,
+.tw-dex-app .candle-live-state,
+.tw-dex-app .candlestick-axis,
+.tw-dex-app .candlestick-axis-label,
+.tw-dex-app .candlestick-time-label,
+.tw-dex-app .candlestick-price-tag-text,
+.tw-dex-app .candlestick-cross-label-text,
+.tw-dex-app .trade-amount-row-v04 input,
+.tw-dex-app .trade-amount-row-v04 strong,
+.tw-dex-app .trade-quote-metric-v05 b,
+.tw-dex-app .quote-result,
+.tw-dex-app .transactions-table,
+.tw-dex-app .market-activity-table{
+  font-family:var(--font-num)!important;
+  font-variant-numeric:tabular-nums lining-nums;
+  font-feature-settings:"tnum" 1,"lnum" 1;
+  letter-spacing:-.01em;
+}
+.tw-dex-app .up{color:var(--buy)}
+.tw-dex-app .down{color:var(--sell)}
 </style>
 <script src="/static/vendor/lightweight-charts.standalone.production.js?v=5.2.1"></script>
 </head><body><div class="tw-dex-app">

@@ -1451,3 +1451,29 @@ def test_tw_dex_05a_polishes_market_activity_without_changing_data_contract():
     assert 'const specs=[["buys","activity-buys",activityNumber],["sells","activity-sells",activityNumber],["total_transactions","activity-total",activityNumber],["volume_usd","activity-volume",activityUsd]]' in html
     assert 'renderMarketActivity(payload.market_activity);' in html
     assert "const POLL_INTERVAL_MS=5000;" in html
+
+
+def test_tw_ui_01_loads_workspace_fonts_and_semantic_design_tokens_only():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-UI-01 — Token Workspace typography and semantic design tokens" in html
+    assert 'family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600' in html
+    assert '--bg-0:#0A0D13;' in html
+    assert '--bg-1:#10141C;' in html
+    assert '--bg-2:#151B25;' in html
+    assert '--bg-3:#1B2230;' in html
+    assert '--brand:#4C8DFF;' in html
+    assert '--buy:#2FD98A;' in html
+    assert '--sell:#F65E6E;' in html
+    assert '--font-ui:"Inter","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;' in html
+    assert '--font-num:"JetBrains Mono","Cascadia Mono",Consolas,ui-monospace,monospace;' in html
+    assert 'html:not([data-theme="plain"]) .tw-dex-app{' in html
+    assert 'font-variant-numeric:tabular-nums lining-nums;' in html
+
+    # UI-01 must preserve the production integration contract.
+    assert 'data-jupiter-sandbox' in html
+    assert 'data-connect-wallet' in html
+    assert 'data-get-quote' in html
+    assert 'data-execute-swap disabled' in html
+    assert 'data-candlestick-panel' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
