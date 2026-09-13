@@ -1477,3 +1477,73 @@ def test_tw_ui_01_loads_workspace_fonts_and_semantic_design_tokens_only():
     assert 'data-execute-swap disabled' in html
     assert 'data-candlestick-panel' in html
     assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
+
+
+def test_tw_ui_02_applies_shell_and_market_header_tokens_without_contract_changes():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-UI-02 — Application shell and market header" in html
+    assert 'html:not([data-theme="plain"]) .tw-dex-app{' in html
+    assert 'background:var(--bg-0)!important;' in html
+    assert 'html:not([data-theme="plain"]) .tw-dex-side{' in html
+    assert 'html:not([data-theme="plain"]) .tw-dex-topbar{' in html
+    assert 'html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a{' in html
+    assert 'html:not([data-theme="plain"]) .discovery-engine-v12{' in html
+    assert 'html:not([data-theme="plain"]) .tw-market-header{' in html
+    assert 'background:var(--brand-dim)!important;' in html
+    assert 'color:var(--buy)!important' in html
+    assert 'color:var(--sell)!important' in html
+
+    # UI-02 must not replace structure or production integration hooks.
+    assert 'class="tw-dex-app"' in html
+    assert 'class="token-overview-card tw-market-header"' in html
+    assert 'data-token-workspace-v26' in html
+    assert 'data-jupiter-sandbox' in html
+    assert 'data-connect-wallet' in html
+    assert 'data-get-quote' in html
+    assert 'data-execute-swap disabled' in html
+    assert 'data-candlestick-panel' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
+
+
+def test_tw_ui_02a1_enlarges_left_workspace_and_applies_documented_fonts_only():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-UI-02A.1 — Left workspace sizing and typography" in html
+    assert 'grid-template-columns:260px minmax(0,1fr) 340px!important;' in html
+    assert 'grid-template-columns:240px minmax(0,1fr) 320px!important;' in html
+    assert 'font-family:var(--font-ui)!important;' in html
+    assert 'font-family:var(--font-num)!important;' in html
+    assert 'font-size:14px!important;' in html
+    assert 'min-height:58px!important;' in html
+
+    # UI-02A.1 must not introduce the navigation drawer or alter app integrations.
+    assert "TW-UI-02A.2" not in html
+    assert 'data-navigation-toggle' not in html
+    assert 'data-jupiter-sandbox' in html
+    assert 'data-connect-wallet' in html
+    assert 'data-get-quote' in html
+    assert 'data-execute-swap disabled' in html
+    assert 'data-candlestick-panel' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
+
+
+def test_tw_ui_02a1b_makes_left_workspace_change_visually_distinct_only():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-UI-02A.1B — Stronger left workspace sizing and typography" in html
+    assert 'grid-template-columns:300px minmax(0,1fr) 340px!important;' in html
+    assert 'grid-template-columns:280px minmax(0,1fr) 320px!important;' in html
+    assert 'font-size:15px!important;' in html
+    assert 'min-height:62px!important;' in html
+    assert 'padding:10px 15px!important;' in html
+
+    # UI-02A.1B remains a CSS-only correction and preserves production hooks.
+    assert "TW-UI-02A.2" not in html
+    assert 'data-navigation-toggle' not in html
+    assert 'data-jupiter-sandbox' in html
+    assert 'data-connect-wallet' in html
+    assert 'data-get-quote' in html
+    assert 'data-execute-swap disabled' in html
+    assert 'data-candlestick-panel' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html

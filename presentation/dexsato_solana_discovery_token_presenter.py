@@ -3713,6 +3713,473 @@ html:not([data-theme="plain"]) body{background:var(--bg-0);color:var(--text-hi);
 }
 .tw-dex-app .up{color:var(--buy)}
 .tw-dex-app .down{color:var(--sell)}
+
+/* TW-UI-02 — Application shell and market header.
+   CSS-only: layout regions and existing production integration hooks remain unchanged. */
+html:not([data-theme="plain"]) .tw-dex-app{
+  background:var(--bg-0)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-side{
+  border-color:var(--line)!important;
+  background:var(--bg-1)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-side-brand{
+  border-color:var(--line)!important;
+  color:var(--text-hi)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-side-nav-v08c .tw-side-icon-v08c{
+  color:var(--text-lo)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-side-nav-v08c .tw-side-icon-v08c:hover{
+  color:var(--text-mid)!important;
+  background:var(--bg-3)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-side-nav-v08c .tw-side-icon-v08c.active{
+  color:var(--brand)!important;
+  background:var(--brand-dim)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-stage,
+html:not([data-theme="plain"]) .tw-dex-content{
+  background:var(--bg-0)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-topbar{
+  border-color:var(--line)!important;
+  background:rgba(16,20,28,.96)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-topbar .tw-dex-brand strong{
+  color:var(--text-hi)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-topbar .tw-dex-brand small{
+  color:var(--text-lo)!important;
+  font-size:9px;
+}
+html:not([data-theme="plain"]) .tw-header-search-v07c{
+  border-color:var(--line)!important;
+  background:var(--bg-2)!important;
+}
+html:not([data-theme="plain"]) .tw-header-search-v07c:focus-within{
+  border-color:var(--line-strong)!important;
+  box-shadow:0 0 0 2px var(--brand-dim);
+}
+html:not([data-theme="plain"]) .tw-header-search-icon-v07c,
+html:not([data-theme="plain"]) .tw-header-search-v07c input::placeholder{
+  color:var(--text-lo)!important;
+}
+html:not([data-theme="plain"]) .tw-header-search-v07c input{
+  color:var(--text-hi)!important;
+  font-family:var(--font-ui)!important;
+  font-size:12px!important;
+}
+html:not([data-theme="plain"]) .tw-header-gas-v07c{
+  border-color:var(--line)!important;
+  background:var(--bg-2)!important;
+  color:var(--text-mid)!important;
+  font-size:10px!important;
+}
+html:not([data-theme="plain"]) .tw-header-gas-v07c i{
+  background:var(--buy)!important;
+  box-shadow:0 0 0 3px var(--buy-dim)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-topbar .tw-header-wallet-v07b{
+  border-color:var(--brand)!important;
+  background:var(--brand)!important;
+  color:#07101F!important;
+  font-size:12px!important;
+}
+html:not([data-theme="plain"]) .tw-dex-topbar .tw-header-wallet-v07b.connected{
+  border-color:var(--line-strong)!important;
+  background:var(--brand-dim)!important;
+  color:var(--brand)!important;
+}
+
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a{
+  border-color:var(--line)!important;
+  background:var(--bg-2)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-head-v07a,
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-tabs-v07a,
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-search{
+  background:var(--bg-2)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-head-v07a h2{
+  color:var(--text-hi)!important;
+  font-family:var(--font-ui)!important;
+  font-size:13px!important;
+  letter-spacing:.02em!important;
+}
+html:not([data-theme="plain"]) .token-list-chain-v07a{
+  color:var(--text-mid)!important;
+}
+html:not([data-theme="plain"]) .token-list-tab-v07a{
+  border-color:var(--line)!important;
+  background:var(--bg-3)!important;
+  color:var(--text-mid)!important;
+  font-family:var(--font-ui)!important;
+  font-size:10px!important;
+}
+html:not([data-theme="plain"]) .token-list-tab-v07a.active{
+  border-color:var(--brand)!important;
+  background:var(--brand-dim)!important;
+  color:var(--brand)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-search input{
+  border-color:var(--line)!important;
+  background:var(--bg-0)!important;
+  color:var(--text-hi)!important;
+  font-family:var(--font-ui)!important;
+  font-size:11px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-search input:focus{
+  border-color:var(--line-strong)!important;
+  outline:2px solid var(--brand-dim);
+  outline-offset:0;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-rows,
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-row{
+  background:var(--bg-2)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-row{
+  border-color:var(--line)!important;
+  color:var(--text-hi)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-row:hover{
+  background:var(--bg-3)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-row.active{
+  background:var(--bg-3)!important;
+  box-shadow:inset 2px 0 var(--brand)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-avatar{
+  border-color:var(--line)!important;
+  background:var(--bg-3)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-identity strong{
+  color:var(--text-hi)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-identity small,
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-price-v10{
+  color:var(--text-mid)!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-change.up{color:var(--buy)!important}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-change.down{color:var(--sell)!important}
+
+html:not([data-theme="plain"]) .discovery-engine-v12{
+  border-color:var(--line-strong)!important;
+  background:radial-gradient(circle at 50% 0,var(--brand-dim),transparent 60%),var(--bg-2)!important;
+  color:var(--text-hi)!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12,
+html:not([data-theme="plain"]) .discovery-engine-result-v12,
+html:not([data-theme="plain"]) .discovery-engine-foot-v12{
+  border-color:var(--line)!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12 strong,
+html:not([data-theme="plain"]) .discovery-engine-result-v12>a,
+html:not([data-theme="plain"]) .discovery-engine-foot-v12 [data-engine-status]{
+  color:var(--brand)!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12 strong i{
+  background:var(--buy)!important;
+  box-shadow:0 0 0 3px var(--buy-dim);
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12 small,
+html:not([data-theme="plain"]) .discovery-engine-foot-v12,
+html:not([data-theme="plain"]) .discovery-engine-result-v12 small{
+  color:var(--text-mid)!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-result-v12>span{
+  color:var(--text-hi)!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-log-v12 p{
+  color:var(--text-lo)!important;
+  font-family:var(--font-num)!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-log-v12 p.active{
+  color:var(--brand)!important;
+  text-shadow:none!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-grid-v12{
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px)!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-beam-v12{
+  border-bottom-color:var(--brand)!important;
+  background:linear-gradient(to bottom,transparent,rgba(76,141,255,.04),rgba(76,141,255,.16))!important;
+  filter:none!important;
+}
+
+html:not([data-theme="plain"]) .tw-market-header{
+  border-color:var(--line)!important;
+  background:var(--bg-2)!important;
+  box-shadow:none!important;
+}
+html:not([data-theme="plain"]) .tw-market-top,
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-strip{
+  background:var(--bg-2)!important;
+}
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-strip{
+  border-top:1px solid var(--line)!important;
+}
+html:not([data-theme="plain"]) .tw-market-avatar{
+  border-color:var(--line-strong)!important;
+  background:var(--bg-3)!important;
+}
+html:not([data-theme="plain"]) .tw-market-identity-copy h1,
+html:not([data-theme="plain"]) .tw-market-price strong,
+html:not([data-theme="plain"]) .tw-market-kpi strong{
+  color:var(--text-hi)!important;
+}
+html:not([data-theme="plain"]) .tw-market-identity-copy>span{
+  color:var(--text-mid)!important;
+  font-size:10px!important;
+}
+html:not([data-theme="plain"]) .tw-market-price>span,
+html:not([data-theme="plain"]) .tw-market-kpi>span,
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-cell span{
+  color:var(--text-lo)!important;
+  font-size:9px!important;
+}
+html:not([data-theme="plain"]) .tw-market-kpi strong{font-size:13px!important}
+html:not([data-theme="plain"]) .tw-market-price .token-change.up,
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-value.up{color:var(--buy)!important}
+html:not([data-theme="plain"]) .tw-market-price .token-change.down,
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-value.down{color:var(--sell)!important}
+html:not([data-theme="plain"]) .tw-market-price .token-change.flat,
+html:not([data-theme="plain"]) .tw-market-price .token-change.unavailable,
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-value.unavailable{color:var(--text-mid)!important}
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-value{font-size:11px!important}
+html:not([data-theme="plain"]) .tw-market-dex{color:var(--text-hi)!important}
+html:not([data-theme="plain"]) a.tw-market-dex:hover,
+html:not([data-theme="plain"]) .tw-market-socials-v12 .token-info-link{
+  color:var(--brand)!important;
+}
+html:not([data-theme="plain"]) .tw-market-watch-icon-v07g{
+  border:1px solid var(--line)!important;
+  color:var(--text-mid)!important;
+}
+html:not([data-theme="plain"]) .tw-market-watch-icon-v07g:hover,
+html:not([data-theme="plain"]) .tw-market-watch-icon-v07g.active{
+  border-color:var(--line-strong)!important;
+  background:var(--brand-dim)!important;
+  color:var(--brand)!important;
+}
+
+/* TW-UI-02A.1 — Left workspace sizing and typography.
+   CSS-only: navigation visibility, data, routes and application behavior remain unchanged. */
+@media(min-width:1451px){
+  .tw-dex-content .token-workspace-v26{
+    grid-template-columns:260px minmax(0,1fr) 340px!important;
+  }
+}
+@media(min-width:1181px) and (max-width:1450px){
+  .tw-dex-content .token-workspace-v26{
+    grid-template-columns:240px minmax(0,1fr) 320px!important;
+  }
+}
+html:not([data-theme="plain"]) .workspace-left-v26{
+  min-width:0;
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12,
+html:not([data-theme="plain"]) .discovery-engine-foot-v12{
+  padding:11px 14px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12 strong{
+  gap:8px!important;
+  font-family:var(--font-ui)!important;
+  font-size:12px!important;
+  font-weight:700!important;
+  line-height:1.25!important;
+  letter-spacing:.035em!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12 small{
+  max-width:86px;
+  font-family:var(--font-num)!important;
+  font-size:9px!important;
+  font-weight:500!important;
+  line-height:1.4!important;
+  text-align:right;
+}
+html:not([data-theme="plain"]) .discovery-engine-screen-v12{
+  min-height:118px!important;
+  padding:14px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-log-v12 p{
+  margin-bottom:8px!important;
+  font-family:var(--font-num)!important;
+  font-size:10px!important;
+  font-weight:500!important;
+  line-height:1.55!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-result-v12{
+  padding:12px 14px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-result-v12>span{
+  font-family:var(--font-ui)!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  letter-spacing:.035em!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-result-v12>a{
+  font-family:var(--font-ui)!important;
+  font-size:12px!important;
+  font-weight:700!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-result-v12 small{
+  margin-top:7px!important;
+  font-family:var(--font-ui)!important;
+  font-size:10px!important;
+  line-height:1.55!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-foot-v12{
+  font-family:var(--font-num)!important;
+  font-size:9px!important;
+  font-weight:500!important;
+  line-height:1.35!important;
+}
+
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-head-v07a{
+  padding:15px 14px 10px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-head-v07a h2{
+  font-family:var(--font-ui)!important;
+  font-size:14px!important;
+  font-weight:700!important;
+  line-height:1.25!important;
+  letter-spacing:.01em!important;
+}
+html:not([data-theme="plain"]) .token-list-chain-v07a{
+  font-family:var(--font-num)!important;
+  font-size:9px!important;
+  font-weight:600!important;
+}
+html:not([data-theme="plain"]) .token-list-tabs-v07a{
+  gap:7px!important;
+  padding:0 14px 11px!important;
+}
+html:not([data-theme="plain"]) .token-list-tab-v07a{
+  min-height:31px!important;
+  padding:6px 11px!important;
+  font-family:var(--font-ui)!important;
+  font-size:11px!important;
+  font-weight:600!important;
+  line-height:1.2!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-search{
+  padding:0 14px 12px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-search input{
+  min-height:36px!important;
+  padding:9px 11px!important;
+  font-family:var(--font-ui)!important;
+  font-size:11px!important;
+  font-weight:400!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-row-v10{
+  min-height:58px!important;
+  padding:9px 13px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-identity strong{
+  font-family:var(--font-ui)!important;
+  font-size:12px!important;
+  font-weight:700!important;
+  line-height:1.3!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-pair-v10{
+  font-family:var(--font-num)!important;
+  font-size:9px!important;
+  font-weight:500!important;
+  line-height:1.3!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-price-v10{
+  font-family:var(--font-num)!important;
+  font-size:10px!important;
+  font-weight:500!important;
+  line-height:1.3!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-change{
+  font-family:var(--font-num)!important;
+  font-size:10.5px!important;
+  font-weight:600!important;
+  line-height:1.3!important;
+}
+
+/* TW-UI-02A.1B — Stronger left workspace sizing and typography.
+   Visual correction only: application structure, navigation and integrations remain unchanged. */
+@media(min-width:1451px){
+  .tw-dex-content .token-workspace-v26{
+    grid-template-columns:300px minmax(0,1fr) 340px!important;
+  }
+}
+@media(min-width:1181px) and (max-width:1450px){
+  .tw-dex-content .token-workspace-v26{
+    grid-template-columns:280px minmax(0,1fr) 320px!important;
+  }
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12{
+  padding:13px 16px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12 strong{
+  font-size:13px!important;
+  letter-spacing:.045em!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-head-v12 small{
+  max-width:104px!important;
+  font-size:10px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-screen-v12{
+  min-height:126px!important;
+  padding:16px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-log-v12 p{
+  font-size:11px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-result-v12{
+  padding:14px 16px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-result-v12>span,
+html:not([data-theme="plain"]) .discovery-engine-result-v12>a{
+  font-size:12px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-result-v12 small{
+  font-size:11px!important;
+}
+html:not([data-theme="plain"]) .discovery-engine-foot-v12{
+  padding:12px 16px!important;
+  font-size:10px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-head-v07a{
+  padding:17px 16px 12px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-head-v07a h2{
+  font-size:15px!important;
+}
+html:not([data-theme="plain"]) .token-list-chain-v07a{
+  font-size:10px!important;
+}
+html:not([data-theme="plain"]) .token-list-tabs-v07a{
+  padding:0 16px 12px!important;
+}
+html:not([data-theme="plain"]) .token-list-tab-v07a{
+  min-height:33px!important;
+  font-size:12px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-search{
+  padding:0 16px 14px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-search input{
+  min-height:38px!important;
+  font-size:12px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-row-v10{
+  min-height:62px!important;
+  padding:10px 15px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-identity strong{
+  font-size:13px!important;
+}
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .coin-list-price-v10,
+html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-row-v10 .coin-list-change{
+  font-size:11px!important;
+}
 </style>
 <script src="/static/vendor/lightweight-charts.standalone.production.js?v=5.2.1"></script>
 </head><body><div class="tw-dex-app">
