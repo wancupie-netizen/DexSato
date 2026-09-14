@@ -4265,6 +4265,157 @@ html:not([data-theme="plain"]) .workspace-left-v26>.token-list-v07a .token-list-
   .tw-navigation-toggle-v02a2 svg,
   .tw-dex-side-nav-v08c{transition:none!important}
 }
+
+/* TW-UI-02B — Market header layout and background.
+   CSS-only: market values, chart controls, reset behavior and data hooks remain unchanged. */
+html:not([data-theme="plain"]) .tw-market-header{
+  border-radius:0!important;
+  background:var(--bg-0)!important;
+}
+html:not([data-theme="plain"]) .tw-market-top,
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-strip{
+  background:var(--bg-0)!important;
+}
+html:not([data-theme="plain"]) .tw-market-top{
+  min-height:100px;
+  align-items:stretch;
+}
+html:not([data-theme="plain"]) .tw-market-top>div{
+  padding:18px 22px!important;
+  border-right:0!important;
+}
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-strip{
+  border-top:1px solid var(--line)!important;
+}
+html:not([data-theme="plain"]) .tw-dex-content .candlestick-panel{
+  margin-top:0!important;
+  border-top:0!important;
+  border-radius:0!important;
+}
+html:not([data-theme="plain"]) .tw-dex-content .candle-toolbar,
+html:not([data-theme="plain"]) .tw-dex-content .candle-timeframe-tabs{
+  background:var(--bg-0)!important;
+}
+
+@media(min-width:1451px){
+  html:not([data-theme="plain"]) .tw-market-top{
+    grid-template-columns:218px 170px 130px 150px 150px 160px!important;
+    justify-content:start;
+  }
+}
+@media(min-width:1181px) and (max-width:1450px){
+  html:not([data-theme="plain"]) .tw-market-top{
+    grid-template-columns:minmax(190px,1.25fr) minmax(145px,1fr) repeat(4,minmax(75px,.7fr))!important;
+  }
+  html:not([data-theme="plain"]) .tw-market-top>.tw-market-kpi:nth-last-child(-n+2){
+    display:block!important;
+  }
+  html:not([data-theme="plain"]) .tw-market-top>div{
+    padding-right:12px!important;
+    padding-left:12px!important;
+  }
+}
+@media(min-width:821px){
+  html:not([data-theme="plain"]) .tw-market-header .trader-tf-strip{
+    display:flex!important;
+    align-items:flex-start;
+    justify-content:flex-start;
+    gap:26px;
+    padding:12px 22px 13px!important;
+  }
+  html:not([data-theme="plain"]) .tw-market-header .trader-tf-cell{
+    flex:0 0 42px;
+    width:42px;
+    padding:0!important;
+    border:0!important;
+  }
+  html:not([data-theme="plain"]) .tw-dex-content .candle-toolbar{
+    justify-content:flex-start!important;
+    gap:0!important;
+  }
+  html:not([data-theme="plain"]) .tw-dex-content .candle-timeframe-tabs{
+    flex:0 0 auto!important;
+    padding:10px 22px!important;
+  }
+  html:not([data-theme="plain"]) .tw-dex-content .candle-toolbar-actions{
+    flex:1 1 auto;
+    justify-content:flex-start!important;
+    padding:10px 12px 10px 0!important;
+  }
+  html:not([data-theme="plain"]) .tw-dex-content .candle-live-state{
+    margin-left:auto;
+  }
+}
+
+/* TW-UI-02B.2 — Market header typography and identity width.
+   CSS-only: displayed values, timeframe data and chart behavior remain unchanged. */
+html:not([data-theme="plain"]) .tw-market-price>span,
+html:not([data-theme="plain"]) .tw-market-kpi>span{
+  font-family:var(--font-ui)!important;
+  font-size:10px!important;
+  font-weight:700!important;
+  line-height:1.25!important;
+  letter-spacing:.045em!important;
+}
+html:not([data-theme="plain"]) .tw-market-price strong,
+html:not([data-theme="plain"]) .tw-market-kpi strong{
+  margin-top:7px!important;
+  font-family:var(--font-num)!important;
+  font-size:16px!important;
+  font-weight:700!important;
+  line-height:1.25!important;
+}
+html:not([data-theme="plain"]) .tw-market-kpi .tw-market-dex{
+  font-family:var(--font-ui)!important;
+}
+html:not([data-theme="plain"]) .tw-market-price .token-change{
+  margin-top:6px!important;
+  font-size:11.5px!important;
+  font-weight:700!important;
+}
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-cell span{
+  font-family:var(--font-ui)!important;
+  font-size:10px!important;
+  font-weight:700!important;
+  line-height:1.25!important;
+}
+html:not([data-theme="plain"]) .tw-market-header .trader-tf-value{
+  margin-top:6px!important;
+  font-family:var(--font-num)!important;
+  font-size:13px!important;
+  font-weight:700!important;
+  line-height:1.25!important;
+}
+html:not([data-theme="plain"]) .tw-dex-content .candle-tf-button{
+  font-size:12px!important;
+  font-weight:650!important;
+}
+html:not([data-theme="plain"]) .tw-dex-content .candle-ohlc{
+  font-size:11px!important;
+  font-weight:600!important;
+}
+html:not([data-theme="plain"]) .tw-dex-content .candle-ohlc b{
+  font-weight:700!important;
+}
+
+@media(min-width:1451px){
+  html:not([data-theme="plain"]) .tw-market-top{
+    grid-template-columns:260px 180px 145px 145px 155px 170px!important;
+  }
+}
+@media(min-width:821px){
+  html:not([data-theme="plain"]) .tw-market-identity-copy h1{
+    overflow:visible!important;
+    text-overflow:clip!important;
+    white-space:nowrap!important;
+  }
+  html:not([data-theme="plain"]) .tw-market-identity-copy>span{
+    overflow:visible!important;
+    text-overflow:clip!important;
+    white-space:normal!important;
+    line-height:1.35!important;
+  }
+}
 </style>
 <script src="/static/vendor/lightweight-charts.standalone.production.js?v=5.2.1"></script>
 </head><body><div class="tw-dex-app">

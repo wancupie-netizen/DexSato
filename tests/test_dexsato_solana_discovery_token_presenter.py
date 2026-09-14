@@ -1570,3 +1570,79 @@ def test_tw_ui_02a2_adds_collapsible_navigation_without_contract_changes():
     assert 'data-execute-swap disabled' in html
     assert 'data-candlestick-panel' in html
     assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
+
+
+def test_tw_ui_02b_repositions_market_header_on_black_without_contract_changes():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-UI-02B — Market header layout and background" in html
+    assert 'background:var(--bg-0)!important;' in html
+    assert 'grid-template-columns:218px 170px 130px 150px 150px 160px!important;' in html
+    assert 'display:flex!important;' in html
+    assert 'gap:26px;' in html
+    assert 'justify-content:flex-start!important;' in html
+    assert 'margin-left:auto;' in html
+    assert 'border-radius:0!important;' in html
+
+    # UI-02B must retain every market datum and chart interaction hook.
+    assert 'PRICE · USD' in html
+    assert 'DEX VENUE' in html
+    assert 'AGE' in html
+    assert 'LIQUIDITY' in html
+    assert 'VOLUME · 24H' in html
+    assert 'data-timeframe="1m"' in html
+    assert 'data-timeframe="4H"' in html
+    assert 'data-candle-timeframe="5m"' in html
+    assert 'data-ohlc-open' in html
+    assert 'data-ohlc-volume' in html
+    assert 'data-candle-live-state' in html
+    assert 'data-candle-reset' in html
+    assert 'data-candlestick-panel' in html
+
+    # Production trade, wallet and external script contracts remain intact.
+    assert 'data-jupiter-sandbox' in html
+    assert 'data-connect-wallet' in html
+    assert 'data-get-quote' in html
+    assert 'data-execute-swap disabled' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
+
+
+def test_tw_ui_02b2_strengthens_market_header_typography_without_data_changes():
+    html = render_solana_discovery_token_page(DETAIL)
+
+    assert "TW-UI-02B.2 — Market header typography and identity width" in html
+    assert 'grid-template-columns:260px 180px 145px 145px 155px 170px!important;' in html
+    assert 'overflow:visible!important;' in html
+    assert 'text-overflow:clip!important;' in html
+    assert 'font-size:16px!important;' in html
+    assert 'font-size:13px!important;' in html
+    assert 'font-size:12px!important;' in html
+    assert 'font-size:11.5px!important;' in html
+    assert 'font-size:11px!important;' in html
+    assert 'font-size:10px!important;' in html
+    assert 'font-weight:700!important;' in html
+
+    # All existing market values and controls remain rendered from the same contract.
+    assert "TEST / SOL" in html
+    assert "Test Token · Raydium exact pool" in html
+    assert 'PRICE · USD' in html
+    assert 'DEX VENUE' in html
+    assert 'AGE' in html
+    assert 'LIQUIDITY' in html
+    assert 'VOLUME · 24H' in html
+    assert 'data-timeframe="1m"' in html
+    assert 'data-timeframe="4H"' in html
+    assert 'data-candle-timeframe="1m"' in html
+    assert 'data-candle-timeframe="4H"' in html
+    assert 'data-ohlc-open' in html
+    assert 'data-ohlc-volume' in html
+    assert 'data-candle-live-state' in html
+    assert 'data-candle-reset' in html
+
+    # Trade, wallet, chart and external script integration hooks remain intact.
+    assert 'data-jupiter-sandbox' in html
+    assert 'data-connect-wallet' in html
+    assert 'data-get-quote' in html
+    assert 'data-execute-swap disabled' in html
+    assert 'data-candlestick-panel' in html
+    assert 'src="/static/js/dexsato_solana_discovery_swap.js?v=tw-dex-09" defer' in html
