@@ -956,9 +956,15 @@ def _normalize_birdeye_exact_pool_trade(
         price_usd = _number(row.get("tokenPrice", row.get("token_price")))
     volume_usd = _number(row.get("volumeUSD", row.get("volume_usd")))
 
-    if token_amount is None or price_usd is None or volume_usd is None:
+    if token_amount is None or price_usd is None:
         return None
     token_amount = abs(token_amount)
+    # TW-DATA-01B_BIRDEYE_FROM_TO_VOLUME
+    # Birdeye's live /defi/txs/pair shape does not always include volumeUSD.
+    # The selected token leg still proves both amount and USD unit price, so
+    # derive the same notional deterministically instead of discarding the row.
+    if volume_usd is None:
+        volume_usd = token_amount * price_usd
     if price_usd < 0 or volume_usd < 0:
         return None
 

@@ -635,6 +635,44 @@ def test_birdeye_trade_fallback_rejects_wrong_pool_and_wrong_token():
     wrong_token["to"] = {"address": "other-token", "uiAmount": 1, "price": 1}
     assert normalize({"success": True, "data": {"items": [wrong_token]}}, TOKEN, POOL) == []
 
+def test_birdeye_live_from_to_shape_derives_missing_volume_usd():
+    """Accept the observed pair endpoint shape without fabricating trade data."""
+    normalize = token_service._normalize_birdeye_exact_pool_trades
+    payload = {
+        "success": True,
+        "data": {"items": [{
+            "address": POOL,
+            "blockUnixTime": 1789393329,
+            "from": {
+                "address": TOKEN,
+                "price": 0.00019000773344855,
+                "uiAmount": 897396.188856188,
+                "uiChangeAmount": -897396.188856188,
+            },
+            "owner": "wallet-live",
+            "source": "raydium_clamm",
+            "to": {
+                "address": "quote-token",
+                "price": 2.0605646379105216,
+                "uiAmount": 82.7502388,
+                "uiChangeAmount": 82.7502388,
+            },
+            "txHash": "birdeye-live-tx",
+            "txType": "swap",
+        }]},
+    }
+
+    result = normalize(payload, TOKEN, POOL)
+
+    assert len(result) == 1
+    trade = result[0]
+    assert trade["side"] == "SELL"
+    assert trade["token_amount"] == 897396.188856188
+    assert trade["price_usd"] == 0.00019000773344855
+    assert abs(trade["volume_usd"] - 170.5122158499312) < 1e-9
+    assert trade["trader"] == "wallet-live"
+    assert trade["timestamp"] == "2026-09-14T13:42:09Z"
+
 
 
 # TRANSACTIONS_FEED_V123_PROVIDER_RESILIENCE
