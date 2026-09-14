@@ -855,8 +855,8 @@ def test_transactions_feed_v122_compacts_rows_without_vertical_scroll_trap():
     assert "MAX_VISIBLE_TRANSACTIONS=30" in html
     assert "rows.slice(0,MAX_VISIBLE_TRANSACTIONS)" in html
     assert "visibleRows.forEach" in html
-    # v1.3 owns loaded-state presentation through LIVE/STALE.
-    assert 'setTransactionState(payload.stale===true?"STALE":"LIVE",shown)' in html
+    # Loaded state distinguishes real rows, an honest empty payload, and failure.
+    assert 'payload.stale===true?"STALE":(shown?"LIVE":"NO_DATA")' in html
     assert "setInterval(loadTransactions" not in html
 
 
@@ -952,7 +952,7 @@ def test_transactions_feed_v13_live_polling_preserves_rows_on_failure():
     loader = html[loader_start:loader_end]
     assert "tbody.replaceChildren();" not in loader
 
-    assert 'setTransactionState(payload.stale===true?"STALE":"LIVE",shown)' in html
+    assert 'payload.stale===true?"STALE":(shown?"LIVE":"NO_DATA")' in html
     assert 'setTransactionState("STALE",existingCount)' in html
 
 
@@ -985,7 +985,7 @@ def test_transactions_feed_v14_renders_freshness_diagnostics():
     assert 'detail.push("stale fallback")' in html
 
     state_pos = html.index(
-        'setTransactionState(payload.stale===true?"STALE":"LIVE",shown)'
+        'payload.stale===true?"STALE":(shown?"LIVE":"NO_DATA")'
     )
     diagnostics_pos = html.index("applyFreshnessDiagnostics(payload);")
     assert state_pos < diagnostics_pos
@@ -1002,7 +1002,22 @@ def test_transactions_feed_v141_hides_internal_row_count_from_user_status():
     assert 'state.textContent=shown ? shown+" recent · LIVE" : "LIVE"' not in html
     assert 'state.textContent=shown ? shown+" recent · STALE" : "STALE"' not in html
     assert 'state.textContent="LIVE"' in html
+    assert 'state.textContent="NO DATA"' in html
     assert 'state.textContent="STALE"' in html
+
+
+def test_tw_data_01a_marks_successful_empty_payload_as_no_data():
+    detail = dict(DETAIL)
+    detail["candlestick_timeframes"] = {
+        timeframe: [] for timeframe in ("1m", "5m", "15m", "30m", "1H", "4H")
+    }
+    html = render_solana_discovery_token_page(detail)
+
+    assert "TW-DATA-01A_HONEST_EMPTY_STATE" in html
+    assert '<i aria-hidden="true"></i>NO DATA' in html
+    assert 'setLiveState(incoming.length?"LIVE":"NO_DATA")' in html
+    assert 'setLiveState("NO_DATA")' in html
+    assert 'payload.stale===true?"STALE":(shown?"LIVE":"NO_DATA")' in html
 
     assert '"Last trade "+lastTradeAge' in html
     assert '"API age "+apiAge' in html

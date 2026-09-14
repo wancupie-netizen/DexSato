@@ -542,6 +542,100 @@ def test_transactions_service_fails_closed_for_malformed_provider_payload():
     assert result["transactions"] == []
 
 
+# TW-DATA-01A_EXACT_POOL_FALLBACK
+def test_empty_gecko_ohlcv_uses_configured_birdeye_exact_pair(monkeypatch):
+    from application.solana_discovery_token_service import _minute_candles_provider
+
+    monkeypatch.setenv("BIRDEYE_API_KEY", "server-side-test-key")
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        if "geckoterminal" in url:
+            return Response({"data": {"attributes": {"ohlcv_list": []}}})
+        return Response({
+            "success": True,
+            "data": {"items": [
+                {"unixTime": 1700000060, "o": 1.1, "h": 1.3, "l": 1.0, "c": 1.2, "v": 20},
+                {"unixTime": 1700000000, "o": 1.0, "h": 1.2, "l": 0.9, "c": 1.1, "v": 10},
+            ]},
+        })
+
+    rows = _minute_candles_provider(FEED["candidates"][0], get)
+
+    assert [row["time"] for row in rows] == [1700000000.0, 1700000060.0]
+    assert len(calls) == 2
+    fallback_url, fallback_kwargs = calls[1]
+    assert fallback_url == token_service.BIRDEYE_OHLCV_PAIR_URL
+    assert fallback_kwargs["params"]["address"] == POOL
+    assert fallback_kwargs["params"]["type"] == "1m"
+    assert fallback_kwargs["headers"] == {
+        "X-API-KEY": "server-side-test-key", "x-chain": "solana",
+    }
+
+
+def test_empty_gecko_transactions_use_birdeye_exact_pool_only(monkeypatch):
+    from application.solana_discovery_token_service import load_solana_discovery_transactions
+
+    monkeypatch.setenv("BIRDEYE_API_KEY", "server-side-test-key")
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        if url == token_service.BIRDEYE_TRADES_PAIR_URL:
+            return Response({
+                "success": True,
+                "data": {"items": [{
+                    "poolId": POOL,
+                    "txHash": "birdeye-tx-1",
+                    "blockUnixTime": 1700000000,
+                    "owner": "wallet-1",
+                    "volumeUSD": 12.5,
+                    "from": {"address": "quote-token", "uiAmount": 0.5, "price": 25},
+                    "to": {"address": TOKEN, "uiAmount": 125, "price": 0.1},
+                }]},
+            })
+        if url.endswith(f"/pools/{POOL}/trades"):
+            return Response({"data": []})
+        return Response({"data": {"id": f"solana_{POOL}", "attributes": {"address": POOL}}})
+
+    result = load_solana_discovery_transactions(TOKEN, feed=FEED, request_get=get)
+
+    assert result is not None
+    assert result["source"] == "Birdeye exact-pool trades fallback"
+    assert result["transactions"] == [{
+        "id": "birdeye-tx-1",
+        "tx_hash": "birdeye-tx-1",
+        "timestamp": "2023-11-14T22:13:20Z",
+        "trader": "wallet-1",
+        "side": "BUY",
+        "price_usd": 0.1,
+        "token_amount": 125.0,
+        "volume_usd": 12.5,
+    }]
+    fallback_calls = [item for item in calls if item[0] == token_service.BIRDEYE_TRADES_PAIR_URL]
+    assert len(fallback_calls) == 1
+    assert fallback_calls[0][1]["params"]["address"] == POOL
+
+
+def test_birdeye_trade_fallback_rejects_wrong_pool_and_wrong_token():
+    normalize = token_service._normalize_birdeye_exact_pool_trades
+    valid_shape = {
+        "poolId": "wrong-pool",
+        "txHash": "tx",
+        "blockUnixTime": 1700000000,
+        "volumeUSD": 1,
+        "from": {"address": "quote", "uiAmount": 1, "price": 1},
+        "to": {"address": TOKEN, "uiAmount": 1, "price": 1},
+    }
+    assert normalize({"success": True, "data": {"items": [valid_shape]}}, TOKEN, POOL) == []
+
+    wrong_token = dict(valid_shape)
+    wrong_token["poolId"] = POOL
+    wrong_token["to"] = {"address": "other-token", "uiAmount": 1, "price": 1}
+    assert normalize({"success": True, "data": {"items": [wrong_token]}}, TOKEN, POOL) == []
+
+
 
 # TRANSACTIONS_FEED_V123_PROVIDER_RESILIENCE
 def test_provider_resilience_reuses_minute_ohlcv_cache(monkeypatch):
@@ -1086,4 +1180,3 @@ def test_tw_sec_008_policy_and_tw_sec_004_invariants():
     assert service.MAX_LIVE_PAIR_CACHE_ENTRIES == 500
     assert service.LIVE_PAIR_STALE_SECONDS == 30.0
     assert service.LIVE_PAIR_TTL_SECONDS == 5.0
-

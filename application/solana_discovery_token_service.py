@@ -44,6 +44,11 @@ GECKO_MINUTE_OHLCV_URL = (
     "https://api.geckoterminal.com/api/v2/networks/solana/pools/"
     "{pair_address}/ohlcv/minute"
 )
+
+# TW-DATA-01A_EXACT_POOL_FALLBACK
+BIRDEYE_OHLCV_PAIR_URL = "https://public-api.birdeye.so/defi/ohlcv/pair"
+BIRDEYE_TRADES_PAIR_URL = "https://public-api.birdeye.so/defi/txs/pair"
+BIRDEYE_OHLCV_SECONDS = {"1m": 60, "1H": 3600, "4H": 14400}
 TRADER_TIMEFRAME_MINUTES = {
     "change_1m": 1,
     "change_5m": 5,
@@ -99,6 +104,66 @@ def _normalize_ohlcv_rows(rows: Any) -> list[dict[str, float]]:
         })
 
     return [candles_by_time[timestamp] for timestamp in sorted(candles_by_time)]
+
+
+def _birdeye_api_key() -> str:
+    """Return the server-side provider key without ever exposing it downstream."""
+    return os.getenv("BIRDEYE_API_KEY", "").strip()
+
+
+def _normalize_birdeye_ohlcv(payload: Any) -> list[dict[str, float]]:
+    """Translate Birdeye pair candles into the existing strict candle contract."""
+    if not isinstance(payload, dict) or payload.get("success") is not True:
+        return []
+    data = payload.get("data")
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return []
+
+    rows: list[list[Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        rows.append([
+            item.get("unixTime", item.get("unix_time")),
+            item.get("o", item.get("open")),
+            item.get("h", item.get("high")),
+            item.get("l", item.get("low")),
+            item.get("c", item.get("close")),
+            item.get("v", item.get("volume")),
+        ])
+    return _normalize_ohlcv_rows(rows)
+
+
+def _birdeye_ohlcv_provider(
+    candidate: dict[str, Any],
+    request_get: Callable[..., Any],
+    *,
+    timeframe: str,
+    limit: int,
+) -> list[dict[str, float]]:
+    """Read exact-pair OHLCV only when the configured fallback is available."""
+    pair_address = str(candidate.get("pair_address") or "")
+    api_key = _birdeye_api_key()
+    seconds = BIRDEYE_OHLCV_SECONDS.get(timeframe)
+    if not pair_address or not api_key or seconds is None:
+        return []
+
+    time_to = int(datetime.now(timezone.utc).timestamp())
+    time_from = max(1, time_to - (seconds * max(2, limit + 2)))
+    response = request_get(
+        BIRDEYE_OHLCV_PAIR_URL,
+        params={
+            "address": pair_address,
+            "type": timeframe,
+            "time_from": time_from,
+            "time_to": time_to,
+        },
+        headers={"X-API-KEY": api_key, "x-chain": "solana"},
+        timeout=10,
+    )
+    response.raise_for_status()
+    return _normalize_birdeye_ohlcv(response.json())[-limit:]
 
 
 # TOKEN_OBSERVATION_V28_ONCHAIN_AUTHORITY
@@ -305,7 +370,15 @@ def _chart_provider(candidate: dict[str, Any], request_get: Callable[..., Any]) 
     data = payload.get("data") if isinstance(payload, dict) else None
     attributes = data.get("attributes") if isinstance(data, dict) else None
     rows = attributes.get("ohlcv_list") if isinstance(attributes, dict) else None
-    return _normalize_ohlcv_rows(rows)
+    primary = _normalize_ohlcv_rows(rows)
+    if primary:
+        return primary
+    try:
+        return _birdeye_ohlcv_provider(
+            candidate, request_get, timeframe="4H", limit=90,
+        )
+    except (requests.RequestException, RuntimeError, TypeError, ValueError):
+        return []
 
 
 
@@ -332,7 +405,15 @@ def _minute_candles_provider(
     data = payload.get("data") if isinstance(payload, dict) else None
     attributes = data.get("attributes") if isinstance(data, dict) else None
     rows = attributes.get("ohlcv_list") if isinstance(attributes, dict) else None
-    return _normalize_ohlcv_rows(rows)
+    primary = _normalize_ohlcv_rows(rows)
+    if primary:
+        return primary
+    try:
+        return _birdeye_ohlcv_provider(
+            candidate, request_get, timeframe="1m", limit=300,
+        )
+    except (requests.RequestException, RuntimeError, TypeError, ValueError):
+        return []
 
 
 def _change_between(newer: float, older: float) -> float | None:
@@ -442,7 +523,15 @@ def _hourly_candles_provider(
     data = payload.get("data") if isinstance(payload, dict) else None
     attributes = data.get("attributes") if isinstance(data, dict) else None
     rows = attributes.get("ohlcv_list") if isinstance(attributes, dict) else None
-    return _normalize_ohlcv_rows(rows)
+    primary = _normalize_ohlcv_rows(rows)
+    if primary:
+        return primary
+    try:
+        return _birdeye_ohlcv_provider(
+            candidate, request_get, timeframe="1H", limit=120,
+        )
+    except (requests.RequestException, RuntimeError, TypeError, ValueError):
+        return []
 
 
 
@@ -815,6 +904,137 @@ def _normalize_exact_pool_trades(payload: Any, token_address: str) -> list[dict[
     return transactions
 
 
+def _birdeye_asset_address(asset: Any) -> str:
+    if not isinstance(asset, dict):
+        return ""
+    return str(asset.get("address") or asset.get("mint") or "").strip()
+
+
+def _birdeye_asset_number(asset: Any, *keys: str) -> float | None:
+    if not isinstance(asset, dict):
+        return None
+    for key in keys:
+        value = _number(asset.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _normalize_birdeye_exact_pool_trade(
+    row: dict[str, Any], token_address: str, pair_address: str,
+) -> dict[str, Any] | None:
+    """Fail closed unless the Birdeye row proves both pool and token identity."""
+    returned_pool = str(
+        row.get("poolId") or row.get("pool_id")
+        or row.get("poolAddress") or row.get("pool_address")
+        or row.get("address") or ""
+    ).strip()
+    if returned_pool != pair_address:
+        return None
+
+    tx_hash = str(row.get("txHash") or row.get("tx_hash") or "").strip()
+    timestamp_value = _number(row.get("blockUnixTime", row.get("block_unix_time")))
+    if not tx_hash or timestamp_value is None or timestamp_value <= 0:
+        return None
+
+    from_asset = row.get("from")
+    to_asset = row.get("to")
+    if _birdeye_asset_address(to_asset) == token_address:
+        side, token_asset = "BUY", to_asset
+    elif _birdeye_asset_address(from_asset) == token_address:
+        side, token_asset = "SELL", from_asset
+    else:
+        return None
+
+    token_amount = _birdeye_asset_number(
+        token_asset, "uiAmount", "ui_amount", "uiChangeAmount", "ui_change_amount",
+    )
+    price_usd = _birdeye_asset_number(
+        token_asset, "price", "nearestPrice", "nearest_price",
+    )
+    if price_usd is None:
+        price_usd = _number(row.get("tokenPrice", row.get("token_price")))
+    volume_usd = _number(row.get("volumeUSD", row.get("volume_usd")))
+
+    if token_amount is None or price_usd is None or volume_usd is None:
+        return None
+    token_amount = abs(token_amount)
+    if price_usd < 0 or volume_usd < 0:
+        return None
+
+    instruction = str(row.get("insIndex", row.get("ins_index", "")))
+    inner_instruction = str(row.get("innerInsIndex", row.get("inner_ins_index", "")))
+    identity = ":".join(
+        part for part in (tx_hash, instruction, inner_instruction) if part != ""
+    )
+    observed = datetime.fromtimestamp(timestamp_value, tz=timezone.utc)
+    return {
+        "id": identity,
+        "tx_hash": tx_hash,
+        "timestamp": observed.isoformat().replace("+00:00", "Z"),
+        "trader": str(row.get("owner") or "").strip() or None,
+        "side": side,
+        "price_usd": price_usd,
+        "token_amount": token_amount,
+        "volume_usd": volume_usd,
+    }
+
+
+def _normalize_birdeye_exact_pool_trades(
+    payload: Any, token_address: str, pair_address: str,
+) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict) or payload.get("success") is not True:
+        return []
+    data = payload.get("data")
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return []
+
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in items:
+        if not isinstance(row, dict):
+            continue
+        normalized = _normalize_birdeye_exact_pool_trade(
+            row, token_address, pair_address,
+        )
+        if normalized is None or str(normalized["id"]) in seen:
+            continue
+        seen.add(str(normalized["id"]))
+        result.append(normalized)
+    result.sort(
+        key=lambda item: (str(item.get("timestamp") or ""), str(item.get("id") or "")),
+        reverse=True,
+    )
+    return result
+
+
+def _birdeye_exact_pool_trades_provider(
+    token_address: str,
+    pair_address: str,
+    request_get: Callable[..., Any],
+) -> list[dict[str, Any]]:
+    api_key = _birdeye_api_key()
+    if not api_key:
+        return []
+    response = request_get(
+        BIRDEYE_TRADES_PAIR_URL,
+        params={
+            "address": pair_address,
+            "offset": 0,
+            "limit": 50,
+            "tx_type": "swap",
+            "sort_type": "desc",
+        },
+        headers={"X-API-KEY": api_key, "x-chain": "solana"},
+        timeout=10,
+    )
+    response.raise_for_status()
+    return _normalize_birdeye_exact_pool_trades(
+        response.json(), token_address, pair_address,
+    )
+
+
 # TRANSACTIONS_FEED_V16B_MARKET_ACTIVITY_UI
 def _normalize_market_activity(payload: Any, pair_address: str) -> dict[str, Any]:
     data = payload.get("data") if isinstance(payload, dict) else None
@@ -874,13 +1094,26 @@ def _load_solana_discovery_transactions_provider(
     except (requests.RequestException, RuntimeError, TypeError, ValueError):
         market_activity = {}
 
+    transactions = _normalize_exact_pool_trades(response.json(), address)
+    source = "GeckoTerminal exact-pool trades"
+    if not transactions:
+        try:
+            fallback = _birdeye_exact_pool_trades_provider(
+                address, pair_address, request_get,
+            )
+        except (requests.RequestException, RuntimeError, TypeError, ValueError, OSError):
+            fallback = []
+        if fallback:
+            transactions = fallback
+            source = "Birdeye exact-pool trades fallback"
+
     return {
         "token_address": address,
         "pair_address": pair_address,
-        "transactions": _normalize_exact_pool_trades(response.json(), address),
+        "transactions": transactions,
         "market_activity": market_activity,
         "as_of": datetime.now(timezone.utc).isoformat(),
-        "source": "GeckoTerminal exact-pool trades",
+        "source": source,
     }
 
 

@@ -328,6 +328,9 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
         rows = datasets.get(timeframe)
         safe[timeframe] = rows if isinstance(rows, list) else []
 
+    # TW-DATA-01A_HONEST_EMPTY_STATE
+    initial_candle_state = "LIVE" if safe.get("5m") else "NO DATA"
+
     payload = escape(
         json.dumps(safe, separators=(",", ":"), ensure_ascii=True),
         quote=False,
@@ -355,6 +358,7 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
         current_price_attr = ""
 
     return (
+        '<!-- TW-DATA-01A_HONEST_EMPTY_STATE -->'
         '<section class="candlestick-panel" data-candlestick-panel '
         f'data-live-candle-url="{live_url}" '
         f'data-current-price-usd="{escape(current_price_attr, quote=True)}">'
@@ -371,7 +375,7 @@ def _candlestick_chart_panel(detail: dict[str, Any]) -> str:
         '<span>V <b data-ohlc-volume>--</b></span>'
         '</div>'
         '<span class="candle-live-state" data-candle-live-state>'
-        '<i aria-hidden="true"></i>LIVE'
+        f'<i aria-hidden="true"></i>{initial_candle_state}'
         '</span>'
         '<button class="candle-reset" type="button" data-candle-reset>Reset view</button>'
         '</div>'
@@ -1397,6 +1401,7 @@ html[data-theme="intel"] .candlestick-price-tag{fill:#ff9418}
 .candle-live-state{display:inline-flex;align-items:center;gap:6px;color:var(--green);font:700 10px/1 var(--mono);letter-spacing:.04em}
 .candle-live-state i{width:6px;height:6px;border-radius:50%;background:currentColor}
 .candle-live-state.stale{color:var(--amber)}
+.candle-live-state.no-data{color:var(--muted)}
 
 
 
@@ -4953,11 +4958,13 @@ __QUALIFICATION_PANEL__
     if(ohlc.volume) ohlc.volume.textContent=formatVolume(row.volume);
   }
 
-  function setLiveState(ok){
+  function setLiveState(mode){
     if(!liveState) return;
-    liveState.classList.toggle("stale",!ok);
+    const label=mode==="LIVE"?"LIVE":mode==="NO_DATA"?"NO DATA":"STALE";
+    liveState.classList.toggle("stale",label==="STALE");
+    liveState.classList.toggle("no-data",label==="NO DATA");
     const textNode=[...liveState.childNodes].find(node=>node.nodeType===Node.TEXT_NODE);
-    if(textNode) textNode.textContent=ok?"LIVE":"STALE";
+    if(textNode) textNode.textContent=label;
   }
 
   function normalizeRows(rows){
@@ -5304,9 +5311,9 @@ __QUALIFICATION_PANEL__
         datasets[state.timeframe]=incoming;
         render(false);
       }
-      setLiveState(true);
+      setLiveState(incoming.length?"LIVE":"NO_DATA");
     }catch(error){
-      setLiveState(false);
+      setLiveState("STALE");
     }finally{
       state.liveInFlight=false;
     }
@@ -5816,11 +5823,13 @@ __QUALIFICATION_PANEL__
   }
 
 
-  function setLiveState(ok){
+  function setLiveState(mode){
     if(!liveState) return;
-    liveState.classList.toggle("stale",!ok);
+    const label=mode==="LIVE"?"LIVE":mode==="NO_DATA"?"NO DATA":"STALE";
+    liveState.classList.toggle("stale",label==="STALE");
+    liveState.classList.toggle("no-data",label==="NO DATA");
     const textNode=[...liveState.childNodes].find(node=>node.nodeType===Node.TEXT_NODE);
-    if(textNode) textNode.textContent=ok?"LIVE":"STALE";
+    if(textNode) textNode.textContent=label;
   }
 
   async function pollLive(force=false){
@@ -5843,7 +5852,7 @@ __QUALIFICATION_PANEL__
       const payload=await response.json();
       const incoming=Array.isArray(payload.candles)?payload.candles:[];
       if(payload.timeframe!==state.timeframe||!incoming.length){
-        setLiveState(true);
+        setLiveState("NO_DATA");
         return;
       }
 
@@ -5858,9 +5867,9 @@ __QUALIFICATION_PANEL__
       }
 
       draw();
-      setLiveState(true);
+      setLiveState("LIVE");
     }catch(error){
-      setLiveState(false);
+      setLiveState("STALE");
     }finally{
       state.liveInFlight=false;
     }
@@ -6367,6 +6376,12 @@ __QUALIFICATION_PANEL__
       return;
     }
 
+    if(mode==="NO_DATA"){
+      state.textContent="NO DATA";
+      state.classList.add("unavailable");
+      return;
+    }
+
     state.textContent="STALE";
     state.classList.add("stale");
   }
@@ -6442,7 +6457,9 @@ __QUALIFICATION_PANEL__
       }));
 
       const shown=Math.min(deduped.length,MAX_VISIBLE_TRANSACTIONS);
-      setTransactionState(payload.stale===true?"STALE":"LIVE",shown);
+      setTransactionState(
+        payload.stale===true?"STALE":(shown?"LIVE":"NO_DATA"),shown
+      );
       applyFreshnessDiagnostics(payload);
     }catch(error){
       keepExistingRowsOnFailure();
