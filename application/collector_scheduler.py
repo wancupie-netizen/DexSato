@@ -142,6 +142,18 @@ class CollectorScheduler:
             str(PROVIDER_TIMEOUT_SECONDS),
         )
 
+    def _completed_collector_status(self) -> str | None:
+        try:
+            payload = json.loads(
+                (self.configuration.output_directory / "status.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            return None
+        status = payload.get("collector_status")
+        return status if isinstance(status, str) else None
+
     async def start(self) -> None:
         if not self.configuration.enabled or self.running:
             return
@@ -227,6 +239,9 @@ class CollectorScheduler:
                 event,
                 duration_ms=round((time.monotonic() - started) * 1000, 2),
                 return_code=return_code,
+                collector_status=(
+                    self._completed_collector_status() if return_code == 0 else None
+                ),
             )
             return "success" if return_code == 0 else "failed"
 

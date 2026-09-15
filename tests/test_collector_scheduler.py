@@ -1,6 +1,10 @@
 import asyncio
+import json
+from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from application.collector_scheduler import (
     COLLECTOR_SCRIPT,
@@ -8,6 +12,14 @@ from application.collector_scheduler import (
     CollectorConfiguration,
     CollectorScheduler,
     validate_collector_configuration,
+)
+from research.continuous_discovery_runtime import (
+    BIRDEYE_QUOTA_COOLDOWN_SECONDS,
+    _birdeye_quota_retry_at,
+    _http_error_message,
+    experiment_status,
+    initial_state,
+    main as run_continuous_discovery,
 )
 
 
@@ -215,3 +227,96 @@ def test_collector_sigterm_path_raises_system_exit_for_lock_cleanup():
         assert error.code == 143
     else:
         raise AssertionError("Expected SIGTERM handler to stop through finally")
+
+
+def test_birdeye_quota_message_is_read_from_bounded_http_error_body():
+    error = HTTPError(
+        "https://public-api.birdeye.so/defi/v2/tokens/new_listing",
+        400,
+        "Bad Request",
+        {},
+        BytesIO(b'{"success":false,"message":"Compute units usage limit exceeded"}'),
+    )
+    assert _http_error_message(error) == "Compute units usage limit exceeded"
+
+
+def test_birdeye_quota_cooldown_is_persisted_and_expires():
+    current = datetime(2026, 9, 15, tzinfo=timezone.utc)
+    retry_at = current + timedelta(seconds=BIRDEYE_QUOTA_COOLDOWN_SECONDS)
+    state = {"birdeye_quota_retry_at": retry_at.isoformat()}
+    assert _birdeye_quota_retry_at(state, current) == retry_at
+    assert _birdeye_quota_retry_at(state, retry_at) is None
+
+
+def test_quota_warning_is_degraded_without_becoming_attention():
+    current = datetime(2026, 9, 15, tzinfo=timezone.utc)
+    state = initial_state(current)
+    state["last_warnings"] = ["Birdeye compute-unit quota exhausted"]
+    assert experiment_status(state, current) == "DEGRADED"
+    state["last_errors"] = ["DexScreener profiles HTTPError"]
+    assert experiment_status(state, current) == "ATTENTION"
+
+
+def test_scheduler_reports_persisted_degraded_status_in_success_log(tmp_path, caplog):
+    async def scenario():
+        (tmp_path / "status.json").write_text(
+            json.dumps({"collector_status": "DEGRADED"}), encoding="utf-8"
+        )
+        scheduler = CollectorScheduler(
+            _configuration(tmp_path), process_factory=ProcessFactory(FakeProcess(0))
+        )
+        assert await scheduler.run_cycle() == "success"
+
+    with caplog.at_level("INFO", logger="dexsato.production"):
+        asyncio.run(scenario())
+    payload = json.loads(caplog.records[-1].message)
+    assert payload["event"] == "collector_cycle_succeeded"
+    assert payload["return_code"] == 0
+    assert payload["collector_status"] == "DEGRADED"
+
+
+def test_quota_exhaustion_degrades_cycle_and_cooldown_skips_next_request(tmp_path):
+    def quota_error():
+        return HTTPError(
+            "https://public-api.birdeye.so/defi/v2/tokens/new_listing",
+            400,
+            "Bad Request",
+            {},
+            BytesIO(b'{"success":false,"message":"Compute units usage limit exceeded"}'),
+        )
+
+    arguments = [
+        "continuous_discovery_runtime.py",
+        "--output-dir",
+        str(tmp_path),
+    ]
+    profile_run = {
+        "provider": "dexscreener-profiles",
+        "latency_ms": 1.0,
+        "received": 0,
+    }
+    with (
+        patch.dict("os.environ", {"BIRDEYE_API_KEY": "configured"}, clear=True),
+        patch("sys.argv", arguments),
+        patch(
+            "research.continuous_discovery_runtime.collect_birdeye",
+            side_effect=quota_error(),
+        ) as birdeye,
+        patch(
+            "research.continuous_discovery_runtime.collect_dex_profiles",
+            return_value=([], profile_run),
+        ),
+        patch("research.continuous_discovery_runtime.refresh_solana_discovery_archive"),
+    ):
+        assert run_continuous_discovery() == 0
+        assert run_continuous_discovery() == 0
+
+    assert birdeye.call_count == 1
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
+    assert state["failed_runs"] == 0
+    assert state["successful_runs"] == 0
+    assert state["degraded_runs"] == 2
+    assert status["collector_status"] == "DEGRADED"
+    assert status["last_run"]["errors"] == []
+    assert status["last_run"]["provider_runs"][0]["request_attempted"] is False

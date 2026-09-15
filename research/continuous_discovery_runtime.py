@@ -48,6 +48,8 @@ MAX_DAYS = 7
 MAX_RUNS = 672
 PAIR_RETRY_MINUTES = (0, 15, 30, 60)
 DEFAULT_OUTPUT = "output/research/solana-discovery-phase0-seven-day"
+BIRDEYE_QUOTA_COOLDOWN_SECONDS = 60 * 60
+BIRDEYE_QUOTA_MESSAGE = "compute units usage limit exceeded"
 
 
 def _graceful_termination(signum: int, _frame: object) -> None:
@@ -72,6 +74,28 @@ def parse_time(value: str | None) -> datetime | None:
 def display_time(value: str | None) -> str:
     parsed = parse_time(value)
     return parsed.astimezone(MYT).strftime("%d %b %Y, %I:%M %p MYT") if parsed else "—"
+
+
+def _http_error_message(error: HTTPError) -> str:
+    """Read a bounded provider error body without exposing request credentials."""
+    try:
+        raw = error.read(4096).decode("utf-8", errors="replace")
+        payload = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    message = payload.get("message")
+    return message.strip() if isinstance(message, str) else ""
+
+
+def _birdeye_quota_retry_at(state: dict[str, Any], current: datetime) -> datetime | None:
+    """Return a future retry time only while a persisted quota cooldown is active."""
+    try:
+        retry_at = parse_time(state.get("birdeye_quota_retry_at"))
+    except (TypeError, ValueError):
+        return None
+    return retry_at if retry_at is not None and current < retry_at else None
 
 
 def read_env_file(path: Path) -> None:
@@ -100,6 +124,10 @@ def initial_state(started_at: datetime) -> dict[str, Any]:
         "last_run_at": None,
         "last_success_at": None,
         "last_errors": [],
+        "last_warnings": [],
+        "degraded_runs": 0,
+        "birdeye_quota_retry_at": None,
+        "birdeye_quota_exhausted_at": None,
         "candidates": {},
         "latest_birdeye_addresses": [],
         "latest_dex_profile_addresses": [],
@@ -250,6 +278,8 @@ def experiment_status(state: dict[str, Any], current: datetime) -> str:
     # reset state and is no longer bounded by ends_at/MAX_RUNS.
     if state["last_errors"]:
         return "ATTENTION"
+    if state.get("last_warnings"):
+        return "DEGRADED"
     return "RUNNING"
 
 
@@ -266,6 +296,7 @@ def write_latest_run(path: Path, state: dict[str, Any], summary: dict[str, Any])
         f"Pair waiting       : {summary['metrics']['pair_waiting']}",
         f"Estimated CU       : {state['estimated_birdeye_cu']}/20160",
         f"Errors             : {len(state['last_errors'])}",
+        f"Warnings           : {len(state.get('last_warnings', []))}",
         "Runtime            : MI v4.1 CONTINUOUS",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -367,9 +398,14 @@ def main() -> int:
     try:
         read_env_file(env_file)
         state = load_state(state_path, current)
+        state.setdefault("last_warnings", [])
+        state.setdefault("degraded_runs", 0)
+        state.setdefault("birdeye_quota_retry_at", None)
+        state.setdefault("birdeye_quota_exhausted_at", None)
 
         key = os.getenv("BIRDEYE_API_KEY", "").strip()
         errors: list[str] = []
+        warnings: list[str] = []
         provider_runs: list[dict[str, Any]] = []
         new_birdeye = 0
         new_profiles = 0
@@ -380,19 +416,46 @@ def main() -> int:
         if not key:
             errors.append(f"BIRDEYE_API_KEY was not found in {env_file.name}")
         else:
-            try:
-                records, run = collect_birdeye(key, args.limit, True, args.timeout_seconds)
-                state["birdeye_calls"] += 1
-                state["estimated_birdeye_cu"] = state["birdeye_calls"] * 30
-                provider_runs.append(run)
-                state["latest_birdeye_addresses"] = [item["token_address"] for item in records]
-                new_birdeye = merge_discovery(state, records, "birdeye", current, events_path)
-            except HTTPError as exc:
-                state["birdeye_calls"] += 1
-                state["estimated_birdeye_cu"] = state["birdeye_calls"] * 30
-                errors.append(f"Birdeye HTTP {exc.code}")
-            except (URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
-                errors.append(f"Birdeye {type(exc).__name__}: {exc}")
+            quota_retry_at = _birdeye_quota_retry_at(state, current)
+            if quota_retry_at is not None:
+                warnings.append("Birdeye compute-unit quota cooldown active")
+                provider_runs.append({
+                    "provider": "birdeye",
+                    "status": "degraded",
+                    "reason": "compute_units_exhausted",
+                    "request_attempted": False,
+                    "retry_at": iso(quota_retry_at),
+                })
+            else:
+                try:
+                    records, run = collect_birdeye(key, args.limit, True, args.timeout_seconds)
+                    state["birdeye_calls"] += 1
+                    state["estimated_birdeye_cu"] = state["birdeye_calls"] * 30
+                    state["birdeye_quota_retry_at"] = None
+                    state["birdeye_quota_exhausted_at"] = None
+                    provider_runs.append(run)
+                    state["latest_birdeye_addresses"] = [item["token_address"] for item in records]
+                    new_birdeye = merge_discovery(state, records, "birdeye", current, events_path)
+                except HTTPError as exc:
+                    state["birdeye_calls"] += 1
+                    state["estimated_birdeye_cu"] = state["birdeye_calls"] * 30
+                    message = _http_error_message(exc)
+                    if message.casefold() == BIRDEYE_QUOTA_MESSAGE:
+                        retry_at = current + timedelta(seconds=BIRDEYE_QUOTA_COOLDOWN_SECONDS)
+                        state["birdeye_quota_retry_at"] = iso(retry_at)
+                        state["birdeye_quota_exhausted_at"] = iso(current)
+                        warnings.append("Birdeye compute-unit quota exhausted")
+                        provider_runs.append({
+                            "provider": "birdeye",
+                            "status": "degraded",
+                            "reason": "compute_units_exhausted",
+                            "request_attempted": True,
+                            "retry_at": iso(retry_at),
+                        })
+                    else:
+                        errors.append(f"Birdeye HTTP {exc.code}")
+                except (URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
+                    errors.append(f"Birdeye {type(exc).__name__}: {exc}")
 
         try:
             records, run = collect_dex_profiles(args.timeout_seconds)
@@ -409,8 +472,11 @@ def main() -> int:
             errors.append(f"DexScreener enrichment {type(exc).__name__}: {exc}")
 
         state["last_errors"] = errors
+        state["last_warnings"] = warnings
         if errors:
             state["failed_runs"] += 1
+        elif warnings:
+            state["degraded_runs"] += 1
         else:
             state["successful_runs"] += 1
             state["last_success_at"] = iso(current)
@@ -423,6 +489,7 @@ def main() -> int:
             "pair_resolved": pair_run.get("resolved", 0),
             "provider_runs": provider_runs,
             "errors": errors,
+            "warnings": warnings,
         }
         append_jsonl(runs_path, run_record)
         state_metrics = metrics(state, current)
