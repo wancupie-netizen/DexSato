@@ -401,11 +401,11 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     clear_search = f'<a class="clear-search" href="/discovery/solana?view={quote(view)}&page=1">Clear</a>' if search_query else ""
     if search_query:
         empty_heading = "No matching token found."
-        empty_copy = f'No {view} observation matches “{escape(search_query)}”. Try a symbol, token name, contract, pair address or DEX.'
+        empty_copy = "Try another name, symbol, contract, pair address or DEX."
         empty_actions = f'<a class="primary-link" href="/discovery/solana?view={quote(view)}&page=1">Clear search</a>'
     elif view == "qualified":
-        empty_heading = "No token currently meets all qualification requirements."
-        empty_copy = "The current scan found no token that passes every identity, liquidity, activity and freshness check. Previously qualified observations remain available."
+        empty_heading = "No qualified SOL pairs right now."
+        empty_copy = "Tokens appear here only after identity, liquidity, activity and freshness checks pass."
         empty_actions = ""
     elif view == "recent":
         empty_heading = "No new discovery was first qualified in the last 24 hours."
@@ -423,7 +423,13 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         f'<h3>{empty_heading}</h3><p>{empty_copy}</p>'
         f'{empty_actions_markup}</div></div>'
     )
-    candidate_feed = f'<div class="candidate-list">{candidate_rows}</div>' if candidate_rows else empty_state
+    discovery_feed = (
+        '<div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div>'
+        '<div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>'
+        f'<div class="candidate-list">{candidate_rows}</div>{pagination}'
+        if candidate_rows
+        else empty_state
+    )
     page = """<!doctype html>
 <html lang="en">
 <head>
@@ -1866,10 +1872,17 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     .dex-category-placeholder strong{display:block;color:var(--muted);font:600 14px "Space Grotesk",sans-serif}
     .dex-category-placeholder small{display:block;max-width:520px;margin-top:6px;color:var(--faint);font:500 11px "JetBrains Mono",monospace;line-height:1.55}
     .dex-market-intelligence>.dex-panel-shell{min-height:150px}
+    /* TW-UI-03D — Compact, honest Token List empty state. */
+    .dex-token-list .empty-state{min-height:150px;display:flex;align-items:center;justify-content:center;gap:14px;margin:0;padding:32px 24px;border:0;background:var(--panel)}
+    .dex-token-list .empty-icon{width:38px;height:38px;flex:0 0 38px;border-color:var(--line2);color:var(--cyan);font-size:15px}
+    .dex-token-list .empty-state h3{font:600 16px "Space Grotesk",sans-serif;letter-spacing:0}
+    .dex-token-list .empty-state p{max-width:620px;margin-top:5px;color:var(--muted);font:500 11px/1.55 "JetBrains Mono",monospace}
+    .dex-token-list .empty-actions{margin-top:10px}
     @media(max-width:760px){
       .dex-market-tabs{display:flex;overflow-x:auto;scrollbar-width:thin}
       .dex-market-tab{min-width:112px;flex:1 0 auto}
       .dex-category-placeholder{min-height:210px}
+      .dex-token-list .empty-state{min-height:132px;justify-content:flex-start;padding:26px 16px}
     }
 
   </style>
@@ -2006,9 +2019,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
             <span class="discovery-segment-v1 upcoming" role="tab" aria-selected="false" aria-disabled="true"><span>Established Solana</span><small>Soon</small></span>
           </nav>
           <!-- TW-UI-03C: legacy discovery view controls intentionally omitted. -->
-          <div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div>
-          <div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>
-          __CANDIDATE_FEED____PAGINATION__
+          __DISCOVERY_FEED__
         </section>
       </section>
       <section id="dex-market-panel-recent" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-recent" data-market-panel="recent" hidden>
@@ -2208,10 +2219,9 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         .replace("__QUALIFIED__", escape(qualified))
         .replace("__UPDATED__", escape(updated))
         .replace("__STATUS_LABEL__", escape(status_label))
-        .replace("__CANDIDATE_FEED__", candidate_feed)
+        .replace("__DISCOVERY_FEED__", discovery_feed)
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
-        .replace("__PAGINATION__", pagination)
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))
         .replace("__OBSERVED_TXNS__", escape(txns_label))
         .replace("__DEX_BADGES__", dex_badges)

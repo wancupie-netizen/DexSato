@@ -38,7 +38,7 @@ def test_solana_discovery_prototype_is_honest_and_read_only():
     assert "TOTAL DEX VOLUME · 24H · SOLANA" in html
     assert "LIVE SIGNALS" in html
     assert "No signal data displayed yet" in html
-    assert "No token currently meets all qualification requirements." in html
+    assert "No qualified SOL pairs right now." in html
     assert "Experimental discovery · evidence synthesis only · not financial advice." in html
     assert "Get buy quote" not in html
 
@@ -49,7 +49,9 @@ def test_solana_discovery_hides_legacy_views_and_has_no_fake_candidates():
     assert "Qualified Now" not in html
     assert "Recent Discoveries" not in html
     assert "Full Archive" not in html
-    assert "Page 1 of 1" in html
+    assert "Page 1 of 1" not in html
+    assert 'class="sort-note"' not in html
+    assert 'class="feed-columns-v33"' not in html
     assert 'name="view" value="qualified"' in html
     assert 'href="/discovery/solana?view=recent' not in html
     assert 'href="/discovery/solana?view=archive' not in html
@@ -189,6 +191,9 @@ def test_solana_discovery_renders_qualified_candidate_in_compact_feed():
     assert "Example token" in html and "EX / SOL" in html
     assert "$12.00K" in html and "$4.50K" in html
     assert "data-token-address=\"token-address\"" in html
+    assert 'class="sort-note"' in html
+    assert 'class="feed-columns-v33"' in html
+    assert "Page 1 of 1" in html
     assert "Inspect pool" not in html
     assert "Pool pool-address" not in html
 
@@ -283,7 +288,13 @@ def test_solana_discovery_v29a_has_pagination_and_observed_network_facts():
         "qualified_total": 2, "recent_total": 5, "archive_total": 61,
         "view": "archive", "page": 3, "page_count": 3, "page_size": 25,
         "observed_volume_24h_usd": 12_345, "observed_txns_24h": 99,
-        "observed_dex_ids": ["pumpswap", "raydium"], "candidates": [],
+        "observed_dex_ids": ["pumpswap", "raydium"],
+        "candidates": [{
+            "name": "Archived token", "symbol": "ARC", "quote_symbol": "SOL",
+            "token_address": "archived-token", "pair_address": "archived-pool",
+            "dex_id": "raydium", "price_usd": 0.25, "liquidity_usd": 12000,
+            "volume_24h_usd": 4500, "pair_age": "3h",
+        }],
     })
     assert "Qualified Now" not in html
     assert "Recent Discoveries" not in html
@@ -302,7 +313,8 @@ def test_solana_discovery_v291_explains_zero_qualification_without_broken_link()
         "observed_volume_24h_usd": 0, "observed_txns_24h": 0,
         "observed_dex_ids": [], "candidates": [],
     })
-    assert "No token currently meets all qualification requirements." in html
+    assert "No qualified SOL pairs right now." in html
+    assert "Tokens appear here only after identity, liquidity, activity and freshness checks pass." in html
     assert "View Recent Discoveries" not in html
     assert "Open Full Archive" not in html
     assert "preparing its first validated feed" not in html
@@ -310,6 +322,9 @@ def test_solana_discovery_v291_explains_zero_qualification_without_broken_link()
     assert "Qualified Now" not in html
     assert "Recent Discoveries" not in html
     assert "Full Archive" not in html
+    assert 'class="sort-note"' not in html
+    assert 'class="feed-columns-v33"' not in html
+    assert 'class="pagination"' not in html
 
 
 @pytest.mark.parametrize("view", ("qualified", "recent", "archive"))
@@ -326,6 +341,8 @@ def test_solana_discovery_keeps_server_view_context_without_legacy_navigation(vi
     assert "Recent Discoveries" not in html
     assert "Full Archive" not in html
     assert 'class="feed-tabs"' not in html
+    assert 'class="feed-columns-v33"' not in html
+    assert 'class="pagination"' not in html
 
 
 def test_solana_discovery_v292_renders_server_search_and_sort_clarity():
@@ -338,9 +355,10 @@ def test_solana_discovery_v292_renders_server_search_and_sort_clarity():
     })
     assert 'name="q" value="BER mint"' in html
     assert "Search token, symbol, contract or DEX" in html
-    assert "Sorted by: Last qualified" in html
-    assert "76 matching observations" in html
-    assert "view=archive&page=3&q=BER%20mint" in html
+    assert "Sorted by: Last qualified" not in html
+    assert "76 matching observations" not in html
+    assert "view=archive&page=3&q=BER%20mint" not in html
     assert "view=recent" not in html
     assert "No matching token found." in html
+    assert "Try another name, symbol, contract, pair address or DEX." in html
     assert "Clear search" in html
