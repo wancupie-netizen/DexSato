@@ -43,16 +43,17 @@ def test_solana_discovery_prototype_is_honest_and_read_only():
     assert "Get buy quote" not in html
 
 
-def test_solana_discovery_has_persistent_views_and_no_fake_candidates():
+def test_solana_discovery_hides_legacy_views_and_has_no_fake_candidates():
     html = render_solana_discovery_page()
 
-    assert "Qualified Now" in html
-    assert "Recent Discoveries" in html
-    assert "Full Archive" in html
+    assert "Qualified Now" not in html
+    assert "Recent Discoveries" not in html
+    assert "Full Archive" not in html
     assert "Page 1 of 1" in html
-    assert 'href="/discovery/solana?view=qualified&page=1"' in html
-    assert 'href="/discovery/solana?view=recent&page=1"' in html
-    assert 'href="/discovery/solana?view=archive&page=1"' in html
+    assert 'name="view" value="qualified"' in html
+    assert 'href="/discovery/solana?view=recent' not in html
+    assert 'href="/discovery/solana?view=archive' not in html
+    assert "TW-UI-03C: legacy discovery view controls intentionally omitted." in html
     assert "data-token-address" not in html
 
 
@@ -163,7 +164,8 @@ def test_solana_discovery_renders_connected_telemetry_without_candidates():
     })
 
     assert "3271</strong>\n            <span>ACTIVE PAIRS" in html
-    assert "Qualified Now<b>—</b>" in html
+    assert "Qualified Now" not in html
+    assert 'name="view" value="qualified"' in html
     assert "Collector telemetry is connected; publication remains disabled." in html
 
 
@@ -183,7 +185,7 @@ def test_solana_discovery_renders_qualified_candidate_in_compact_feed():
         }],
     })
 
-    assert "Qualified Now<b>1</b>" in html
+    assert "Qualified Now" not in html
     assert "Example token" in html and "EX / SOL" in html
     assert "$12.00K" in html and "$4.50K" in html
     assert "data-token-address=\"token-address\"" in html
@@ -283,9 +285,10 @@ def test_solana_discovery_v29a_has_pagination_and_observed_network_facts():
         "observed_volume_24h_usd": 12_345, "observed_txns_24h": 99,
         "observed_dex_ids": ["pumpswap", "raydium"], "candidates": [],
     })
-    assert "Qualified Now<b>2</b>" in html
-    assert "Recent Discoveries<b>5</b>" in html
-    assert "Full Archive<b>61</b>" in html
+    assert "Qualified Now" not in html
+    assert "Recent Discoveries" not in html
+    assert "Full Archive" not in html
+    assert 'name="view" value="archive"' in html
     assert "Sorted by: Last qualified" in html
     assert "Page 3 of 3" in html
     assert "Archive Context" not in html
@@ -300,12 +303,29 @@ def test_solana_discovery_v291_explains_zero_qualification_without_broken_link()
         "observed_dex_ids": [], "candidates": [],
     })
     assert "No token currently meets all qualification requirements." in html
-    assert "View Recent Discoveries" in html and "Open Full Archive" in html
+    assert "View Recent Discoveries" not in html
+    assert "Open Full Archive" not in html
     assert "preparing its first validated feed" not in html
     assert "#qualification-rules" not in html
-    assert "Qualified Now<b>0</b>" in html
-    assert "Recent Discoveries<b>71</b>" in html
-    assert "Full Archive<b>202</b>" in html
+    assert "Qualified Now" not in html
+    assert "Recent Discoveries" not in html
+    assert "Full Archive" not in html
+
+
+@pytest.mark.parametrize("view", ("qualified", "recent", "archive"))
+def test_solana_discovery_keeps_server_view_context_without_legacy_navigation(view):
+    html = render_solana_discovery_page({
+        "view": view,
+        "page": 1,
+        "page_count": 1,
+        "candidates": [],
+    })
+
+    assert f'name="view" value="{view}"' in html
+    assert "Qualified Now" not in html
+    assert "Recent Discoveries" not in html
+    assert "Full Archive" not in html
+    assert 'class="feed-tabs"' not in html
 
 
 def test_solana_discovery_v292_renders_server_search_and_sort_clarity():
@@ -320,6 +340,7 @@ def test_solana_discovery_v292_renders_server_search_and_sort_clarity():
     assert "Search token, symbol, contract or DEX" in html
     assert "Sorted by: Last qualified" in html
     assert "76 matching observations" in html
-    assert "view=recent&page=1&q=BER%20mint" in html
+    assert "view=archive&page=3&q=BER%20mint" in html
+    assert "view=recent" not in html
     assert "No matching token found." in html
     assert "Clear search" in html

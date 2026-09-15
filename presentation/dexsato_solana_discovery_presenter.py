@@ -375,26 +375,12 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     page_number = int(data.get("page") or 1)
     page_size = int(data.get("page_size") or 25)
     page_count = int(data.get("page_count") or 1)
-    qualified_total = str(data.get("qualified_total", qualified))
-    recent_total = str(data.get("recent_total", "—"))
-    archive_total = str(data.get("archive_total", "—"))
     search_query = str(data.get("search_query") or "")
-    search_counts = data.get("search_counts") if isinstance(data.get("search_counts"), dict) else {}
-    tab_counts = {
-        "qualified": str(search_counts.get("qualified", qualified_total)),
-        "recent": str(search_counts.get("recent", recent_total)),
-        "archive": str(search_counts.get("archive", archive_total)),
-    }
     query_suffix = f'&q={quote(search_query)}' if search_query else ""
     offset = (page_number - 1) * page_size
     candidate_rows = "".join(
         _candidate_row(item, rank)
         for rank, item in enumerate((item for item in candidates if isinstance(item, dict)), start=offset + 1)
-    )
-    tab_labels = (("qualified", "Qualified Now", tab_counts["qualified"]), ("recent", "Recent Discoveries", tab_counts["recent"]), ("archive", "Full Archive", tab_counts["archive"]))
-    tabs = "".join(
-        f'<a class="feed-tab{" active" if key == view else ""}" href="/discovery/solana?view={key}&page=1{query_suffix}">{label}<b>{escape(count)}</b></a>'
-        for key, label, count in tab_labels
     )
     previous_link = f'/discovery/solana?view={quote(view)}&page={page_number - 1}{query_suffix}' if page_number > 1 else ""
     next_link = f'/discovery/solana?view={quote(view)}&page={page_number + 1}{query_suffix}' if page_number < page_count else ""
@@ -420,20 +406,22 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     elif view == "qualified":
         empty_heading = "No token currently meets all qualification requirements."
         empty_copy = "The current scan found no token that passes every identity, liquidity, activity and freshness check. Previously qualified observations remain available."
-        empty_actions = ('<a class="primary-link" href="/discovery/solana?view=recent&page=1">View Recent Discoveries</a>'
-                         '<a class="secondary-link" href="/discovery/solana?view=archive&page=1">Open Full Archive</a>')
+        empty_actions = ""
     elif view == "recent":
         empty_heading = "No new discovery was first qualified in the last 24 hours."
         empty_copy = "Older observations remain available in the persistent archive."
-        empty_actions = '<a class="primary-link" href="/discovery/solana?view=archive&page=1">Open Full Archive</a>'
+        empty_actions = ""
     else:
         empty_heading = "The discovery archive is empty."
         empty_copy = "Records will appear after a token first passes every qualification requirement."
         empty_actions = '<a class="primary-link" href="/">Back to Markets</a>'
+    empty_actions_markup = (
+        f'<div class="empty-actions">{empty_actions}</div>' if empty_actions else ""
+    )
     empty_state = (
         '<div class="empty-state"><div class="empty-icon" aria-hidden="true">◎</div><div>'
         f'<h3>{empty_heading}</h3><p>{empty_copy}</p>'
-        f'<div class="empty-actions">{empty_actions}</div></div></div>'
+        f'{empty_actions_markup}</div></div>'
     )
     candidate_feed = f'<div class="candidate-list">{candidate_rows}</div>' if candidate_rows else empty_state
     page = """<!doctype html>
@@ -2017,7 +2005,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
             <a class="discovery-segment-v1 active" href="/discovery/solana" role="tab" aria-selected="true" aria-current="page"><span>New Discoveries</span><small>Active</small></a>
             <span class="discovery-segment-v1 upcoming" role="tab" aria-selected="false" aria-disabled="true"><span>Established Solana</span><small>Soon</small></span>
           </nav>
-          <nav class="feed-tabs" aria-label="Discovery views">__TABS__</nav>
+          <!-- TW-UI-03C: legacy discovery view controls intentionally omitted. -->
           <div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div>
           <div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>
           __CANDIDATE_FEED____PAGINATION__
@@ -2221,12 +2209,8 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         .replace("__UPDATED__", escape(updated))
         .replace("__STATUS_LABEL__", escape(status_label))
         .replace("__CANDIDATE_FEED__", candidate_feed)
-        .replace("__QUALIFIED_TOTAL__", escape(qualified_total))
-        .replace("__RECENT_TOTAL__", escape(recent_total))
-        .replace("__ARCHIVE_TOTAL__", escape(archive_total))
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
-        .replace("__TABS__", tabs)
         .replace("__PAGINATION__", pagination)
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))
         .replace("__OBSERVED_TXNS__", escape(txns_label))
