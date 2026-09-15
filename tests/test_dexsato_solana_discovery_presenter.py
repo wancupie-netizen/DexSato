@@ -362,3 +362,23 @@ def test_solana_discovery_v292_renders_server_search_and_sort_clarity():
     assert "No matching token found." in html
     assert "Try another name, symbol, contract, pair address or DEX." in html
     assert "Clear search" in html
+
+
+def test_solana_discovery_v03e_is_responsive_and_accessible():
+    html = render_solana_discovery_page()
+
+    assert "/* TW-UI-03E — Responsive and accessibility hardening. */" in html
+    assert "--faint:#718096" in html
+    assert (
+        'role="tablist" aria-label="Solana market categories" '
+        'aria-orientation="horizontal"'
+    ) in html
+    assert '<nav class="discovery-segments-v1" aria-label="Solana discovery products">' in html
+    assert 'class="discovery-segment-v1 active" href="/discovery/solana" aria-current="page"' in html
+    assert 'aria-label="Solana discovery products" role="tablist"' not in html
+    assert 'href="/discovery/solana" role="tab"' not in html
+    assert 'class="dex-empty-icon" aria-hidden="true">↗</span>' in html
+    assert 'class="dex-empty-icon" aria-hidden="true">◇</span>' in html
+    assert ".dex-token-list .terminal-search{width:100%;min-width:0;flex-wrap:wrap}" in html
+    assert ".dex-volume-substat span{font-size:9px!important}" in html
+    assert "@media(prefers-reduced-motion:reduce)" in html

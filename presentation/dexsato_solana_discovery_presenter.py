@@ -1885,6 +1885,34 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
       .dex-token-list .empty-state{min-height:132px;justify-content:flex-start;padding:26px 16px}
     }
 
+    /* TW-UI-03E — Responsive and accessibility hardening. */
+    :root,
+    html[data-theme="plain"],
+    html[data-theme="intel"]{--faint:#718096}
+    .terminal-search input:focus-visible,
+    .terminal-search button:focus-visible,
+    .clear-search:focus-visible,
+    .discovery-segment-v1:focus-visible{
+      outline:2px solid var(--cyan);
+      outline-offset:2px;
+    }
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+    @media(max-width:760px){
+      .dex-token-list .feed-head{align-items:stretch}
+      .dex-token-list .terminal-search{width:100%;min-width:0;flex-wrap:wrap}
+      .dex-token-list .terminal-search input{width:auto;min-width:0;flex:1 1 180px}
+      .dex-token-list .terminal-search button,
+      .dex-token-list .clear-search{min-height:44px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+      .dex-market-tabs{scroll-snap-type:x proximity;overscroll-behavior-inline:contain}
+      .dex-market-tab{scroll-snap-align:start}
+    }
+    @media(max-width:620px){
+      .dex-volume-substat span{font-size:9px!important}
+    }
+    @media(max-width:480px){
+      .dex-token-list .empty-state{align-items:flex-start;gap:12px}
+    }
+
   </style>
 </head>
 <body><div class="dex-app-shell">
@@ -1984,14 +2012,14 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     <div class="dex-section-label"><span>LIVE SIGNALS</span><i></i></div>
     <div class="dex-panel-shell">
       <div class="dex-panel-head"><strong>Live market signal stream</strong><span>Solana discovery</span></div>
-      <div class="dex-empty-stream"><span class="dex-empty-icon">↗</span><div><strong>No signal data displayed yet</strong><small>Presentation shell only. Existing signal logic is unchanged.</small></div></div>
+      <div class="dex-empty-stream"><span class="dex-empty-icon" aria-hidden="true">↗</span><div><strong>No signal data displayed yet</strong><small>Presentation shell only. Existing signal logic is unchanged.</small></div></div>
     </div>
   </section>
 
   <section class="dex-terminal-section dex-market-categories" aria-label="Solana market categories">
     <div class="dex-section-label"><span>MARKET VIEWS</span><i></i></div>
     <div class="dex-market-category-shell">
-      <div class="dex-market-tabs" role="tablist" aria-label="Solana market categories">
+      <div class="dex-market-tabs" role="tablist" aria-label="Solana market categories" aria-orientation="horizontal">
         <button id="dex-market-tab-trending" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-trending" tabindex="-1" data-market-tab="trending">Trending</button>
         <button id="dex-market-tab-top-traded" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-top-traded" tabindex="-1" data-market-tab="top-traded">Top Traded</button>
         <button id="dex-market-tab-organic" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-organic" tabindex="-1" data-market-tab="organic">Organic</button>
@@ -2014,9 +2042,9 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
             <div><span class="eyebrow">SOLANA DISCOVERY</span><h2>Token List</h2><p>Persistent, server-paginated observations. Historical inclusion does not mean current qualification.</p></div>
             <form class="terminal-search" method="get" action="/discovery/solana"><input type="hidden" name="view" value="__VIEW__"><input type="hidden" name="page" value="1"><input type="search" name="q" value="__SEARCH_QUERY__" placeholder="Search token, symbol, contract or DEX" aria-label="Search the discovery archive"><button type="submit">Search</button>__CLEAR_SEARCH__</form>
           </div>
-          <nav class="discovery-segments-v1" aria-label="Solana discovery products" role="tablist">
-            <a class="discovery-segment-v1 active" href="/discovery/solana" role="tab" aria-selected="true" aria-current="page"><span>New Discoveries</span><small>Active</small></a>
-            <span class="discovery-segment-v1 upcoming" role="tab" aria-selected="false" aria-disabled="true"><span>Established Solana</span><small>Soon</small></span>
+          <nav class="discovery-segments-v1" aria-label="Solana discovery products">
+            <a class="discovery-segment-v1 active" href="/discovery/solana" aria-current="page"><span>New Discoveries</span><small>Active</small></a>
+            <span class="discovery-segment-v1 upcoming" aria-disabled="true"><span>Established Solana</span><small>Soon</small></span>
           </nav>
           <!-- TW-UI-03C: legacy discovery view controls intentionally omitted. -->
           __DISCOVERY_FEED__
@@ -2032,7 +2060,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     <div class="dex-section-label"><span>MARKET INTELLIGENCE</span><i></i></div>
     <article class="dex-panel-shell">
       <div class="dex-panel-head"><strong>MARKET INTELLIGENCE</strong><span>DexSato</span></div>
-      <div class="dex-intelligence-empty"><span class="dex-empty-icon">◇</span><div><strong>No intelligence items displayed yet</strong><small>Insights will appear only when backed by existing DexSato data.</small></div></div>
+      <div class="dex-intelligence-empty"><span class="dex-empty-icon" aria-hidden="true">◇</span><div><strong>No intelligence items displayed yet</strong><small>Insights will appear only when backed by existing DexSato data.</small></div></div>
     </article>
   </section>
   <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>__STATUS_MESSAGE__</span></footer>
