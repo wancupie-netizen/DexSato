@@ -1,4 +1,5 @@
 import base64
+import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 from concurrent.futures import ThreadPoolExecutor
@@ -109,6 +110,7 @@ def _lighthouse_pair(
     signed_core_data=None,
     second_discriminator=10,
     signed_blockhash=None,
+    signed_table_two_readonly=(52,),
 ):
     wallet = _base58_bytes(WALLET)
     output_account = bytes([3]) * 32
@@ -141,7 +143,7 @@ def _lighthouse_pair(
         ],
         [
             (table_one, (123, 141), (99, 117)),
-            (table_two, (62,), (52,)),
+            (table_two, (62,), signed_table_two_readonly),
         ],
         blockhash=signed_blockhash,
     )
@@ -506,6 +508,44 @@ def test_rejects_lighthouse_wrapper_that_changes_approved_semantics(changes, exp
             signed_message,
             _base58_bytes(WALLET),
         )
+
+
+def test_lookup_mismatch_emits_bounded_safe_diagnostics(monkeypatch):
+    original, signed = _lighthouse_pair(signed_table_two_readonly=(53,))
+    _, _, approved_message, _, _, _ = _transaction_parts(original)
+    _, _, signed_message, _, _, _ = _transaction_parts(signed)
+    events = []
+    monkeypatch.setattr(
+        "application.jupiter_swap_service._SWAP_LOGGER.warning",
+        events.append,
+    )
+
+    with pytest.raises(JupiterSwapRejected, match="address lookups"):
+        _validate_lighthouse_augmentation(
+            approved_message,
+            signed_message,
+            _base58_bytes(WALLET),
+        )
+
+    assert len(events) == 1
+    event = json.loads(events[0])
+    assert event["event"] == "swap_address_lookup_mismatch"
+    assert event["approved"]["lookup_table_count"] == 2
+    assert event["approved"]["writable_reference_count"] == 3
+    assert event["approved"]["readonly_reference_count"] == 3
+    assert event["signed"]["lookup_table_count"] == 2
+    assert event["delta"] == {
+        "readonly_added_count": 1,
+        "readonly_removed_count": 1,
+        "writable_added_count": 0,
+        "writable_removed_count": 0,
+    }
+    assert len(event["approved"]["fingerprint_sha256"]) == 64
+    assert len(event["signed"]["fingerprint_sha256"]) == 64
+    serialized = json.dumps(event)
+    assert WALLET not in serialized
+    assert original not in serialized
+    assert signed not in serialized
 
 
 def test_rejects_unsigned_modified_expired_or_replayed_transactions():

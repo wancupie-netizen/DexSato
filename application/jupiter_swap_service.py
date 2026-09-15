@@ -14,6 +14,7 @@ from decimal import Decimal
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import threading
@@ -141,6 +142,7 @@ class _MessageSemantics:
 _pending_orders: dict[str, _PendingOrder] = {}
 _pending_reservations: dict[str, _PendingReservation] = {}
 _pending_lock = threading.RLock()
+_SWAP_LOGGER = logging.getLogger("dexsato.production")
 
 
 _redis_pending_store: RedisJupiterPendingStore | None = None
@@ -637,6 +639,55 @@ def _lookup_permissions(message: _MessageSemantics) -> tuple[tuple[Any, ...], ..
     return tuple(sorted(references, key=repr))
 
 
+def _lookup_fingerprint(references: set[tuple[Any, ...]]) -> str:
+    """Return a stable digest without exposing lookup table addresses or indexes."""
+    digest = hashlib.sha256()
+    for _, table_account, permission, index in sorted(references, key=repr):
+        digest.update(table_account)
+        digest.update(b"\x00")
+        digest.update(permission.encode("ascii"))
+        digest.update(b"\x00")
+        digest.update(bytes((index,)))
+    return digest.hexdigest()
+
+
+def _lookup_summary(message: _MessageSemantics) -> tuple[dict[str, object], set[tuple[Any, ...]]]:
+    references = set(_lookup_permissions(message))
+    return (
+        {
+            "fingerprint_sha256": _lookup_fingerprint(references),
+            "lookup_table_count": len({lookup.table_account for lookup in message.lookups}),
+            "readonly_reference_count": sum(reference[2] == "readonly" for reference in references),
+            "writable_reference_count": sum(reference[2] == "writable" for reference in references),
+        },
+        references,
+    )
+
+
+def _emit_lookup_mismatch(approved: _MessageSemantics, signed: _MessageSemantics) -> None:
+    """Emit bounded structural evidence while retaining no transaction material."""
+    approved_summary, approved_references = _lookup_summary(approved)
+    signed_summary, signed_references = _lookup_summary(signed)
+    added = signed_references - approved_references
+    removed = approved_references - signed_references
+    payload = {
+        "approved": approved_summary,
+        "delta": {
+            "readonly_added_count": sum(reference[2] == "readonly" for reference in added),
+            "readonly_removed_count": sum(reference[2] == "readonly" for reference in removed),
+            "writable_added_count": sum(reference[2] == "writable" for reference in added),
+            "writable_removed_count": sum(reference[2] == "writable" for reference in removed),
+        },
+        "event": "swap_address_lookup_mismatch",
+        "signed": signed_summary,
+        "timestamp_unix_ms": int(datetime.now(timezone.utc).timestamp() * 1000),
+    }
+    try:
+        _SWAP_LOGGER.warning(json.dumps(payload, separators=(",", ":"), sort_keys=True))
+    except Exception:
+        pass
+
+
 def _normalized_instructions(
     message: _MessageSemantics,
 ) -> tuple[tuple[tuple[Any, ...], tuple[tuple[Any, ...], ...], bytes], ...]:
@@ -686,6 +737,7 @@ def _validate_lighthouse_augmentation(
     if lighthouse in approved_permissions or signed_permissions != expected_permissions:
         raise JupiterSwapRejected("Signed transaction changed the approved static accounts.")
     if _lookup_permissions(approved) != _lookup_permissions(signed):
+        _emit_lookup_mismatch(approved, signed)
         raise JupiterSwapRejected("Signed transaction changed the approved address lookups.")
 
     approved_instructions = _normalized_instructions(approved)
