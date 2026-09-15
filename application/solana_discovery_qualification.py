@@ -13,6 +13,7 @@ import requests
 
 
 PAIR_URL = "https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
+SOL_QUOTE_ADDRESS = "So11111111111111111111111111111111111111112"
 MIN_LIQUIDITY_USD = 5_000.0
 MIN_VOLUME_24H_USD = 1_000.0
 MAX_CANDIDATES_CHECKED = 12
@@ -129,6 +130,14 @@ def qualify_candidate(
     if not _same(base.get("address"), token_address):
         reject("token_mismatch", "Token identity mismatch", "The provider base-token mint did not match the observed token.")
         return None
+    quote_address = str(quote.get("address") or "").strip()
+    if quote_address != SOL_QUOTE_ADDRESS:
+        reject(
+            "unsupported_quote_asset",
+            "SOL quote required",
+            "Only exact pools quoted in SOL are eligible during the current public pilot.",
+        )
+        return None
     liquidity = _number((pair.get("liquidity") or {}).get("usd"))
     volume = _number((pair.get("volume") or {}).get("h24"))
     price = _number(pair.get("priceUsd"))
@@ -155,7 +164,7 @@ def qualify_candidate(
         "symbol": str(base.get("symbol") or observed.get("symbol") or "Unknown"),
         "name": str(base.get("name") or observed.get("name") or "Unknown token"),
         "quote_symbol": str(quote.get("symbol") or "Unknown"),
-        "quote_address": str(quote.get("address") or "").strip(),
+        "quote_address": quote_address,
         "dex_id": str(pair.get("dexId") or "Unknown"),
         "price_usd": price,
         "change_24h": change_24h,
@@ -168,7 +177,7 @@ def qualify_candidate(
         ),
         "pair_age": _pair_age_label(pair.get("pairCreatedAt"), now),
         "pair_age_hours": _pair_age_hours(pair.get("pairCreatedAt"), now),
-        "evidence": "Verified Solana pool with observable liquidity and 24h activity.",
+        "evidence": "Verified SOL-quoted Solana pool with observable liquidity and 24h activity.",
         "risk_label": "Token security not independently verified",
         "source": "DexScreener exact pair",
         "source_url": str(pair.get("url") or ""),

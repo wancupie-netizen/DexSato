@@ -4,8 +4,9 @@ from application.solana_discovery_qualification import qualify_candidate
 
 
 NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+SOL_QUOTE_ADDRESS = "So11111111111111111111111111111111111111112"
 OBSERVED = {"token_address": "token-one", "pair_address": "pool-one", "symbol": "ONE", "name": "One", "last_seen_at": "2026-08-22T11:55:00+00:00"}
-PAIR = {"chainId": "solana", "pairAddress": "pool-one", "dexId": "raydium", "baseToken": {"address": "token-one", "symbol": "ONE", "name": "One"}, "quoteToken": {"symbol": "SOL"}, "priceUsd": "0.25", "priceChange": {"h24": "-12.75"}, "liquidity": {"usd": 12000}, "volume": {"h24": 4500}, "txns": {"h24": {"buys": 125, "sells": 75}}, "pairCreatedAt": 1787396400000}
+PAIR = {"chainId": "solana", "pairAddress": "pool-one", "dexId": "raydium", "baseToken": {"address": "token-one", "symbol": "ONE", "name": "One"}, "quoteToken": {"address": SOL_QUOTE_ADDRESS, "symbol": "SOL"}, "priceUsd": "0.25", "priceChange": {"h24": "-12.75"}, "liquidity": {"usd": 12000}, "volume": {"h24": 4500}, "txns": {"h24": {"buys": 125, "sells": 75}}, "pairCreatedAt": 1787396400000}
 
 
 def test_qualifies_identity_matched_liquid_active_pool():
@@ -18,13 +19,12 @@ def test_qualifies_identity_matched_liquid_active_pool():
     assert "not independently verified" in result["risk_label"]
 
 
-def test_records_exact_quote_mint_evidence_without_enforcing_sol_only():
-    sol_mint = "So11111111111111111111111111111111111111112"
+def test_accepts_only_exact_sol_quote_mint():
     usdc_mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 
     sol_result = qualify_candidate(
         OBSERVED,
-        {**PAIR, "quoteToken": {"address": sol_mint, "symbol": "SOL"}},
+        {**PAIR, "quoteToken": {"address": SOL_QUOTE_ADDRESS, "symbol": "SOL"}},
         now=NOW,
     )
     usdc_result = qualify_candidate(
@@ -34,17 +34,22 @@ def test_records_exact_quote_mint_evidence_without_enforcing_sol_only():
     )
 
     assert sol_result is not None
-    assert usdc_result is not None
-    assert sol_result["quote_address"] == sol_mint
-    assert usdc_result["quote_address"] == usdc_mint
-    assert usdc_result["quote_symbol"] == "USDC"
+    assert sol_result["quote_address"] == SOL_QUOTE_ADDRESS
+    assert usdc_result is None
 
 
-def test_records_missing_quote_mint_as_empty_evidence_in_phase_01a():
-    result = qualify_candidate(OBSERVED, PAIR, now=NOW)
+def test_rejects_missing_quote_mint_with_explicit_diagnostic():
+    diagnostic = {}
+    result = qualify_candidate(
+        OBSERVED,
+        {**PAIR, "quoteToken": {"symbol": "SOL"}},
+        now=NOW,
+        diagnostic=diagnostic,
+    )
 
-    assert result is not None
-    assert result["quote_address"] == ""
+    assert result is None
+    assert diagnostic["code"] == "unsupported_quote_asset"
+    assert diagnostic["title"] == "SOL quote required"
 
 
 def test_24h_change_remains_unavailable_when_provider_value_is_invalid():
@@ -118,7 +123,7 @@ def test_rotating_enrichment_eventually_checks_older_resolved_pairs(monkeypatch)
                     "chainId": "solana",
                     "pairAddress": self.pair_address,
                     "baseToken": {"address": token_address, "symbol": f"T{token_index}"},
-                    "quoteToken": {"symbol": "SOL"},
+                    "quoteToken": {"address": SOL_QUOTE_ADDRESS, "symbol": "SOL"},
                     "dexId": "test",
                     "priceUsd": "1",
                     "liquidity": {"usd": 10000},
