@@ -1,18 +1,46 @@
-from presentation.dexsato_solana_discovery_presenter import (
-    render_solana_discovery_page,
-)
+import pytest
+
+import presentation.dexsato_solana_discovery_presenter as discovery_presenter
+
+
+render_solana_discovery_page = discovery_presenter.render_solana_discovery_page
+
+
+@pytest.fixture(autouse=True)
+def _isolate_presenter_from_public_market_endpoints(monkeypatch):
+    """Keep presenter characterization deterministic and presentation-only."""
+    monkeypatch.setattr(
+        discovery_presenter,
+        "_solana_dex_card_metrics",
+        lambda: {
+            "volume": "—",
+            "change": "—",
+            "change_class": "",
+            "tvl": "—",
+            "state": "UNAVAILABLE",
+            "dot_class": " is-offline",
+            "line_path": "",
+            "area_path": "",
+        },
+    )
+    monkeypatch.setattr(discovery_presenter, "_solana_perps_volume_24h", lambda: "—")
+    monkeypatch.setattr(
+        discovery_presenter,
+        "_solana_priority_fee",
+        lambda: ("Gas · —", " is-offline"),
+    )
 
 
 def test_solana_discovery_prototype_is_honest_and_read_only():
     html = render_solana_discovery_page()
 
     assert "Solana Discovery" in html
-    assert "Evidence-led Solana intelligence" in html
-    assert "Feed unavailable" in html
+    assert "TOTAL DEX VOLUME · 24H · SOLANA" in html
+    assert "LIVE SIGNALS" in html
+    assert "No signal data displayed yet" in html
     assert "No token currently meets all qualification requirements." in html
-    assert "Network activity" in html
-    assert "Observed 24h Volume" in html
-    assert "Coming soon" in html and "Multiple chain" in html
+    assert "Experimental discovery · evidence synthesis only · not financial advice." in html
+    assert "Get buy quote" not in html
 
 
 def test_solana_discovery_has_persistent_views_and_no_fake_candidates():
@@ -21,21 +49,21 @@ def test_solana_discovery_has_persistent_views_and_no_fake_candidates():
     assert "Qualified Now" in html
     assert "Recent Discoveries" in html
     assert "Full Archive" in html
-    assert "25 per page" in html
+    assert "Page 1 of 1" in html
+    assert 'href="/discovery/solana?view=qualified&page=1"' in html
+    assert 'href="/discovery/solana?view=recent&page=1"' in html
+    assert 'href="/discovery/solana?view=archive&page=1"' in html
     assert "data-token-address" not in html
 
 
-def test_solana_discovery_is_responsive_and_supports_existing_themes():
+def test_solana_discovery_is_responsive_and_preserves_dark_terminal_tokens():
     html = render_solana_discovery_page()
 
     assert "@media(max-width:820px)" in html
     assert "@media(max-width:480px)" in html
-    assert 'data-theme-option="current"' in html
-    assert 'data-theme-option="intel"' in html
-    assert 'aria-label="Use market intelligence theme"' in html
-    assert 'data-theme-option="plain"' in html
-    assert 'aria-label="Use current dark theme"' in html
-    assert 'aria-label="Use plain white theme"' in html
+    assert "color-scheme:dark" in html
+    assert "--bg:#070b12" in html
+    assert "--cyan:#14f1d9" in html
     assert 'href="/"' in html
 
 
@@ -43,13 +71,53 @@ def test_solana_discovery_uses_market_terminal_layout():
     html = render_solana_discovery_page()
 
     assert "Solana Discovery Terminal" in html
-    assert 'class="workspace"' in html
+    assert 'class="dex-app-shell"' in html
+    assert 'class="dex-side-rail"' in html
+    assert 'class="dex-app-main"' in html
+    assert 'class="dex-volume-panel"' in html
+    assert "dex-signals-panel" in html
+    assert 'class="dex-market-category-shell"' in html
+    assert 'class="dex-market-tabs"' in html
+    assert "dex-market-intelligence" in html
+    assert "dex-token-list" in html
     assert 'class="feed-panel"' in html
-    assert 'class="intel-rail"' in html
-    assert "Network activity" in html
-    assert "Observed qualified pools" in html
-    assert "Discovery rank reflects activity, not safety." in html
-    assert "grid-template-columns:minmax(0,1fr) 310px" in html
+
+
+def test_solana_discovery_uses_restructured_market_section_order():
+    html = render_solana_discovery_page()
+
+    ordered_markers = (
+        "TOTAL DEX VOLUME · 24H · SOLANA",
+        "LIVE SIGNALS",
+        '<div class="dex-section-label"><span>MARKET VIEWS</span>',
+        'id="dex-market-panel-discovery"',
+        '<div class="dex-section-label"><span>MARKET INTELLIGENCE</span>',
+        "Experimental discovery · evidence synthesis only",
+    )
+    positions = [html.index(marker) for marker in ordered_markers]
+
+    assert positions == sorted(positions)
+
+
+def test_solana_discovery_market_tabs_have_exact_order_and_discovery_default():
+    html = render_solana_discovery_page()
+
+    ordered_tabs = (
+        'data-market-tab="trending">Trending</button>',
+        'data-market-tab="top-traded">Top Traded</button>',
+        'data-market-tab="organic">Organic</button>',
+        'data-market-tab="discovery">Discovery</button>',
+        'data-market-tab="recent">Recent</button>',
+    )
+    positions = [html.index(marker) for marker in ordered_tabs]
+
+    assert positions == sorted(positions)
+    assert 'id="dex-market-tab-discovery" class="dex-market-tab" type="button" role="tab" aria-selected="true"' in html
+    assert 'id="dex-market-panel-discovery" class="dex-market-panel dex-token-list" role="tabpanel"' in html
+    assert html.count("<h2>Token List</h2>") == 1
+    assert "fetch(" not in html
+    assert 'event.key === "ArrowRight"' in html
+    assert 'event.key === "ArrowLeft"' in html
 
 
 def test_solana_discovery_uses_terminal_typography_stack():
@@ -94,9 +162,9 @@ def test_solana_discovery_renders_connected_telemetry_without_candidates():
         "message": "Collector telemetry is connected; publication remains disabled.",
     })
 
-    assert "Collector connected" in html
-    assert "Qualified Now</span><strong>—" in html
-    assert "5 min ago" in html
+    assert "3271</strong>\n            <span>ACTIVE PAIRS" in html
+    assert "Qualified Now<b>—</b>" in html
+    assert "Collector telemetry is connected; publication remains disabled." in html
 
 
 def test_solana_discovery_renders_qualified_candidate_in_compact_feed():
@@ -115,7 +183,7 @@ def test_solana_discovery_renders_qualified_candidate_in_compact_feed():
         }],
     })
 
-    assert "Qualified Now</span><strong>1" in html
+    assert "Qualified Now<b>1</b>" in html
     assert "Example token" in html and "EX / SOL" in html
     assert "$12.00K" in html and "$4.50K" in html
     assert "data-token-address=\"token-address\"" in html
@@ -180,7 +248,7 @@ def test_solana_discovery_v33_feed_uses_safe_ascii_and_compact_header():
     assert "Previously qualified" in html
     assert "Â· exact pool" not in html
 
-def test_solana_discovery_mi_v34_has_clean_feed_font_dot_and_metric_icons():
+def test_solana_discovery_current_feed_keeps_observation_and_terminal_fonts():
     html = render_solana_discovery_page({
         "connected": True,
         "fresh": True,
@@ -199,12 +267,11 @@ def test_solana_discovery_mi_v34_has_clean_feed_font_dot_and_metric_icons():
         }],
     })
 
-    assert "Observed market activity" in html
     assert 'class="why-dot"' in html
-    assert 'class="metric metric-observed"' in html
-    assert 'class="metric metric-resolved"' in html
-    assert 'class="metric metric-qualified"' in html
-    assert 'class="metric metric-network"' in html
+    assert "Previously qualified" in html
+    assert 'data-market-tab="trending">Trending</button>' in html
+    assert 'data-market-tab="top-traded">Top Traded</button>' in html
+    assert "MARKET INTELLIGENCE" in html
     assert 'font-family:Inter,"Segoe UI Variable Text"' in html
 
 
@@ -216,9 +283,11 @@ def test_solana_discovery_v29a_has_pagination_and_observed_network_facts():
         "observed_volume_24h_usd": 12_345, "observed_txns_24h": 99,
         "observed_dex_ids": ["pumpswap", "raydium"], "candidates": [],
     })
-    assert "25 per page · Page 3 of 3" in html
-    assert "$12.35K" in html and ">99<" in html
-    assert "pumpswap" in html and "raydium" in html
+    assert "Qualified Now<b>2</b>" in html
+    assert "Recent Discoveries<b>5</b>" in html
+    assert "Full Archive<b>61</b>" in html
+    assert "Sorted by: Last qualified" in html
+    assert "Page 3 of 3" in html
     assert "Archive Context" not in html
 
 
@@ -234,9 +303,9 @@ def test_solana_discovery_v291_explains_zero_qualification_without_broken_link()
     assert "View Recent Discoveries" in html and "Open Full Archive" in html
     assert "preparing its first validated feed" not in html
     assert "#qualification-rules" not in html
-    assert "Observed 24h Volume</span><strong>$0.00" in html
-    assert "Observed 24H Txns</span><strong>0" in html
-    assert "None currently observed" in html
+    assert "Qualified Now<b>0</b>" in html
+    assert "Recent Discoveries<b>71</b>" in html
+    assert "Full Archive<b>202</b>" in html
 
 
 def test_solana_discovery_v292_renders_server_search_and_sort_clarity():

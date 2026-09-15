@@ -1864,6 +1864,26 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
       }
     }
 
+    /* TW-UI-03B — Market category tabs and Discovery relocation. */
+    .dex-market-category-shell{border:1px solid var(--line);background:var(--panel)}
+    .dex-market-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-bottom:1px solid var(--line);background:var(--panel2)}
+    .dex-market-tab{min-height:46px;padding:0 14px;border:0;border-right:1px solid var(--line);background:transparent;color:var(--muted);font:600 12px "Space Grotesk",sans-serif;cursor:pointer}
+    .dex-market-tab:last-child{border-right:0}
+    .dex-market-tab:hover{background:rgba(76,244,214,.035);color:var(--text)}
+    .dex-market-tab[aria-selected="true"]{background:rgba(76,244,214,.07);box-shadow:inset 0 -2px 0 var(--cyan);color:var(--cyan)}
+    .dex-market-tab:focus-visible{position:relative;z-index:1;outline:2px solid var(--cyan);outline-offset:-2px}
+    .dex-market-panel[hidden]{display:none!important}
+    .dex-market-panel>.feed-panel{border:0}
+    .dex-category-placeholder{min-height:260px;display:grid;place-items:center;padding:28px;text-align:center}
+    .dex-category-placeholder strong{display:block;color:var(--muted);font:600 14px "Space Grotesk",sans-serif}
+    .dex-category-placeholder small{display:block;max-width:520px;margin-top:6px;color:var(--faint);font:500 11px "JetBrains Mono",monospace;line-height:1.55}
+    .dex-market-intelligence>.dex-panel-shell{min-height:150px}
+    @media(max-width:760px){
+      .dex-market-tabs{display:flex;overflow-x:auto;scrollbar-width:thin}
+      .dex-market-tab{min-width:112px;flex:1 0 auto}
+      .dex-category-placeholder{min-height:210px}
+    }
+
   </style>
 </head>
 <body><div class="dex-app-shell">
@@ -1967,47 +1987,94 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     </div>
   </section>
 
-  <section class="dex-terminal-section">
-    <div class="dex-market-grid">
-      <article class="dex-panel-shell">
-        <div class="dex-panel-head"><strong>TOP PAIRS BY VOLUME</strong><span>Solana</span></div>
-        <div class="dex-mini-table-head"><span>#</span><span>PAIR</span><span>VOLUME 24H</span><span>%</span></div>
-        <div class="dex-panel-empty">No pair data connected to this view.</div>
-      </article>
-      <article class="dex-panel-shell">
-        <div class="dex-panel-head"><strong>TRENDING TOKENS</strong><span>Solana</span></div>
-        <div class="dex-mini-table-head"><span>#</span><span>TOKEN</span><span>ACTIVITY</span><span>24H %</span></div>
-        <div class="dex-panel-empty">No trending-token data connected to this view.</div>
-      </article>
-      <article class="dex-panel-shell">
-        <div class="dex-panel-head"><strong>MARKET INTELLIGENCE</strong><span>DexSato</span></div>
-        <div class="dex-intelligence-empty"><span class="dex-empty-icon">◇</span><div><strong>No intelligence items displayed yet</strong><small>Insights will appear only when backed by existing DexSato data.</small></div></div>
-      </article>
+  <section class="dex-terminal-section dex-market-categories" aria-label="Solana market categories">
+    <div class="dex-section-label"><span>MARKET VIEWS</span><i></i></div>
+    <div class="dex-market-category-shell">
+      <div class="dex-market-tabs" role="tablist" aria-label="Solana market categories">
+        <button id="dex-market-tab-trending" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-trending" tabindex="-1" data-market-tab="trending">Trending</button>
+        <button id="dex-market-tab-top-traded" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-top-traded" tabindex="-1" data-market-tab="top-traded">Top Traded</button>
+        <button id="dex-market-tab-organic" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-organic" tabindex="-1" data-market-tab="organic">Organic</button>
+        <button id="dex-market-tab-discovery" class="dex-market-tab" type="button" role="tab" aria-selected="true" aria-controls="dex-market-panel-discovery" tabindex="0" data-market-tab="discovery">Discovery</button>
+        <button id="dex-market-tab-recent" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-recent" tabindex="-1" data-market-tab="recent">Recent</button>
+      </div>
+
+      <section id="dex-market-panel-trending" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-trending" data-market-panel="trending" hidden>
+        <div class="dex-category-placeholder"><div><strong>Trending market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
+      </section>
+      <section id="dex-market-panel-top-traded" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-top-traded" data-market-panel="top-traded" hidden>
+        <div class="dex-category-placeholder"><div><strong>Top Traded market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
+      </section>
+      <section id="dex-market-panel-organic" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-organic" data-market-panel="organic" hidden>
+        <div class="dex-category-placeholder"><div><strong>Organic market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
+      </section>
+      <section id="dex-market-panel-discovery" class="dex-market-panel dex-token-list" role="tabpanel" aria-labelledby="dex-market-tab-discovery" data-market-panel="discovery">
+        <section class="feed-panel">
+          <div class="feed-head">
+            <div><span class="eyebrow">SOLANA DISCOVERY</span><h2>Token List</h2><p>Persistent, server-paginated observations. Historical inclusion does not mean current qualification.</p></div>
+            <form class="terminal-search" method="get" action="/discovery/solana"><input type="hidden" name="view" value="__VIEW__"><input type="hidden" name="page" value="1"><input type="search" name="q" value="__SEARCH_QUERY__" placeholder="Search token, symbol, contract or DEX" aria-label="Search the discovery archive"><button type="submit">Search</button>__CLEAR_SEARCH__</form>
+          </div>
+          <nav class="discovery-segments-v1" aria-label="Solana discovery products" role="tablist">
+            <a class="discovery-segment-v1 active" href="/discovery/solana" role="tab" aria-selected="true" aria-current="page"><span>New Discoveries</span><small>Active</small></a>
+            <span class="discovery-segment-v1 upcoming" role="tab" aria-selected="false" aria-disabled="true"><span>Established Solana</span><small>Soon</small></span>
+          </nav>
+          <nav class="feed-tabs" aria-label="Discovery views">__TABS__</nav>
+          <div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div>
+          <div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>
+          __CANDIDATE_FEED____PAGINATION__
+        </section>
+      </section>
+      <section id="dex-market-panel-recent" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-recent" data-market-panel="recent" hidden>
+        <div class="dex-category-placeholder"><div><strong>Recent market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
+      </section>
     </div>
   </section>
 
-  <section class="dex-terminal-section dex-token-list">
-    <div class="dex-section-label"><span>TOKEN LIST</span><i></i></div>
-    <section class="feed-panel">
-      <div class="feed-head">
-        <div><span class="eyebrow">SOLANA DISCOVERY</span><h2>Token List</h2><p>Persistent, server-paginated observations. Historical inclusion does not mean current qualification.</p></div>
-        <form class="terminal-search" method="get" action="/discovery/solana"><input type="hidden" name="view" value="__VIEW__"><input type="hidden" name="page" value="1"><input type="search" name="q" value="__SEARCH_QUERY__" placeholder="Search token, symbol, contract or DEX" aria-label="Search the discovery archive"><button type="submit">Search</button>__CLEAR_SEARCH__</form>
-      </div>
-      <nav class="discovery-segments-v1" aria-label="Solana discovery products" role="tablist">
-        <a class="discovery-segment-v1 active" href="/discovery/solana" role="tab" aria-selected="true" aria-current="page"><span>New Discoveries</span><small>Active</small></a>
-        <span class="discovery-segment-v1 upcoming" role="tab" aria-selected="false" aria-disabled="true"><span>Established Solana</span><small>Soon</small></span>
-      </nav>
-      <nav class="feed-tabs" aria-label="Discovery views">__TABS__</nav>
-      <div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div>
-      <div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>
-      __CANDIDATE_FEED____PAGINATION__
-    </section>
+  <section class="dex-terminal-section dex-market-intelligence" aria-label="Market intelligence">
+    <div class="dex-section-label"><span>MARKET INTELLIGENCE</span><i></i></div>
+    <article class="dex-panel-shell">
+      <div class="dex-panel-head"><strong>MARKET INTELLIGENCE</strong><span>DexSato</span></div>
+      <div class="dex-intelligence-empty"><span class="dex-empty-icon">◇</span><div><strong>No intelligence items displayed yet</strong><small>Insights will appear only when backed by existing DexSato data.</small></div></div>
+    </article>
   </section>
   <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>__STATUS_MESSAGE__</span></footer>
 </main>
   </div>
 </div><script>
   const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){const value=theme==="plain"?"plain":theme==="intel"?"intel":"current";if(value==="current")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=value;themeOptions.forEach(button=>{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});try{localStorage.setItem("dexsato-theme",value);}catch(error){}}let saved="current";try{saved=localStorage.getItem("dexsato-theme")||"current";}catch(error){}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
+
+  /* TW-UI-03B — Presentation-only market category navigation. */
+  (() => {
+    const tabs = [...document.querySelectorAll("[data-market-tab]")];
+    const panels = [...document.querySelectorAll("[data-market-panel]")];
+    if (!tabs.length || !panels.length) return;
+
+    function activateTab(tab) {
+      const selected = tab.dataset.marketTab;
+      tabs.forEach(item => {
+        const active = item === tab;
+        item.setAttribute("aria-selected", String(active));
+        item.tabIndex = active ? 0 : -1;
+      });
+      panels.forEach(panel => {
+        panel.hidden = panel.dataset.marketPanel !== selected;
+      });
+    }
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => activateTab(tab));
+      tab.addEventListener("keydown", event => {
+        let nextIndex = index;
+        if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+        else if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === "Home") nextIndex = 0;
+        else if (event.key === "End") nextIndex = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        activateTab(tabs[nextIndex]);
+        tabs[nextIndex].focus();
+      });
+    });
+  })();
 
   /* HEADER V1.3 — Solana Wallet Connect */
   (() => {
