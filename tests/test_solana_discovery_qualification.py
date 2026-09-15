@@ -18,6 +18,35 @@ def test_qualifies_identity_matched_liquid_active_pool():
     assert "not independently verified" in result["risk_label"]
 
 
+def test_records_exact_quote_mint_evidence_without_enforcing_sol_only():
+    sol_mint = "So11111111111111111111111111111111111111112"
+    usdc_mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+
+    sol_result = qualify_candidate(
+        OBSERVED,
+        {**PAIR, "quoteToken": {"address": sol_mint, "symbol": "SOL"}},
+        now=NOW,
+    )
+    usdc_result = qualify_candidate(
+        OBSERVED,
+        {**PAIR, "quoteToken": {"address": usdc_mint, "symbol": "USDC"}},
+        now=NOW,
+    )
+
+    assert sol_result is not None
+    assert usdc_result is not None
+    assert sol_result["quote_address"] == sol_mint
+    assert usdc_result["quote_address"] == usdc_mint
+    assert usdc_result["quote_symbol"] == "USDC"
+
+
+def test_records_missing_quote_mint_as_empty_evidence_in_phase_01a():
+    result = qualify_candidate(OBSERVED, PAIR, now=NOW)
+
+    assert result is not None
+    assert result["quote_address"] == ""
+
+
 def test_24h_change_remains_unavailable_when_provider_value_is_invalid():
     result = qualify_candidate(
         OBSERVED,

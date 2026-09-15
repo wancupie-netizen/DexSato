@@ -155,6 +155,7 @@ def qualify_candidate(
         "symbol": str(base.get("symbol") or observed.get("symbol") or "Unknown"),
         "name": str(base.get("name") or observed.get("name") or "Unknown token"),
         "quote_symbol": str(quote.get("symbol") or "Unknown"),
+        "quote_address": str(quote.get("address") or "").strip(),
         "dex_id": str(pair.get("dexId") or "Unknown"),
         "price_usd": price,
         "change_24h": change_24h,
