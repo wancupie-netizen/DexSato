@@ -1978,35 +1978,45 @@ def render_solana_discovery_page(
     .dex-market-tab:focus-visible{position:relative;z-index:1;outline:2px solid var(--cyan);outline-offset:-2px}
     .dex-market-panel[hidden]{display:none!important}
     .dex-market-panel>.feed-panel{border:0}
+    /* TOKEN-LIST-UI-01 — compact premium market-feed table. */
     .dex-trending-table{min-width:0;background:var(--panel)}
-    .dex-trending-head,.dex-trending-row{display:grid;grid-template-columns:minmax(250px,1.5fr) minmax(110px,.7fr) minmax(90px,.55fr) minmax(120px,.8fr) minmax(120px,.8fr) minmax(190px,1.1fr);align-items:center}
-    .dex-trending-head{min-height:36px;border-bottom:1px solid var(--line);background:var(--panel2)}
-    .dex-trending-head span{padding:0 14px;color:var(--faint);font:500 10.5px "JetBrains Mono",monospace;letter-spacing:.04em}
+    .dex-trending-head,.dex-trending-row{display:grid;grid-template-columns:minmax(230px,1.25fr) minmax(100px,.62fr) minmax(82px,.48fr) minmax(110px,.68fr) minmax(110px,.68fr) minmax(250px,1.45fr);align-items:center}
+    .dex-trending-head{min-height:34px;border-bottom:1px solid var(--line);background:var(--panel2)}
+    .dex-trending-head span{padding:0 12px;color:var(--faint);font:600 10px "JetBrains Mono",monospace;letter-spacing:.055em;text-transform:uppercase}
     .dex-trending-head span:not(:first-child){text-align:right}
-    .dex-trending-row{min-height:62px;border-bottom:1px solid var(--line)}
+    .dex-trending-head span:last-child{text-align:left;padding-left:16px}
+    .dex-trending-row{min-height:58px;border-bottom:1px solid rgba(42,56,71,.72);transition:background .12s ease,box-shadow .12s ease}
     .dex-trending-row:last-child{border-bottom:0}
-    .dex-trending-row:hover{background:rgba(76,244,214,.025)}
-    .dex-trending-token{display:flex;align-items:center;gap:10px;min-width:0;padding:10px 14px}
-    .dex-trending-rank{width:24px;flex:0 0 24px;color:var(--faint);font:500 10px "JetBrains Mono",monospace}
-    .dex-trending-token-link{display:flex;align-items:center;gap:10px;min-width:0;color:inherit;text-decoration:none}
-    .dex-trending-token-link img,.dex-trending-avatar{width:30px;height:30px;flex:0 0 30px;border:1px solid var(--line2);border-radius:50%;background:var(--panel2)}
+    .dex-trending-row:hover{background:rgba(76,244,214,.035);box-shadow:inset 2px 0 0 rgba(76,244,214,.72)}
+    .dex-trending-token{display:flex;align-items:center;gap:9px;min-width:0;padding:8px 12px}
+    .dex-trending-rank{width:22px;flex:0 0 22px;color:var(--faint);font:500 9.5px "JetBrains Mono",monospace}
+    .dex-trending-token-link{display:flex;align-items:center;gap:10px;min-width:0;color:inherit;text-decoration:none;border-radius:6px}
+    .dex-trending-token-link:focus-visible{outline:2px solid var(--cyan);outline-offset:4px}
+    .dex-trending-token-link img,.dex-trending-avatar{width:32px;height:32px;flex:0 0 32px;border:1px solid var(--line2);border-radius:50%;background:var(--panel2)}
     .dex-trending-token-link img{object-fit:cover}
     .dex-trending-avatar{display:grid;place-items:center;color:var(--cyan);font:600 9px "JetBrains Mono",monospace}
     .dex-trending-token-link span{min-width:0}
-    .dex-trending-token-link strong{display:block;color:var(--text);font:600 12.5px "Space Grotesk",sans-serif}
-    .dex-trending-token-link small{display:block;max-width:220px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--faint);font:500 9.5px "JetBrains Mono",monospace}
-    .dex-trending-value{padding:10px 14px;text-align:right;border-left:1px solid rgba(29,39,51,.55)}
-    .dex-trending-value strong{color:var(--text);font:600 11.5px "JetBrains Mono",monospace}
+    .dex-trending-token-link strong{display:block;color:var(--text);font:700 13px/1.15 "Space Grotesk",sans-serif;letter-spacing:.005em}
+    .dex-trending-token-link small{display:block;max-width:190px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--faint);font:500 9px/1.2 "JetBrains Mono",monospace}
+    .dex-trending-value{padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums}
+    .dex-trending-value strong{color:var(--text);font:650 11.5px "JetBrains Mono",monospace}
     .dex-trending-value strong.up{color:var(--cyan)}
     .dex-trending-value strong.down{color:var(--risk)}
-    .dex-trending-signal{display:inline-block;color:var(--faint);font:500 10px/1.35 "JetBrains Mono",monospace;text-align:left}
+    .dex-trending-signal-cell{text-align:left;padding-left:16px;padding-right:14px}
+    .dex-trending-signal{display:block;max-width:340px;color:var(--faint);font:500 10px/1.35 "JetBrains Mono",monospace;text-align:left}
     .dex-trending-signal.is-active{color:var(--text)}
-    .dex-trending-signal strong{display:block;color:inherit;font:600 10.5px/1.35 "Space Grotesk",sans-serif}
-    .dex-trending-signal small{display:block;margin-top:3px;color:var(--faint);font:500 9px/1.35 "JetBrains Mono",monospace;white-space:normal}
+    .dex-trending-signal strong{display:block;color:inherit;font:700 11px/1.25 "Space Grotesk",sans-serif;white-space:normal}
+    .dex-trending-signal small{display:block;margin-top:3px;color:var(--faint);font:600 9px/1.25 "JetBrains Mono",monospace;white-space:normal}
     .dex-trending-signal.is-bullish strong{color:var(--cyan)}
     .dex-trending-signal.is-bearish strong{color:var(--risk)}
     .dex-trending-signal.is-mixed strong{color:var(--violet)}
-    @media(max-width:980px){.dex-trending-table{overflow-x:auto}.dex-trending-head,.dex-trending-row{min-width:900px}}
+    @media(max-width:1180px){
+      .dex-trending-head,.dex-trending-row{grid-template-columns:minmax(220px,1.2fr) 100px 82px 110px 110px minmax(230px,1.35fr)}
+    }
+    @media(max-width:980px){
+      .dex-trending-table{overflow-x:auto;overscroll-behavior-inline:contain}
+      .dex-trending-head,.dex-trending-row{min-width:920px}
+    }
     .dex-category-placeholder{min-height:260px;display:grid;place-items:center;padding:28px;text-align:center}
     .dex-category-placeholder strong{display:block;color:var(--muted);font:600 14px "Space Grotesk",sans-serif}
     .dex-category-placeholder small{display:block;max-width:520px;margin-top:6px;color:var(--faint);font:500 11px "JetBrains Mono",monospace;line-height:1.55}
