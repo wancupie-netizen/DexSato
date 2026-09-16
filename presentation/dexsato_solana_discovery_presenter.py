@@ -307,6 +307,87 @@ def _why_now(candidate: dict[str, Any]) -> str:
     return " / ".join(reasons[:2]) or "Qualified market activity"
 
 
+def _signed_percent(value: Any) -> tuple[str, str]:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "—", ""
+    return f"{amount:+.2f}%", "up" if amount >= 0 else "down"
+
+
+def _trending_row(item: dict[str, Any], rank: int) -> str:
+    token_address = str(item.get("token_address") or "").strip()
+    symbol = escape(str(item.get("symbol") or "Unknown"))
+    name = escape(str(item.get("name") or "Unknown token"))
+    icon = str(item.get("icon") or "").strip()
+    href = escape(str(item.get("href") or ""), quote=True)
+    price = escape(_usd(item.get("price_usd")))
+    change, change_class = _signed_percent(item.get("change_1h"))
+    volume = escape(_compact_usd(item.get("volume_1h_usd")))
+    liquidity = escape(_compact_usd(item.get("liquidity_usd")))
+    signal = str(item.get("detected_signal") or "").strip()
+
+    signal_markup = (
+        f'<span class="dex-trending-signal is-active">{escape(signal)}</span>'
+        if signal
+        else '<span class="dex-trending-signal">—</span>'
+    )
+    icon_markup = (
+        f'<img src="{escape(icon, quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer">'
+        if icon.startswith("https://")
+        else f'<span class="dex-trending-avatar">{escape(symbol[:2].upper())}</span>'
+    )
+    token_content = f'{icon_markup}<span><strong>{symbol}</strong><small>{name}</small></span>'
+    token_link = (
+        f'<a class="dex-trending-token-link" href="{href}">{token_content}</a>'
+        if token_address and href
+        else f'<div class="dex-trending-token-link">{token_content}</div>'
+    )
+
+    return (
+        '<article class="dex-trending-row">'
+        f'<div class="dex-trending-token"><span class="dex-trending-rank">{rank:02d}</span>{token_link}</div>'
+        f'<div class="dex-trending-value"><strong>{price}</strong></div>'
+        f'<div class="dex-trending-value"><strong class="{change_class}">{escape(change)}</strong></div>'
+        f'<div class="dex-trending-value"><strong>{volume}</strong></div>'
+        f'<div class="dex-trending-value"><strong>{liquidity}</strong></div>'
+        f'<div class="dex-trending-value dex-trending-signal-cell">{signal_markup}</div>'
+        '</article>'
+    )
+
+
+def _render_trending_panel(trending: dict[str, Any] | None) -> str:
+    data = trending if isinstance(trending, dict) else {}
+    rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+    row_markup = "".join(
+        _trending_row(item, rank)
+        for rank, item in enumerate(
+            (row for row in rows if isinstance(row, dict)), start=1
+        )
+    )
+
+    if not row_markup:
+        message = escape(
+            str(data.get("message") or "Trending data is temporarily unavailable.")
+        )
+        return (
+            '<div class="dex-category-placeholder"><div>'
+            '<strong>No eligible Trending tokens displayed</strong>'
+            f'<small>{message} DexSato does not fabricate replacement rows.</small>'
+            '</div></div>'
+        )
+
+    return (
+        '<div class="dex-trending-table">'
+        '<div class="dex-trending-head" aria-hidden="true">'
+        '<span>Token</span><span>Price</span><span>1h %</span>'
+        '<span>Volume 1h</span><span>Liquidity</span><span>Detected Signal</span>'
+        '</div>'
+        f'<div class="dex-trending-list">{row_markup}</div>'
+        '</div>'
+    )
+
+
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     symbol = escape(str(candidate.get("symbol") or "Unknown"))
     name = escape(str(candidate.get("name") or "Unknown token"))
@@ -342,9 +423,14 @@ def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     )
 
 
-def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
+def render_solana_discovery_page(
+    feed: dict[str, Any] | None = None,
+    *,
+    trending: dict[str, Any] | None = None,
+) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
+    trending_panel = _render_trending_panel(trending)
     dex_card = _solana_dex_card_metrics()
     dex_volume_24h = dex_card["volume"]
     dex_volume_change = dex_card["change"]
@@ -1868,6 +1954,30 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
     .dex-market-tab:focus-visible{position:relative;z-index:1;outline:2px solid var(--cyan);outline-offset:-2px}
     .dex-market-panel[hidden]{display:none!important}
     .dex-market-panel>.feed-panel{border:0}
+    .dex-trending-table{min-width:0;background:var(--panel)}
+    .dex-trending-head,.dex-trending-row{display:grid;grid-template-columns:minmax(250px,1.5fr) minmax(110px,.7fr) minmax(90px,.55fr) minmax(120px,.8fr) minmax(120px,.8fr) minmax(190px,1.1fr);align-items:center}
+    .dex-trending-head{min-height:36px;border-bottom:1px solid var(--line);background:var(--panel2)}
+    .dex-trending-head span{padding:0 14px;color:var(--faint);font:500 10.5px "JetBrains Mono",monospace;letter-spacing:.04em}
+    .dex-trending-head span:not(:first-child){text-align:right}
+    .dex-trending-row{min-height:62px;border-bottom:1px solid var(--line)}
+    .dex-trending-row:last-child{border-bottom:0}
+    .dex-trending-row:hover{background:rgba(76,244,214,.025)}
+    .dex-trending-token{display:flex;align-items:center;gap:10px;min-width:0;padding:10px 14px}
+    .dex-trending-rank{width:24px;flex:0 0 24px;color:var(--faint);font:500 10px "JetBrains Mono",monospace}
+    .dex-trending-token-link{display:flex;align-items:center;gap:10px;min-width:0;color:inherit;text-decoration:none}
+    .dex-trending-token-link img,.dex-trending-avatar{width:30px;height:30px;flex:0 0 30px;border:1px solid var(--line2);border-radius:50%;background:var(--panel2)}
+    .dex-trending-token-link img{object-fit:cover}
+    .dex-trending-avatar{display:grid;place-items:center;color:var(--cyan);font:600 9px "JetBrains Mono",monospace}
+    .dex-trending-token-link span{min-width:0}
+    .dex-trending-token-link strong{display:block;color:var(--text);font:600 12.5px "Space Grotesk",sans-serif}
+    .dex-trending-token-link small{display:block;max-width:220px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--faint);font:500 9.5px "JetBrains Mono",monospace}
+    .dex-trending-value{padding:10px 14px;text-align:right;border-left:1px solid rgba(29,39,51,.55)}
+    .dex-trending-value strong{color:var(--text);font:600 11.5px "JetBrains Mono",monospace}
+    .dex-trending-value strong.up{color:var(--cyan)}
+    .dex-trending-value strong.down{color:var(--risk)}
+    .dex-trending-signal{display:inline-block;color:var(--faint);font:500 10px/1.35 "JetBrains Mono",monospace}
+    .dex-trending-signal.is-active{color:var(--text)}
+    @media(max-width:980px){.dex-trending-table{overflow-x:auto}.dex-trending-head,.dex-trending-row{min-width:900px}}
     .dex-category-placeholder{min-height:260px;display:grid;place-items:center;padding:28px;text-align:center}
     .dex-category-placeholder strong{display:block;color:var(--muted);font:600 14px "Space Grotesk",sans-serif}
     .dex-category-placeholder small{display:block;max-width:520px;margin-top:6px;color:var(--faint);font:500 11px "JetBrains Mono",monospace;line-height:1.55}
@@ -2028,7 +2138,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
       </div>
 
       <section id="dex-market-panel-trending" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-trending" data-market-panel="trending" hidden>
-        <div class="dex-category-placeholder"><div><strong>Trending market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
+        __TRENDING_PANEL__
       </section>
       <section id="dex-market-panel-top-traded" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-top-traded" data-market-panel="top-traded" hidden>
         <div class="dex-category-placeholder"><div><strong>Top Traded market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
@@ -2248,6 +2358,7 @@ def render_solana_discovery_page(feed: dict[str, Any] | None = None) -> str:
         .replace("__UPDATED__", escape(updated))
         .replace("__STATUS_LABEL__", escape(status_label))
         .replace("__DISCOVERY_FEED__", discovery_feed)
+        .replace("__TRENDING_PANEL__", trending_panel)
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))

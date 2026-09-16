@@ -69,10 +69,17 @@ from application.solana_discovery_feed_service import (
     load_solana_discovery_engine_feed,
     load_solana_discovery_feed,
 )
+from application.jupiter_market_feed_service import load_jupiter_trending_feed
 from application.solana_discovery_token_service import (
     load_solana_discovery_live_candles,
     load_solana_discovery_token,
     load_solana_discovery_transactions,
+)
+from application.trending_token_workspace_service import (
+    TrendingWorkspaceUnavailable,
+    load_trending_live_candles,
+    load_trending_token_workspace,
+    load_trending_transactions,
 )
 from application.solana_wallet_balance_service import (
     SolanaWalletBalanceRejected,
@@ -130,6 +137,9 @@ from presentation.dexsato_solana_discovery_presenter import (
 )
 from presentation.dexsato_solana_discovery_token_presenter import (
     render_solana_discovery_token_page,
+)
+from presentation.dexsato_market_feed_token_presenter import (
+    render_trending_token_page,
 )
 
 render_founder_snapshot_dashboard = render_user_dashboard
@@ -242,7 +252,8 @@ def _content_cookie_secure(request: Request) -> bool:
 def app_home() -> str:
     """Display Solana Discovery as the DexSato main app."""
     return render_solana_discovery_page(
-        load_solana_discovery_feed(view="qualified", page=1, page_size=25, query="")
+        load_solana_discovery_feed(view="qualified", page=1, page_size=25, query=""),
+        trending=load_jupiter_trending_feed(),
     )
 
 
@@ -278,7 +289,8 @@ def major_assets() -> str:
 def solana_discovery(view: str = "qualified", page: int = 1, q: str = "") -> str:
     """Display the read-only Solana Discovery D1 prototype."""
     return render_solana_discovery_page(
-        load_solana_discovery_feed(view=view, page=page, page_size=25, query=q)
+        load_solana_discovery_feed(view=view, page=page, page_size=25, query=q),
+        trending=load_jupiter_trending_feed(),
     )
 
 
@@ -293,6 +305,71 @@ def solana_discovery_token(token_address: str) -> str:
         raise HTTPException(status_code=404, detail="Qualified discovery token is not available.")
     feed = load_solana_discovery_feed()
     return render_solana_discovery_token_page(detail, feed=feed)
+
+
+@app.get(
+    "/market/trending/{token_address}",
+    response_class=HTMLResponse,
+)
+def trending_token_workspace(token_address: str) -> str:
+    """Display one current Jupiter Trending token in a separate workspace."""
+    try:
+        loaded = load_trending_token_workspace(token_address)
+    except TrendingWorkspaceUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Trending market feed is temporarily unavailable.",
+        ) from error
+    if loaded is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trending token is not available in the current eligible feed.",
+        )
+    detail, feed = loaded
+    return render_trending_token_page(detail, feed=feed)
+
+
+@app.get("/api/market/trending/{token_address}/candles")
+def trending_token_candles(
+    token_address: str,
+    timeframe: str = "5m",
+) -> dict[str, object]:
+    try:
+        payload = load_trending_live_candles(token_address, timeframe)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except TrendingWorkspaceUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Trending market feed is temporarily unavailable.",
+        ) from error
+    except (requests.RequestException, RuntimeError, TypeError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Trending candle data is temporarily unavailable.",
+        ) from error
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Trending token is not available.")
+    return payload
+
+
+@app.get("/api/market/trending/{token_address}/transactions")
+def trending_token_transactions(token_address: str) -> dict[str, object]:
+    try:
+        payload = load_trending_transactions(token_address)
+    except TrendingWorkspaceUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Trending market feed is temporarily unavailable.",
+        ) from error
+    except (requests.RequestException, RuntimeError, TypeError, ValueError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Trending transaction data is temporarily unavailable.",
+        ) from error
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Trending token is not available.")
+    return payload
 
 
 @app.get("/api/discovery/solana/engine")
