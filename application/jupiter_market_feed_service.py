@@ -13,6 +13,7 @@ from application.dexscreener_sol_pair_resolver import (
     ExactSolPairResolverUnavailable,
     resolve_exact_sol_pairs,
 )
+from application.trending_signal_interpreter import interpret_trending_signal
 
 
 JUPITER_TRENDING_1H_URL = "https://api.jup.ag/tokens/v2/toptrending/1h"
@@ -69,9 +70,9 @@ def _normalize_trending_row(token: dict[str, Any], pair: dict[str, Any]) -> dict
         "quote_address": str(pair.get("quote_address") or "").strip(),
         "quote_symbol": str(pair.get("quote_symbol") or "SOL").strip(),
         "trending_rank": token.get("_trending_rank"),
-        # Never fabricate engine output. Existing read-only signal data can be
-        # wired later without modifying engine behavior.
-        "detected_signal": None,
+        # Stateless market intelligence: canonical DexSato price/volume/
+        # liquidity semantics plus transparent Jupiter 1h evidence.
+        "detected_signal": interpret_trending_signal(stats),
         # TRENDING-02C will introduce a separate market-feed workspace route.
         # Keep rows non-clickable until that route/data contract is available.
         "href": f"/market/trending/{mint}",

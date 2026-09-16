@@ -325,13 +325,37 @@ def _trending_row(item: dict[str, Any], rank: int) -> str:
     change, change_class = _signed_percent(item.get("change_1h"))
     volume = escape(_compact_usd(item.get("volume_1h_usd")))
     liquidity = escape(_compact_usd(item.get("liquidity_usd")))
-    signal = str(item.get("detected_signal") or "").strip()
+    signal_data = item.get("detected_signal")
+    signal_primary = ""
+    signal_evidence: list[str] = []
+    signal_direction = "neutral"
+    if isinstance(signal_data, dict):
+        signal_primary = str(signal_data.get("primary_signal") or "").strip()
+        raw_evidence = signal_data.get("secondary_evidence")
+        if isinstance(raw_evidence, list):
+            signal_evidence = [
+                str(value).strip()
+                for value in raw_evidence[:2]
+                if str(value).strip()
+            ]
+        raw_direction = str(signal_data.get("direction") or "neutral").strip().lower()
+        if raw_direction in {"bullish", "bearish", "mixed", "neutral"}:
+            signal_direction = raw_direction
+    elif signal_data:
+        signal_primary = str(signal_data).strip()
 
-    signal_markup = (
-        f'<span class="dex-trending-signal is-active">{escape(signal)}</span>'
-        if signal
-        else '<span class="dex-trending-signal">—</span>'
-    )
+    if signal_primary:
+        evidence_markup = (
+            f'<small>{escape(" · ".join(signal_evidence))}</small>'
+            if signal_evidence
+            else ""
+        )
+        signal_markup = (
+            f'<span class="dex-trending-signal is-active is-{signal_direction}">'
+            f'<strong>{escape(signal_primary)}</strong>{evidence_markup}</span>'
+        )
+    else:
+        signal_markup = '<span class="dex-trending-signal">—</span>'
     icon_markup = (
         f'<img src="{escape(icon, quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer">'
         if icon.startswith("https://")
@@ -1975,8 +1999,13 @@ def render_solana_discovery_page(
     .dex-trending-value strong{color:var(--text);font:600 11.5px "JetBrains Mono",monospace}
     .dex-trending-value strong.up{color:var(--cyan)}
     .dex-trending-value strong.down{color:var(--risk)}
-    .dex-trending-signal{display:inline-block;color:var(--faint);font:500 10px/1.35 "JetBrains Mono",monospace}
+    .dex-trending-signal{display:inline-block;color:var(--faint);font:500 10px/1.35 "JetBrains Mono",monospace;text-align:left}
     .dex-trending-signal.is-active{color:var(--text)}
+    .dex-trending-signal strong{display:block;color:inherit;font:600 10.5px/1.35 "Space Grotesk",sans-serif}
+    .dex-trending-signal small{display:block;margin-top:3px;color:var(--faint);font:500 9px/1.35 "JetBrains Mono",monospace;white-space:normal}
+    .dex-trending-signal.is-bullish strong{color:var(--cyan)}
+    .dex-trending-signal.is-bearish strong{color:var(--risk)}
+    .dex-trending-signal.is-mixed strong{color:var(--violet)}
     @media(max-width:980px){.dex-trending-table{overflow-x:auto}.dex-trending-head,.dex-trending-row{min-width:900px}}
     .dex-category-placeholder{min-height:260px;display:grid;place-items:center;padding:28px;text-align:center}
     .dex-category-placeholder strong{display:block;color:var(--muted);font:600 14px "Space Grotesk",sans-serif}
