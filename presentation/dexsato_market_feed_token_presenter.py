@@ -92,6 +92,123 @@ def _top_traded_source_context(detail: dict[str, Any]) -> str:
     )
 
 
+def _organic_flow_source_context(detail: dict[str, Any]) -> str:
+    rank = detail.get("organic_flow_rank")
+    rank_text = f"#{rank}" if isinstance(rank, int) and rank > 0 else "—"
+    organic_score = detail.get("organic_score")
+    try:
+        organic_score_text = f"{float(organic_score):.2f}"
+    except (TypeError, ValueError):
+        organic_score_text = "Unavailable"
+    liquidity = detail.get("liquidity_usd")
+    try:
+        liquidity_text = f"${float(liquidity):,.0f}"
+    except (TypeError, ValueError):
+        liquidity_text = "Unavailable"
+
+    return (
+        '<section class="card market-feed-context-v02c">'
+        '<h3>Organic Flow Context</h3>'
+        '<div class="metrics">'
+        '<div class="metric"><span>Source</span>'
+        '<b class="value" style="font-size:13px">Jupiter Organic Score · 1H</b></div>'
+        '<div class="metric"><span>Organic rank</span>'
+        f'<b class="value">{escape(rank_text)}</b></div>'
+        '<div class="metric"><span>Organic score</span>'
+        f'<b class="value">{escape(organic_score_text)}</b></div>'
+        '<div class="metric"><span>Pool liquidity</span>'
+        f'<b class="value">{escape(liquidity_text)}</b></div>'
+        '</div>'
+        '</section>'
+    )
+
+
+def render_organic_flow_token_page(
+    detail: dict[str, Any],
+    *,
+    feed: dict[str, Any],
+) -> str:
+    """Reuse the stable Token Workspace shell with Organic Flow semantics."""
+    html = render_solana_discovery_token_page(detail, feed=feed)
+    token_address = escape(
+        str(detail.get("token_address") or ""),
+        quote=True,
+    )
+
+    html = html.replace(
+        f"/api/discovery/solana/{token_address}/candles",
+        f"/api/market/organic-flow/{token_address}/candles",
+    )
+    html = html.replace(
+        f"/api/discovery/solana/{token_address}/transactions",
+        f"/api/market/organic-flow/{token_address}/transactions",
+    )
+    html = html.replace(
+        'href="/discovery/solana/',
+        'href="/market/organic-flow/',
+    )
+
+    html = html.replace(
+        " · Solana Discovery</title>",
+        " · Organic Flow Workspace</title>",
+        1,
+    )
+    html = html.replace(
+        '<span class="eyebrow">Qualified exact-token workspace</span>',
+        '<span class="eyebrow">Organic Flow market workspace · Jupiter 1H</span>',
+        1,
+    )
+    html = html.replace(
+        "Review observed market activity, exact-pool identity and disclosed risk before taking any action.",
+        "Review current Organic Flow context and exact-pool market evidence. "
+        "Organic Flow inclusion is separate from DexSato Discovery qualification.",
+        1,
+    )
+
+    # Discovery qualification semantics do not belong to market-feed workspaces.
+    html = _remove_section(
+        html,
+        '<section class="qualification qualification-vp0d3',
+    )
+    html = _remove_section(
+        html,
+        '<section class="discovery-engine-v12',
+    )
+
+    # Bind the inherited production Jupiter trade UI to the separate
+    # Organic Flow execution route contract.
+    html = html.replace(
+        'data-jupiter-sandbox data-token-address=',
+        f'data-jupiter-sandbox data-api-base="/api/market/organic-flow/{token_address}" data-token-address=',
+        1,
+    )
+
+    context = _organic_flow_source_context(detail)
+    html = html.replace(
+        '<section class="card market-snapshot-v26">',
+        context + '<section class="card market-snapshot-v26">',
+        1,
+    )
+
+    html = html.replace(
+        "<h2>Token List</h2>",
+        "<h2>Organic Flow Tokens</h2>",
+        1,
+    )
+    html = html.replace(
+        '<span class="token-list-chain-v07a">SOLANA</span>',
+        '<span class="token-list-chain-v07a">JUPITER · ORGANIC 1H</span>',
+        1,
+    )
+    html = html.replace(
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Token list views">',
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Organic Flow market feed" hidden>',
+        1,
+    )
+
+    return html
+
+
 def render_top_traded_token_page(
     detail: dict[str, Any],
     *,

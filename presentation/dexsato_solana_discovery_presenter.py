@@ -483,6 +483,57 @@ def _render_top_traded_panel(top_traded: dict[str, Any] | None) -> str:
     )
 
 
+def _render_organic_flow_panel(organic_flow: dict[str, Any] | None) -> str:
+    """Render Organic Flow with the locked market-feed table UI."""
+    data = organic_flow if isinstance(organic_flow, dict) else {}
+    rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+    valid_rows = [row for row in rows if isinstance(row, dict)]
+
+    liquidity_values: list[float] = []
+    for row in valid_rows:
+        try:
+            liquidity_values.append(
+                max(0.0, float(row.get("liquidity_usd") or 0))
+            )
+        except (TypeError, ValueError):
+            continue
+    liquidity_max = max(liquidity_values, default=0.0)
+
+    rendered_rows: list[str] = []
+    for display_rank, item in enumerate(valid_rows, start=1):
+        source_rank = item.get("organic_flow_rank")
+        if not isinstance(source_rank, int) or source_rank <= 0:
+            source_rank = display_rank
+        rendered_rows.append(
+            _trending_row(item, source_rank, liquidity_max=liquidity_max)
+        )
+    row_markup = "".join(rendered_rows)
+
+    if not row_markup:
+        message = escape(
+            str(
+                data.get("message")
+                or "Organic Flow data is temporarily unavailable."
+            )
+        )
+        return (
+            '<div class="dex-category-placeholder"><div>'
+            '<strong>No eligible Organic Flow tokens displayed</strong>'
+            f'<small>{message} DexSato does not fabricate replacement rows.</small>'
+            '</div></div>'
+        )
+
+    return (
+        '<div class="dex-trending-table">'
+        '<div class="dex-trending-head" aria-hidden="true">'
+        '<span>Token</span><span>Price</span><span>1h %</span>'
+        '<span>Volume 1h</span><span>Liquidity</span><span>Detected Signal</span>'
+        '</div>'
+        f'<div class="dex-trending-list">{row_markup}</div>'
+        '</div>'
+    )
+
+
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     symbol = escape(str(candidate.get("symbol") or "Unknown"))
     name = escape(str(candidate.get("name") or "Unknown token"))
@@ -523,11 +574,13 @@ def render_solana_discovery_page(
     *,
     trending: dict[str, Any] | None = None,
     top_traded: dict[str, Any] | None = None,
+    organic_flow: dict[str, Any] | None = None,
 ) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
     trending_panel = _render_trending_panel(trending)
     top_traded_panel = _render_top_traded_panel(top_traded)
+    organic_flow_panel = _render_organic_flow_panel(organic_flow)
     dex_card = _solana_dex_card_metrics()
     dex_volume_24h = dex_card["volume"]
     dex_volume_change = dex_card["change"]
@@ -2247,7 +2300,7 @@ def render_solana_discovery_page(
       <div class="dex-market-tabs" role="tablist" aria-label="Solana market categories" aria-orientation="horizontal">
         <button id="dex-market-tab-trending" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-trending" tabindex="-1" data-market-tab="trending">Trending</button>
         <button id="dex-market-tab-top-traded" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-top-traded" tabindex="-1" data-market-tab="top-traded">Top Traded</button>
-        <button id="dex-market-tab-organic" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-organic" tabindex="-1" data-market-tab="organic">Organic</button>
+        <button id="dex-market-tab-organic" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-organic" tabindex="-1" data-market-tab="organic">Organic Flow</button>
         <button id="dex-market-tab-discovery" class="dex-market-tab" type="button" role="tab" aria-selected="true" aria-controls="dex-market-panel-discovery" tabindex="0" data-market-tab="discovery">Discovery</button>
         <button id="dex-market-tab-recent" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-recent" tabindex="-1" data-market-tab="recent">Recent</button>
       </div>
@@ -2259,7 +2312,7 @@ def render_solana_discovery_page(
         __TOP_TRADED_PANEL__
       </section>
       <section id="dex-market-panel-organic" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-organic" data-market-panel="organic" hidden>
-        <div class="dex-category-placeholder"><div><strong>Organic market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
+        __ORGANIC_FLOW_PANEL__
       </section>
       <section id="dex-market-panel-discovery" class="dex-market-panel dex-token-list" role="tabpanel" aria-labelledby="dex-market-tab-discovery" data-market-panel="discovery">
         <section class="feed-panel">
@@ -2475,6 +2528,7 @@ def render_solana_discovery_page(
         .replace("__DISCOVERY_FEED__", discovery_feed)
         .replace("__TRENDING_PANEL__", trending_panel)
         .replace("__TOP_TRADED_PANEL__", top_traded_panel)
+        .replace("__ORGANIC_FLOW_PANEL__", organic_flow_panel)
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))
