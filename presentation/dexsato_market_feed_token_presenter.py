@@ -65,6 +65,119 @@ def _source_context(detail: dict[str, Any]) -> str:
     )
 
 
+def _top_traded_source_context(detail: dict[str, Any]) -> str:
+    rank = detail.get("top_traded_rank")
+    rank_text = f"#{rank}" if isinstance(rank, int) and rank > 0 else "—"
+    dex_id = escape(str(detail.get("dex_id") or "Unknown"))
+    liquidity = detail.get("liquidity_usd")
+    try:
+        liquidity_text = f"${float(liquidity):,.0f}"
+    except (TypeError, ValueError):
+        liquidity_text = "Unavailable"
+
+    return (
+        '<section class="card market-feed-context-v02c">'
+        '<h3>Top Traded Context</h3>'
+        '<div class="metrics">'
+        '<div class="metric"><span>Source</span>'
+        '<b class="value" style="font-size:13px">Jupiter · 24H</b></div>'
+        '<div class="metric"><span>Top Traded rank</span>'
+        f'<b class="value">{escape(rank_text)}</b></div>'
+        '<div class="metric"><span>Exact SOL pool</span>'
+        f'<b class="value" style="font-size:13px">{dex_id}</b></div>'
+        '<div class="metric"><span>Pool liquidity</span>'
+        f'<b class="value">{escape(liquidity_text)}</b></div>'
+        '</div>'
+        '</section>'
+    )
+
+
+def render_top_traded_token_page(
+    detail: dict[str, Any],
+    *,
+    feed: dict[str, Any],
+) -> str:
+    """Reuse the Token Workspace shell with Top Traded-only semantics."""
+    html = render_solana_discovery_token_page(detail, feed=feed)
+    token_address = escape(
+        str(detail.get("token_address") or ""),
+        quote=True,
+    )
+
+    html = html.replace(
+        f"/api/discovery/solana/{token_address}/candles",
+        f"/api/market/top-traded/{token_address}/candles",
+    )
+    html = html.replace(
+        f"/api/discovery/solana/{token_address}/transactions",
+        f"/api/market/top-traded/{token_address}/transactions",
+    )
+    html = html.replace(
+        'href="/discovery/solana/',
+        'href="/market/top-traded/',
+    )
+
+    html = html.replace(
+        " · Solana Discovery</title>",
+        " · Top Traded Workspace</title>",
+        1,
+    )
+    html = html.replace(
+        '<span class="eyebrow">Qualified exact-token workspace</span>',
+        '<span class="eyebrow">Top Traded market workspace · Jupiter 24H</span>',
+        1,
+    )
+    html = html.replace(
+        "Review observed market activity, exact-pool identity and disclosed risk before taking any action.",
+        "Review current Top Traded context and exact-pool market evidence. "
+        "Top Traded inclusion is separate from DexSato Discovery qualification.",
+        1,
+    )
+
+    # Discovery qualification semantics do not belong to market-feed workspaces.
+    html = _remove_section(
+        html,
+        '<section class="qualification qualification-vp0d3',
+    )
+    html = _remove_section(
+        html,
+        '<section class="discovery-engine-v12',
+    )
+
+    # Bind the inherited production Jupiter trade UI to the separate
+    # Top Traded execution route contract.
+    html = html.replace(
+        'data-jupiter-sandbox data-token-address=',
+        f'data-jupiter-sandbox data-api-base="/api/market/top-traded/{token_address}" data-token-address=',
+        1,
+    )
+
+    context = _top_traded_source_context(detail)
+    html = html.replace(
+        '<section class="card market-snapshot-v26">',
+        context + '<section class="card market-snapshot-v26">',
+        1,
+    )
+
+    html = html.replace(
+        "<h2>Token List</h2>",
+        "<h2>Top Traded Tokens</h2>",
+        1,
+    )
+    html = html.replace(
+        '<span class="token-list-chain-v07a">SOLANA</span>',
+        '<span class="token-list-chain-v07a">JUPITER · 24H</span>',
+        1,
+    )
+    html = html.replace(
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Token list views">',
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Top Traded market feed" hidden>',
+        1,
+    )
+
+    return html
+
+
 def render_trending_token_page(
     detail: dict[str, Any],
     *,

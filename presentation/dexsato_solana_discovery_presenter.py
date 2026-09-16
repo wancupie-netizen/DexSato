@@ -437,6 +437,52 @@ def _render_trending_panel(trending: dict[str, Any] | None) -> str:
     )
 
 
+def _render_top_traded_panel(top_traded: dict[str, Any] | None) -> str:
+    """Render the Top Traded feed with the locked market-feed table UI."""
+    data = top_traded if isinstance(top_traded, dict) else {}
+    rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+    valid_rows = [row for row in rows if isinstance(row, dict)]
+
+    liquidity_values: list[float] = []
+    for row in valid_rows:
+        try:
+            liquidity_values.append(
+                max(0.0, float(row.get("liquidity_usd") or 0))
+            )
+        except (TypeError, ValueError):
+            continue
+    liquidity_max = max(liquidity_values, default=0.0)
+
+    row_markup = "".join(
+        _trending_row(item, rank, liquidity_max=liquidity_max)
+        for rank, item in enumerate(valid_rows, start=1)
+    )
+
+    if not row_markup:
+        message = escape(
+            str(
+                data.get("message")
+                or "Top Traded data is temporarily unavailable."
+            )
+        )
+        return (
+            '<div class="dex-category-placeholder"><div>'
+            '<strong>No eligible Top Traded tokens displayed</strong>'
+            f'<small>{message} DexSato does not fabricate replacement rows.</small>'
+            '</div></div>'
+        )
+
+    return (
+        '<div class="dex-trending-table">'
+        '<div class="dex-trending-head" aria-hidden="true">'
+        '<span>Token</span><span>Price</span><span>1h %</span>'
+        '<span>Volume 1h</span><span>Liquidity</span><span>Detected Signal</span>'
+        '</div>'
+        f'<div class="dex-trending-list">{row_markup}</div>'
+        '</div>'
+    )
+
+
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     symbol = escape(str(candidate.get("symbol") or "Unknown"))
     name = escape(str(candidate.get("name") or "Unknown token"))
@@ -476,10 +522,12 @@ def render_solana_discovery_page(
     feed: dict[str, Any] | None = None,
     *,
     trending: dict[str, Any] | None = None,
+    top_traded: dict[str, Any] | None = None,
 ) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
     trending_panel = _render_trending_panel(trending)
+    top_traded_panel = _render_top_traded_panel(top_traded)
     dex_card = _solana_dex_card_metrics()
     dex_volume_24h = dex_card["volume"]
     dex_volume_change = dex_card["change"]
@@ -2208,7 +2256,7 @@ def render_solana_discovery_page(
         __TRENDING_PANEL__
       </section>
       <section id="dex-market-panel-top-traded" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-top-traded" data-market-panel="top-traded" hidden>
-        <div class="dex-category-placeholder"><div><strong>Top Traded market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
+        __TOP_TRADED_PANEL__
       </section>
       <section id="dex-market-panel-organic" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-organic" data-market-panel="organic" hidden>
         <div class="dex-category-placeholder"><div><strong>Organic market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
@@ -2426,6 +2474,7 @@ def render_solana_discovery_page(
         .replace("__STATUS_LABEL__", escape(status_label))
         .replace("__DISCOVERY_FEED__", discovery_feed)
         .replace("__TRENDING_PANEL__", trending_panel)
+        .replace("__TOP_TRADED_PANEL__", top_traded_panel)
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))
