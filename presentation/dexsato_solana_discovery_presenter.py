@@ -38,6 +38,21 @@ def _compact_usd(value: Any) -> str:
     return f"${amount:,.0f}"
 
 
+def _liquidity_meter_pct(value: Any, maximum: float) -> int:
+    """Return a compact visual level only; never changes liquidity semantics."""
+    try:
+        amount = max(0.0, float(value))
+        ceiling = max(0.0, float(maximum))
+    except (TypeError, ValueError):
+        return 0
+    if amount <= 0 or ceiling <= 0:
+        return 0
+    ratio = min(1.0, amount / ceiling)
+    # Square-root scaling keeps smaller eligible pools visible without
+    # pretending the bar is a linear risk/quality score.
+    return max(12, min(100, round((ratio ** 0.5) * 100)))
+
+
 def _solana_dex_card_metrics() -> dict[str, str]:
     """Fetch presentation-only Solana DEX card metrics from public DefiLlama endpoints."""
     metrics = {
@@ -315,7 +330,7 @@ def _signed_percent(value: Any) -> tuple[str, str]:
     return f"{amount:+.2f}%", "up" if amount >= 0 else "down"
 
 
-def _trending_row(item: dict[str, Any], rank: int) -> str:
+def _trending_row(item: dict[str, Any], rank: int, *, liquidity_max: float = 0.0) -> str:
     token_address = str(item.get("token_address") or "").strip()
     symbol = escape(str(item.get("symbol") or "Unknown"))
     name = escape(str(item.get("name") or "Unknown token"))
@@ -325,6 +340,7 @@ def _trending_row(item: dict[str, Any], rank: int) -> str:
     change, change_class = _signed_percent(item.get("change_1h"))
     volume = escape(_compact_usd(item.get("volume_1h_usd")))
     liquidity = escape(_compact_usd(item.get("liquidity_usd")))
+    liquidity_meter = _liquidity_meter_pct(item.get("liquidity_usd"), liquidity_max)
     signal_data = item.get("detected_signal")
     signal_primary = ""
     signal_evidence: list[str] = []
@@ -374,7 +390,10 @@ def _trending_row(item: dict[str, Any], rank: int) -> str:
         f'<div class="dex-trending-value"><strong>{price}</strong></div>'
         f'<div class="dex-trending-value"><strong class="{change_class}">{escape(change)}</strong></div>'
         f'<div class="dex-trending-value"><strong>{volume}</strong></div>'
-        f'<div class="dex-trending-value"><strong>{liquidity}</strong></div>'
+        f'<div class="dex-trending-value dex-trending-liquidity">'
+        f'<strong>{liquidity}</strong>'
+        f'<span class="dex-liquidity-meter" aria-hidden="true">'
+        f'<i style="width:{liquidity_meter}%"></i></span></div>'
         f'<div class="dex-trending-value dex-trending-signal-cell">{signal_markup}</div>'
         '</article>'
     )
@@ -383,11 +402,17 @@ def _trending_row(item: dict[str, Any], rank: int) -> str:
 def _render_trending_panel(trending: dict[str, Any] | None) -> str:
     data = trending if isinstance(trending, dict) else {}
     rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+    valid_rows = [row for row in rows if isinstance(row, dict)]
+    liquidity_values: list[float] = []
+    for row in valid_rows:
+        try:
+            liquidity_values.append(max(0.0, float(row.get("liquidity_usd") or 0)))
+        except (TypeError, ValueError):
+            continue
+    liquidity_max = max(liquidity_values, default=0.0)
     row_markup = "".join(
-        _trending_row(item, rank)
-        for rank, item in enumerate(
-            (row for row in rows if isinstance(row, dict)), start=1
-        )
+        _trending_row(item, rank, liquidity_max=liquidity_max)
+        for rank, item in enumerate(valid_rows, start=1)
     )
 
     if not row_markup:
@@ -1982,31 +2007,34 @@ def render_solana_discovery_page(
     .dex-trending-table{min-width:0;background:var(--panel)}
     .dex-trending-head,.dex-trending-row{display:grid;grid-template-columns:minmax(230px,1.25fr) minmax(100px,.62fr) minmax(82px,.48fr) minmax(110px,.68fr) minmax(110px,.68fr) minmax(250px,1.45fr);align-items:center}
     .dex-trending-head{min-height:34px;border-bottom:1px solid var(--line);background:var(--panel2)}
-    .dex-trending-head span{padding:0 12px;color:var(--faint);font:600 10px "JetBrains Mono",monospace;letter-spacing:.055em;text-transform:uppercase}
+    .dex-trending-head span{padding:0 12px;color:var(--faint);font:600 11.5px "JetBrains Mono",monospace;letter-spacing:.055em;text-transform:uppercase}
     .dex-trending-head span:not(:first-child){text-align:right}
     .dex-trending-head span:last-child{text-align:left;padding-left:16px}
     .dex-trending-row{min-height:58px;border-bottom:1px solid rgba(42,56,71,.72);transition:background .12s ease,box-shadow .12s ease}
     .dex-trending-row:last-child{border-bottom:0}
     .dex-trending-row:hover{background:rgba(76,244,214,.035);box-shadow:inset 2px 0 0 rgba(76,244,214,.72)}
     .dex-trending-token{display:flex;align-items:center;gap:9px;min-width:0;padding:8px 12px}
-    .dex-trending-rank{width:22px;flex:0 0 22px;color:var(--faint);font:500 9.5px "JetBrains Mono",monospace}
+    .dex-trending-rank{width:22px;flex:0 0 22px;color:var(--faint);font:500 11px "JetBrains Mono",monospace}
     .dex-trending-token-link{display:flex;align-items:center;gap:10px;min-width:0;color:inherit;text-decoration:none;border-radius:6px}
     .dex-trending-token-link:focus-visible{outline:2px solid var(--cyan);outline-offset:4px}
     .dex-trending-token-link img,.dex-trending-avatar{width:32px;height:32px;flex:0 0 32px;border:1px solid var(--line2);border-radius:50%;background:var(--panel2)}
     .dex-trending-token-link img{object-fit:cover}
     .dex-trending-avatar{display:grid;place-items:center;color:var(--cyan);font:600 9px "JetBrains Mono",monospace}
     .dex-trending-token-link span{min-width:0}
-    .dex-trending-token-link strong{display:block;color:var(--text);font:700 13px/1.15 "Space Grotesk",sans-serif;letter-spacing:.005em}
-    .dex-trending-token-link small{display:block;max-width:190px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--faint);font:500 9px/1.2 "JetBrains Mono",monospace}
+    .dex-trending-token-link strong{display:block;color:var(--text);font:700 15px/1.15 "Space Grotesk",sans-serif;letter-spacing:.005em}
+    .dex-trending-token-link small{display:block;max-width:190px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--faint);font:500 11px/1.2 "JetBrains Mono",monospace}
     .dex-trending-value{padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums}
-    .dex-trending-value strong{color:var(--text);font:650 11.5px "JetBrains Mono",monospace}
+    .dex-trending-value strong{color:var(--text);font:650 14px "JetBrains Mono",monospace}
+    .dex-trending-liquidity{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+    .dex-liquidity-meter{width:42px;height:3px;flex:0 0 42px;overflow:hidden;background:rgba(124,140,160,.18)}
+    .dex-liquidity-meter i{display:block;height:100%;min-width:3px;background:var(--cyan);opacity:.82}
     .dex-trending-value strong.up{color:var(--cyan)}
     .dex-trending-value strong.down{color:var(--risk)}
     .dex-trending-signal-cell{text-align:left;padding-left:16px;padding-right:14px}
     .dex-trending-signal{display:block;max-width:340px;color:var(--faint);font:500 10px/1.35 "JetBrains Mono",monospace;text-align:left}
     .dex-trending-signal.is-active{color:var(--text)}
-    .dex-trending-signal strong{display:block;color:inherit;font:700 11px/1.25 "Space Grotesk",sans-serif;white-space:normal}
-    .dex-trending-signal small{display:block;margin-top:3px;color:var(--faint);font:600 9px/1.25 "JetBrains Mono",monospace;white-space:normal}
+    .dex-trending-signal strong{display:block;color:inherit;font:700 14px/1.25 "Space Grotesk",sans-serif;white-space:normal}
+    .dex-trending-signal small{display:block;margin-top:3px;color:var(--faint);font:600 11px/1.25 "JetBrains Mono",monospace;white-space:normal}
     .dex-trending-signal.is-bullish strong{color:var(--cyan)}
     .dex-trending-signal.is-bearish strong{color:var(--risk)}
     .dex-trending-signal.is-mixed strong{color:var(--violet)}
