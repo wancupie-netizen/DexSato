@@ -38,29 +38,6 @@ def _remove_section(html: str, marker: str) -> str:
             return html[:start] + html[cursor:]
 
 
-def _remove_execute_button(html: str) -> str:
-    """Defense-in-depth: remove any inherited Jupiter execute button."""
-    marker = "data-execute-swap"
-    while True:
-        attr_at = html.find(marker)
-        if attr_at < 0:
-            return html
-
-        start = html.rfind("<button", 0, attr_at)
-        if start < 0:
-            return html
-
-        open_end = html.find(">", start)
-        if open_end < 0 or not (start < attr_at < open_end):
-            return html
-
-        end = html.find("</button>", open_end)
-        if end < 0:
-            return html
-
-        html = html[:start] + html[end + len("</button>"):]
-
-
 def _source_context(detail: dict[str, Any]) -> str:
     rank = detail.get("trending_rank")
     rank_text = f"#{rank}" if isinstance(rank, int) and rank > 0 else "—"
@@ -130,13 +107,14 @@ def render_trending_token_page(
         '<section class="discovery-engine-v12',
     )
 
-    # Execution is deliberately staged for TRENDING-02D. Remove the Discovery
-    # execution control so this separate workspace cannot call the wrong contract.
-    html = _remove_section(
-        html,
-        '<section class="card jupiter jupiter-v27',
+    # Reuse the production Jupiter execution UI while binding it to the
+    # separate Trending route contract.
+    token_address = escape(str(detail.get("token_address") or ""), quote=True)
+    html = html.replace(
+        'data-jupiter-sandbox data-token-address=',
+        f'data-jupiter-sandbox data-api-base="/api/market/trending/{token_address}" data-token-address=',
+        1,
     )
-    html = _remove_execute_button(html)
 
     context = _source_context(detail)
 

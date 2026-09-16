@@ -34,7 +34,8 @@
     const tokenSymbol = sandbox.dataset.tokenSymbol || "token";
     const wrappedSolMint = "So11111111111111111111111111111111111111112";
     const sellRouteStatus = document.querySelector("[data-sell-route-status]");
-    const apiBase = "/api/discovery/solana/" + encodeURIComponent(tokenAddress);
+    const apiBase = sandbox.dataset.apiBase
+        || ("/api/discovery/solana/" + encodeURIComponent(tokenAddress));
     const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
     const BALANCE_REQUEST_TIMEOUT_MS = 12000;
     const QUOTE_REQUEST_TIMEOUT_MS = 18000;

@@ -20,9 +20,14 @@ TRENDING_FETCH_LIMIT = 50
 TRENDING_DISPLAY_LIMIT = 30
 TRENDING_MIN_EXACT_POOL_LIQUIDITY_USD = 100_000.0
 TRENDING_CACHE_SECONDS = 60.0
+# Workspace continuity only: a token that was genuinely eligible and rendered
+# may remain open briefly even if Jupiter's live Top Trending ranking refreshes.
+# This does not put the token back into the public Trending list.
+TRENDING_WORKSPACE_GRACE_SECONDS = 900.0
 _CACHE_LOCK = threading.Lock()
 _CACHE_AT = 0.0
 _CACHE_PAYLOAD: dict[str, Any] | None = None
+_RECENT_ELIGIBLE_ROWS: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _number(value: Any) -> float | None:
@@ -189,6 +194,63 @@ def _fetch_trending(
     }
 
 
+def _remember_eligible_rows(
+    payload: dict[str, Any],
+    *,
+    observed_at: float,
+) -> None:
+    """Remember only rows that already passed the live Trending eligibility flow."""
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        return
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        mint = str(row.get("token_address") or "").strip()
+        if mint:
+            _RECENT_ELIGIBLE_ROWS[mint] = (observed_at, dict(row))
+
+    expired = [
+        mint
+        for mint, (seen_at, _row) in _RECENT_ELIGIBLE_ROWS.items()
+        if observed_at < seen_at
+        or (observed_at - seen_at) >= TRENDING_WORKSPACE_GRACE_SECONDS
+    ]
+    for mint in expired:
+        _RECENT_ELIGIBLE_ROWS.pop(mint, None)
+
+
+def load_recent_jupiter_trending_row(
+    token_address: str,
+    *,
+    now_monotonic: Callable[[], float] = time.monotonic,
+) -> dict[str, Any] | None:
+    """Return a recently displayed eligible row within the continuity window."""
+    address = str(token_address or "").strip()
+    if not address:
+        return None
+
+    now = now_monotonic()
+    with _CACHE_LOCK:
+        item = _RECENT_ELIGIBLE_ROWS.get(address)
+        if item is None:
+            return None
+
+        seen_at, row = item
+        if (
+            now < seen_at
+            or (now - seen_at) >= TRENDING_WORKSPACE_GRACE_SECONDS
+        ):
+            _RECENT_ELIGIBLE_ROWS.pop(address, None)
+            return None
+
+        result = dict(row)
+        result["trending_feed_state"] = "recent"
+        result["trending_observed_age_seconds"] = max(0.0, now - seen_at)
+        return result
+
+
 def load_jupiter_trending_feed(
     *,
     request_get: Callable[..., Any] = requests.get,
@@ -215,5 +277,7 @@ def load_jupiter_trending_feed(
     with _CACHE_LOCK:
         _CACHE_AT = now
         _CACHE_PAYLOAD = dict(payload)
+        if payload.get("connected") is True:
+            _remember_eligible_rows(payload, observed_at=now)
 
     return payload

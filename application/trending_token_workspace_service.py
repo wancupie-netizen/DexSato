@@ -11,7 +11,10 @@ from typing import Any, Callable
 
 import requests
 
-from application.jupiter_market_feed_service import load_jupiter_trending_feed
+from application.jupiter_market_feed_service import (
+    load_jupiter_trending_feed,
+    load_recent_jupiter_trending_row,
+)
 from application.solana_discovery_token_service import (
     load_solana_discovery_live_candles,
     load_solana_discovery_token,
@@ -93,14 +96,114 @@ def load_trending_candidate_feed(
     }
 
 
+def _load_trending_feed_for_token(
+    token_address: str,
+    *,
+    market_loader: Callable[..., dict[str, Any]] = load_jupiter_trending_feed,
+) -> dict[str, Any]:
+    """Use live eligibility first, then bounded continuity for a displayed row."""
+    feed = load_trending_candidate_feed(market_loader=market_loader)
+    address = str(token_address or "").strip()
+
+    candidates = feed.get("candidates")
+    if not isinstance(candidates, list):
+        candidates = []
+
+    if any(
+        isinstance(candidate, dict)
+        and str(candidate.get("token_address") or "").strip() == address
+        for candidate in candidates
+    ):
+        return feed
+
+    recent_row = load_recent_jupiter_trending_row(address)
+    if recent_row is None:
+        return feed
+
+    recent_candidate = _candidate_from_row(recent_row)
+    if recent_candidate is None:
+        return feed
+
+    augmented = dict(feed)
+    augmented["candidates"] = [*candidates, recent_candidate]
+    augmented["workspace_continuity"] = "recently-observed"
+    return augmented
+
+
+def load_trending_execution_feed(
+    token_address: str,
+    *,
+    market_loader: Callable[..., dict[str, Any]] = load_jupiter_trending_feed,
+) -> dict[str, Any]:
+    """Return the bounded Trending feed used by workspace and execution routes."""
+    return _load_trending_feed_for_token(
+        token_address,
+        market_loader=market_loader,
+    )
+
+
+def load_trending_execution_record(
+    token_address: str,
+    *,
+    feed: dict[str, Any] | None = None,
+    market_loader: Callable[..., dict[str, Any]] = load_jupiter_trending_feed,
+) -> dict[str, Any] | None:
+    """Return one candidate from the bounded Trending execution feed."""
+    address = str(token_address or "").strip()
+    active_feed = (
+        feed
+        if isinstance(feed, dict)
+        else _load_trending_feed_for_token(
+            address,
+            market_loader=market_loader,
+        )
+    )
+    candidates = active_feed.get("candidates")
+    if not isinstance(candidates, list):
+        return None
+
+    for candidate in candidates:
+        if (
+            isinstance(candidate, dict)
+            and str(candidate.get("token_address") or "").strip() == address
+        ):
+            return candidate
+    return None
+
+
+def is_trending_token_workspace_eligible(
+    token_address: str,
+    *,
+    market_loader: Callable[..., dict[str, Any]] = load_jupiter_trending_feed,
+) -> bool:
+    """Validate live or recently displayed Trending eligibility."""
+    feed = _load_trending_feed_for_token(
+        token_address,
+        market_loader=market_loader,
+    )
+    address = str(token_address or "").strip()
+    candidates = feed.get("candidates")
+    if not isinstance(candidates, list):
+        return False
+
+    return any(
+        isinstance(candidate, dict)
+        and str(candidate.get("token_address") or "").strip() == address
+        for candidate in candidates
+    )
+
+
 def load_trending_token_workspace(
     token_address: str,
     *,
     market_loader: Callable[..., dict[str, Any]] = load_jupiter_trending_feed,
     request_get: Callable[..., Any] = requests.get,
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    """Return one live Trending workspace without touching Discovery storage."""
-    feed = load_trending_candidate_feed(market_loader=market_loader)
+    """Return one Trending workspace without touching Discovery storage."""
+    feed = _load_trending_feed_for_token(
+        token_address,
+        market_loader=market_loader,
+    )
     address = str(token_address or "").strip()
 
     detail = load_solana_discovery_token(
@@ -128,7 +231,10 @@ def load_trending_live_candles(
     market_loader: Callable[..., dict[str, Any]] = load_jupiter_trending_feed,
     request_get: Callable[..., Any] = requests.get,
 ) -> dict[str, Any] | None:
-    feed = load_trending_candidate_feed(market_loader=market_loader)
+    feed = _load_trending_feed_for_token(
+        token_address,
+        market_loader=market_loader,
+    )
     return load_solana_discovery_live_candles(
         token_address,
         timeframe,
@@ -143,7 +249,10 @@ def load_trending_transactions(
     market_loader: Callable[..., dict[str, Any]] = load_jupiter_trending_feed,
     request_get: Callable[..., Any] = requests.get,
 ) -> dict[str, Any] | None:
-    feed = load_trending_candidate_feed(market_loader=market_loader)
+    feed = _load_trending_feed_for_token(
+        token_address,
+        market_loader=market_loader,
+    )
     return load_solana_discovery_transactions(
         token_address,
         feed=feed,

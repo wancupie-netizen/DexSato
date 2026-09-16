@@ -77,6 +77,10 @@ from application.solana_discovery_token_service import (
 )
 from application.trending_token_workspace_service import (
     TrendingWorkspaceUnavailable,
+    is_trending_token_workspace_eligible,
+    load_trending_candidate_feed,
+    load_trending_execution_feed,
+    load_trending_execution_record,
     load_trending_live_candles,
     load_trending_token_workspace,
     load_trending_transactions,
@@ -419,6 +423,190 @@ def solana_discovery_transactions(token_address: str) -> dict[str, object]:
             detail="Qualified discovery token is not available.",
         )
     return payload
+
+
+def _require_trending_market_token(token_address: str) -> None:
+    """Require live or recently displayed Trending workspace eligibility."""
+    try:
+        eligible = is_trending_token_workspace_eligible(token_address)
+    except TrendingWorkspaceUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Trending market feed is temporarily unavailable.",
+        ) from error
+
+    if not eligible:
+        raise HTTPException(
+            status_code=404,
+            detail="Token is not available in the Trending workspace window.",
+        )
+
+
+@app.get("/api/market/trending/{token_address}/jupiter-quote")
+def trending_jupiter_quote(
+    token_address: str,
+    amount_sol: str = "0.1",
+    amount: str | None = None,
+    side: str = "buy",
+) -> dict[str, object]:
+    """Return the production Jupiter quote contract for a current Trending token."""
+    from application.jupiter_quote_service import (
+        JupiterQuoteNotConfigured,
+        JupiterQuoteUnavailable,
+        fetch_jupiter_quote,
+    )
+
+    _require_trending_market_token(token_address)
+    try:
+        feed = load_trending_execution_feed(token_address)
+        return fetch_jupiter_quote(
+            token_address,
+            amount if amount is not None else amount_sol,
+            side=side,
+            feed=feed,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except JupiterQuoteNotConfigured as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Jupiter quote sandbox is not configured.",
+        ) from error
+    except JupiterQuoteUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Jupiter quote is temporarily unavailable.",
+        ) from error
+
+
+@app.get("/api/market/trending/{token_address}/wallet-balance")
+async def trending_wallet_balance(
+    token_address: str,
+    wallet_address: str,
+) -> dict[str, object]:
+    """Return read-only balances for a current Trending token."""
+    await run_in_threadpool(_require_trending_market_token, token_address)
+    try:
+        feed = load_trending_execution_feed(token_address)
+        return await run_in_threadpool(
+            load_solana_wallet_balance,
+            token_address,
+            wallet_address,
+            record_loader=lambda address: load_trending_execution_record(
+                address,
+                feed=feed,
+            ),
+        )
+    except SolanaWalletBalanceRejected as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except SolanaWalletBalanceUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@app.post("/api/market/trending/{token_address}/jupiter-order")
+async def trending_jupiter_order(
+    token_address: str,
+    request: Request,
+) -> dict[str, object]:
+    """Prepare the same production Jupiter order through a Trending route."""
+    from application.jupiter_quote_service import JupiterQuoteNotConfigured, JupiterQuoteUnavailable
+    from application.jupiter_swap_service import (
+        JupiterSwapExpired,
+        JupiterSwapPendingLimit,
+        JupiterSwapRejected,
+        prepare_jupiter_swap,
+    )
+
+    await run_in_threadpool(_require_trending_market_token, token_address)
+    payload = await _jupiter_swap_body(
+        request,
+        {"amount", "amount_sol", "side", "wallet_address", "risk_acknowledged"},
+    )
+    trade_amount = (
+        payload.get("amount")
+        if payload.get("amount") is not None
+        else payload.get("amount_sol")
+    )
+    wallet_address = str(payload.get("wallet_address") or "")
+    side = str(payload.get("side") or "buy")
+
+    try:
+        feed = load_trending_execution_feed(token_address)
+        balance = await run_in_threadpool(
+            load_solana_wallet_balance,
+            token_address,
+            wallet_address,
+            record_loader=lambda address: load_trending_execution_record(
+                address,
+                feed=feed,
+            ),
+        )
+        await run_in_threadpool(
+            validate_wallet_trade_amount, balance, side, trade_amount,
+        )
+        return await run_in_threadpool(
+            prepare_jupiter_swap,
+            token_address,
+            trade_amount,
+            wallet_address,
+            side=side,
+            risk_acknowledged=payload.get("risk_acknowledged") is True,
+            feed=feed,
+        )
+    except JupiterSwapExpired as error:
+        raise HTTPException(status_code=410, detail=str(error)) from error
+    except JupiterSwapPendingLimit as error:
+        raise HTTPException(status_code=429, detail=str(error)) from error
+    except (JupiterSwapRejected, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except SolanaWalletBalanceUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except JupiterPendingStoreUnavailable as error:
+        raise HTTPException(status_code=503, detail="Swap coordination is temporarily unavailable.") from error
+    except JupiterQuoteNotConfigured as error:
+        raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
+    except JupiterQuoteUnavailable as error:
+        raise HTTPException(status_code=503, detail=safe_jupiter_error_detail(error)) from error
+
+
+@app.post("/api/market/trending/{token_address}/jupiter-execute")
+async def trending_jupiter_execute(
+    token_address: str,
+    request: Request,
+) -> dict[str, object]:
+    """Relay a wallet-approved Jupiter transaction through the Trending route."""
+    from application.jupiter_quote_service import JupiterQuoteNotConfigured, JupiterQuoteUnavailable
+    from application.jupiter_swap_service import (
+        JupiterSwapExpired,
+        JupiterSwapRejected,
+        execute_jupiter_swap,
+    )
+
+    await run_in_threadpool(_require_trending_market_token, token_address)
+    payload = await _jupiter_swap_body(
+        request,
+        {"request_id", "wallet_address", "signed_transaction"},
+    )
+    try:
+        feed = load_trending_execution_feed(token_address)
+        return await run_in_threadpool(
+            execute_jupiter_swap,
+            token_address,
+            str(payload.get("request_id") or ""),
+            str(payload.get("wallet_address") or ""),
+            str(payload.get("signed_transaction") or ""),
+            feed=feed,
+        )
+    except JupiterSwapExpired as error:
+        raise HTTPException(status_code=410, detail=str(error)) from error
+    except (JupiterSwapRejected, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except JupiterPendingStoreUnavailable as error:
+        raise HTTPException(status_code=503, detail="Swap coordination is temporarily unavailable.") from error
+    except JupiterQuoteNotConfigured as error:
+        raise HTTPException(status_code=503, detail="Jupiter swap pilot is not configured.") from error
+    except JupiterQuoteUnavailable as error:
+        raise HTTPException(status_code=503, detail="Jupiter swap execution is temporarily unavailable.") from error
 
 
 @app.get("/api/discovery/solana/{token_address}/jupiter-quote")
