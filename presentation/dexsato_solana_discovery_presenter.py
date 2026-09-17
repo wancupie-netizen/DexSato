@@ -790,6 +790,246 @@ def _render_live_signals_panel(
     )
 
 
+def _render_market_intelligence_panel(
+    trending: dict[str, Any] | None,
+    top_traded: dict[str, Any] | None,
+    organic_flow: dict[str, Any] | None,
+    recent: dict[str, Any] | None,
+    *,
+    dex_volume_change: str,
+) -> str:
+    """Aggregate existing detected_signal output into three market-level observations."""
+    sources = (
+        ("Trending", trending),
+        ("Top Traded", top_traded),
+        ("Organic Flow", organic_flow),
+        ("Recent", recent),
+    )
+
+    def recent_row_is_within_2h(row: dict[str, Any]) -> bool:
+        value = str(row.get("last_seen_at") or "").strip()
+        if not value:
+            return False
+        candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
+        try:
+            from datetime import datetime, timezone
+
+            observed = datetime.fromisoformat(candidate)
+            if observed.tzinfo is None:
+                observed = observed.replace(tzinfo=timezone.utc)
+            age_seconds = (
+                datetime.now(timezone.utc) - observed.astimezone(timezone.utc)
+            ).total_seconds()
+        except (TypeError, ValueError):
+            return False
+        return 0 <= age_seconds <= 2 * 60 * 60
+
+    active_views: set[str] = set()
+    token_signals: dict[str, dict[str, Any]] = {}
+
+    for source_name, payload in sources:
+        data = payload if isinstance(payload, dict) else {}
+        rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+        source_has_signal = False
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if source_name == "Recent" and not recent_row_is_within_2h(row):
+                continue
+
+            signal = row.get("detected_signal")
+            if not isinstance(signal, dict):
+                continue
+
+            primary = str(signal.get("primary_signal") or "").strip()
+            if not primary:
+                continue
+
+            token_address = str(row.get("token_address") or "").strip()
+            if not token_address:
+                continue
+
+            source_has_signal = True
+            raw_direction = str(signal.get("direction") or "neutral").strip().lower()
+            direction = (
+                raw_direction
+                if raw_direction in {"bullish", "bearish", "mixed", "neutral"}
+                else "neutral"
+            )
+            raw_evidence = signal.get("secondary_evidence")
+            evidence = (
+                [str(value).strip() for value in raw_evidence if str(value).strip()]
+                if isinstance(raw_evidence, list)
+                else []
+            )
+
+            if token_address not in token_signals:
+                try:
+                    liquidity_usd = float(row.get("liquidity_usd"))
+                except (TypeError, ValueError):
+                    liquidity_usd = None
+                token_signals[token_address] = {
+                    "direction": direction,
+                    "evidence": evidence,
+                    "liquidity_usd": (
+                        liquidity_usd
+                        if liquidity_usd is not None and liquidity_usd >= 0
+                        else None
+                    ),
+                }
+
+        if source_has_signal:
+            active_views.add(source_name)
+
+    if not token_signals:
+        return (
+            '<div class="dex-intelligence-empty"><span class="dex-empty-icon" '
+            'aria-hidden="true">◇</span><div>'
+            '<strong>No market intelligence available</strong>'
+            '<small>Insights appear only when existing DexSato signals provide '
+            'enough current evidence.</small></div></div>'
+        )
+
+    directions = [
+        str(item.get("direction") or "neutral")
+        for item in token_signals.values()
+    ]
+    bullish = directions.count("bullish")
+    bearish = directions.count("bearish")
+    signal_count = len(token_signals)
+    view_count = len(active_views)
+
+    if bullish > bearish:
+        pressure_title = (
+            "Buying pressure broadening"
+            if bullish >= 2 and view_count >= 2
+            else "Buying pressure leading"
+        )
+        pressure_detail = (
+            f"Bullish pressure leads across {signal_count} active token signals"
+        )
+        pressure_tone = "bullish"
+    elif bearish > bullish:
+        pressure_title = (
+            "Selling pressure broadening"
+            if bearish >= 2 and view_count >= 2
+            else "Selling pressure leading"
+        )
+        pressure_detail = (
+            f"Bearish pressure leads across {signal_count} active token signals"
+        )
+        pressure_tone = "bearish"
+    else:
+        pressure_title = "Market pressure mixed"
+        pressure_detail = (
+            f"Directional pressure is balanced across {signal_count} active token signals"
+        )
+        pressure_tone = "mixed"
+
+    evidence_text = [
+        text.lower()
+        for item in token_signals.values()
+        for text in item.get("evidence", [])
+    ]
+    volume_up = sum(
+        1
+        for text in evidence_text
+        if "volume ↑" in text or "volume up" in text or "volume rising" in text
+    )
+    volume_down = sum(
+        1
+        for text in evidence_text
+        if "volume ↓" in text or "volume down" in text or "volume falling" in text
+    )
+
+    if volume_up > volume_down:
+        activity_title = "Trading activity expanding"
+        activity_detail = "Volume expansion appears more often than contraction"
+        activity_tone = "bullish"
+    elif volume_down > volume_up:
+        activity_title = "Trading activity cooling"
+        activity_detail = "Volume contraction appears more often than expansion"
+        activity_tone = "bearish"
+    else:
+        activity_title = "Trading activity balanced"
+        activity_detail = "Volume evidence is mixed across active signals"
+        activity_tone = "neutral"
+
+    if view_count >= 3:
+        coverage_title = "Momentum spans multiple market views"
+        coverage_detail = f"Active signals detected across {view_count} of 4 market views"
+        coverage_tone = "bullish"
+    elif view_count == 2:
+        coverage_title = "Activity shared across two market views"
+        coverage_detail = "Active signals detected across 2 of 4 market views"
+        coverage_tone = "mixed"
+    else:
+        coverage_title = "Market activity concentrated"
+        coverage_detail = "Active signals currently come from 1 of 4 market views"
+        coverage_tone = "neutral"
+
+    dex_change = str(dex_volume_change or "").strip()
+    if dex_change and dex_change != "—":
+        direction_word = "up" if "▲" in dex_change else "down" if "▼" in dex_change else "changed"
+        clean_change = dex_change.replace("▲", "").replace("▼", "").strip()
+        dex_detail = f"Solana DEX volume {direction_word} {clean_change} in the last 24h"
+    else:
+        dex_detail = "Solana DEX 24h volume change is currently unavailable"
+
+    wallet_title = "Wallet Behavior"
+    wallet_detail = "Wallet-flow intelligence not available yet"
+
+    liquidity_values = sorted(
+        float(item["liquidity_usd"])
+        for item in token_signals.values()
+        if isinstance(item.get("liquidity_usd"), (int, float))
+    )
+    if liquidity_values:
+        middle = len(liquidity_values) // 2
+        if len(liquidity_values) % 2:
+            median_liquidity = liquidity_values[middle]
+        else:
+            median_liquidity = (
+                liquidity_values[middle - 1] + liquidity_values[middle]
+            ) / 2
+        liquidity_title = "Liquidity Conditions"
+        liquidity_detail = (
+            f"Median exact-pool liquidity is {_compact_usd(median_liquidity)} "
+            f"across {len(liquidity_values)} active signals"
+        )
+    else:
+        liquidity_title = "Liquidity Conditions"
+        liquidity_detail = "Exact-pool liquidity snapshot is currently unavailable"
+
+    insights = (
+        (pressure_title, pressure_detail, pressure_tone),
+        (activity_title, activity_detail, activity_tone),
+        (coverage_title, coverage_detail, coverage_tone),
+        ("DEX Activity", dex_detail, "neutral"),
+        (wallet_title, wallet_detail, "neutral"),
+        (liquidity_title, liquidity_detail, "neutral"),
+    )
+
+    markup = "".join(
+        (
+            '<article class="dex-market-intelligence-row">'
+            f'<span class="dex-market-intelligence-index">{index:02d}</span>'
+            '<div>'
+            f'<strong class="is-{tone}">{escape(title)}</strong>'
+            f'<small>{escape(detail)}</small>'
+            '</div></article>'
+        )
+        for index, (title, detail, tone) in enumerate(insights, start=1)
+    )
+    return (
+        '<div class="dex-market-intelligence-list" '
+        'aria-label="DexSato market intelligence">'
+        + markup
+        + '</div>'
+    )
+
+
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     symbol = escape(str(candidate.get("symbol") or "Unknown"))
     name = escape(str(candidate.get("name") or "Unknown token"))
@@ -848,6 +1088,13 @@ def render_solana_discovery_page(
     dex_card = _solana_dex_card_metrics()
     dex_volume_24h = dex_card["volume"]
     dex_volume_change = dex_card["change"]
+    market_intelligence_panel = _render_market_intelligence_panel(
+        trending,
+        top_traded,
+        organic_flow,
+        recent,
+        dex_volume_change=dex_volume_change,
+    )
     dex_volume_change_class = dex_card["change_class"]
     dex_tvl = dex_card["tvl"]
     dex_volume_state = dex_card["state"]
@@ -2038,8 +2285,8 @@ def render_solana_discovery_page(
       display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px
     }
     .dex-signals-intelligence-grid>.dex-terminal-section{min-width:0}
-    .dex-signals-intelligence-grid .dex-panel-shell{min-height:155px}
-    .dex-live-signals-list{display:grid}
+    .dex-signals-intelligence-grid .dex-panel-shell{min-height:394px;height:394px}
+    .dex-live-signals-list{display:grid;height:348px;align-content:start}
     .dex-live-signal-row{
       min-height:58px;display:grid;grid-template-columns:92px minmax(0,1fr);
       align-items:center;gap:14px;padding:9px 14px;border-bottom:1px solid var(--line)
@@ -2080,8 +2327,34 @@ def render_solana_discovery_page(
       font:650 11.5px/1.3 "JetBrains Mono",monospace;
       letter-spacing:.01em
     }
+    .dex-market-intelligence-list{
+      display:grid;grid-template-rows:repeat(6,58px);height:348px
+    }
+    .dex-market-intelligence-row{
+      min-height:58px;display:grid;grid-template-columns:38px minmax(0,1fr);
+      align-items:center;gap:12px;padding:8px 16px;
+      border-bottom:1px solid var(--line)
+    }
+    .dex-market-intelligence-row:last-child{border-bottom:0}
+    .dex-market-intelligence-index{
+      display:grid;place-items:center;width:30px;height:30px;
+      border:1px solid var(--line2);color:var(--faint);
+      font:650 10px "JetBrains Mono",monospace
+    }
+    .dex-market-intelligence-row div{min-width:0}
+    .dex-market-intelligence-row strong{
+      display:block;color:var(--text);
+      font:700 15px/1.25 "Space Grotesk",sans-serif
+    }
+    .dex-market-intelligence-row strong.is-bullish{color:var(--cyan)}
+    .dex-market-intelligence-row strong.is-bearish{color:var(--risk)}
+    .dex-market-intelligence-row strong.is-mixed{color:var(--violet)}
+    .dex-market-intelligence-row small{
+      display:block;margin-top:5px;color:var(--muted);
+      font:650 11px/1.35 "JetBrains Mono",monospace
+    }
     .dex-empty-stream,.dex-intelligence-empty{
-      min-height:108px;display:flex;align-items:center;gap:12px;padding:16px
+      min-height:348px;display:flex;align-items:center;gap:12px;padding:16px
     }
     @media(max-width:820px){
       .dex-signals-intelligence-grid{grid-template-columns:1fr}
@@ -2610,8 +2883,8 @@ def render_solana_discovery_page(
     <section class="dex-terminal-section dex-market-intelligence" aria-label="Market intelligence">
       <div class="dex-section-label"><span>MARKET INTELLIGENCE</span><i></i></div>
       <article class="dex-panel-shell">
-        <div class="dex-panel-head"><strong>MARKET INTELLIGENCE</strong><span>DexSato</span></div>
-        <div class="dex-intelligence-empty"><span class="dex-empty-icon" aria-hidden="true">◇</span><div><strong>No intelligence items displayed yet</strong><small>Insights will appear only when backed by existing DexSato data.</small></div></div>
+        <div class="dex-panel-head"><strong>Know your chain</strong></div>
+        __MARKET_INTELLIGENCE_PANEL__
       </article>
     </section>
   </div>
@@ -2846,6 +3119,7 @@ def render_solana_discovery_page(
         .replace("__ORGANIC_FLOW_PANEL__", organic_flow_panel)
         .replace("__RECENT_PANEL__", recent_panel)
         .replace("__LIVE_SIGNALS_PANEL__", live_signals_panel)
+        .replace("__MARKET_INTELLIGENCE_PANEL__", market_intelligence_panel)
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))
