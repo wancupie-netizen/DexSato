@@ -1886,9 +1886,16 @@ def render_solana_discovery_page(
       letter-spacing:.07em;text-transform:uppercase
     }
 
-    .dex-signals-panel .dex-panel-shell{min-height:155px}
+    .dex-signals-intelligence-grid{
+      display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px
+    }
+    .dex-signals-intelligence-grid>.dex-terminal-section{min-width:0}
+    .dex-signals-intelligence-grid .dex-panel-shell{min-height:155px}
     .dex-empty-stream,.dex-intelligence-empty{
       min-height:108px;display:flex;align-items:center;gap:12px;padding:16px
+    }
+    @media(max-width:820px){
+      .dex-signals-intelligence-grid{grid-template-columns:1fr}
     }
     .dex-empty-icon{
       width:28px;height:28px;display:grid;place-items:center;flex:0 0 auto;
@@ -2402,13 +2409,23 @@ def render_solana_discovery_page(
     </div>
   </section>
 
-  <section class="dex-terminal-section dex-signals-panel" aria-label="Live signals">
-    <div class="dex-section-label"><span>LIVE SIGNALS</span><i></i></div>
-    <div class="dex-panel-shell">
-      <div class="dex-panel-head"><strong>Live market signal stream</strong><span>Solana discovery</span></div>
-      <div class="dex-empty-stream"><span class="dex-empty-icon" aria-hidden="true">↗</span><div><strong>No signal data displayed yet</strong><small>Presentation shell only. Existing signal logic is unchanged.</small></div></div>
-    </div>
-  </section>
+  <div class="dex-signals-intelligence-grid">
+    <section class="dex-terminal-section dex-signals-panel" aria-label="Live signals">
+      <div class="dex-section-label"><span>LIVE SIGNALS</span><i></i></div>
+      <div class="dex-panel-shell">
+        <div class="dex-panel-head"><strong>Live market signal stream</strong><span>Solana discovery</span></div>
+        <div class="dex-empty-stream"><span class="dex-empty-icon" aria-hidden="true">↗</span><div><strong>No signal data displayed yet</strong><small>Presentation shell only. Existing signal logic is unchanged.</small></div></div>
+      </div>
+    </section>
+
+    <section class="dex-terminal-section dex-market-intelligence" aria-label="Market intelligence">
+      <div class="dex-section-label"><span>MARKET INTELLIGENCE</span><i></i></div>
+      <article class="dex-panel-shell">
+        <div class="dex-panel-head"><strong>MARKET INTELLIGENCE</strong><span>DexSato</span></div>
+        <div class="dex-intelligence-empty"><span class="dex-empty-icon" aria-hidden="true">◇</span><div><strong>No intelligence items displayed yet</strong><small>Insights will appear only when backed by existing DexSato data.</small></div></div>
+      </article>
+    </section>
+  </div>
 
   <section class="dex-terminal-section dex-market-categories" aria-label="Solana market categories">
     <div class="dex-section-label"><span>MARKET VIEWS</span><i></i></div>
@@ -2450,13 +2467,6 @@ def render_solana_discovery_page(
     </div>
   </section>
 
-  <section class="dex-terminal-section dex-market-intelligence" aria-label="Market intelligence">
-    <div class="dex-section-label"><span>MARKET INTELLIGENCE</span><i></i></div>
-    <article class="dex-panel-shell">
-      <div class="dex-panel-head"><strong>MARKET INTELLIGENCE</strong><span>DexSato</span></div>
-      <div class="dex-intelligence-empty"><span class="dex-empty-icon" aria-hidden="true">◇</span><div><strong>No intelligence items displayed yet</strong><small>Insights will appear only when backed by existing DexSato data.</small></div></div>
-    </article>
-  </section>
   <footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>__STATUS_MESSAGE__</span></footer>
 </main>
   </div>
