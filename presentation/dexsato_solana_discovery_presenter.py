@@ -535,7 +535,7 @@ def _render_organic_flow_panel(organic_flow: dict[str, Any] | None) -> str:
 
 
 def _render_recent_panel(recent: dict[str, Any] | None) -> str:
-    """Render Jupiter Recent with the locked market-feed table UI."""
+    """Render rolling Recent rows with the locked market-feed table UI."""
     data = recent if isinstance(recent, dict) else {}
     rows = data.get("rows") if isinstance(data.get("rows"), list) else []
     valid_rows = [row for row in rows if isinstance(row, dict)]
@@ -550,17 +550,7 @@ def _render_recent_panel(recent: dict[str, Any] | None) -> str:
             continue
     liquidity_max = max(liquidity_values, default=0.0)
 
-    rendered_rows: list[str] = []
-    for display_position, item in enumerate(valid_rows, start=1):
-        source_position = item.get("recent_source_position")
-        if not isinstance(source_position, int) or source_position <= 0:
-            source_position = display_position
-        rendered_rows.append(
-            _trending_row(item, source_position, liquidity_max=liquidity_max)
-        )
-    row_markup = "".join(rendered_rows)
-
-    if not row_markup:
+    if not valid_rows:
         message = escape(
             str(
                 data.get("message")
@@ -570,9 +560,80 @@ def _render_recent_panel(recent: dict[str, Any] | None) -> str:
         return (
             '<div class="dex-category-placeholder"><div>'
             '<strong>No eligible Recent tokens displayed</strong>'
-            f'<small>{message} DexSato keeps the $50K exact-pool liquidity floor '
+            f'<small>{message} DexSato keeps the $25K exact-pool entry floor '
             'and does not fabricate replacement rows.</small>'
             '</div></div>'
+        )
+
+    page_size = 30
+    page_count = max(1, (len(valid_rows) + page_size - 1) // page_size)
+    rendered_rows: list[str] = []
+    for display_position, item in enumerate(valid_rows, start=1):
+        row_markup = _trending_row(
+            item,
+            display_position,
+            liquidity_max=liquidity_max,
+        )
+        page_number = ((display_position - 1) // page_size) + 1
+        row_markup = row_markup.replace(
+            '<article class="dex-trending-row">',
+            (
+                '<article class="dex-trending-row" '
+                f'data-recent-page="{page_number}" '
+                f'data-recent-position="{display_position}"'
+                + ('' if page_number == 1 else ' hidden')
+                + '>'
+            ),
+            1,
+        )
+        rendered_rows.append(row_markup)
+
+    pagination = ""
+    if page_count > 1:
+        pagination = (
+            '<nav class="pagination dex-recent-pagination" '
+            'aria-label="Recent pages" data-recent-pagination '
+            f'data-page-count="{page_count}">'
+            '<a href="#" data-recent-prev aria-disabled="true">← Previous</a>'
+            f'<strong data-recent-page-label>Page 1 of {page_count}</strong>'
+            '<a href="#" data-recent-next>Next →</a>'
+            '</nav>'
+        )
+
+    pagination_script = ""
+    if page_count > 1:
+        pagination_script = (
+            '<script>'
+            '(() => {'
+            'const root = document.currentScript?.previousElementSibling;'
+            'if (!root || !root.matches("[data-recent-pagination]")) return;'
+            'const panel = root.closest("[data-category-panel=\\"recent\\"]") || root.parentElement;'
+            'if (!panel) return;'
+            'const rows = Array.from(panel.querySelectorAll("[data-recent-page]"));'
+            'const prev = root.querySelector("[data-recent-prev]");'
+            'const next = root.querySelector("[data-recent-next]");'
+            'const label = root.querySelector("[data-recent-page-label]");'
+            'const total = Number(root.dataset.pageCount || "1");'
+            'let page = 1;'
+            'const render = () => {'
+            'rows.forEach((row) => {'
+            'row.hidden = Number(row.dataset.recentPage || "1") !== page;'
+            '});'
+            'if (label) label.textContent = `Page ${page} of ${total}`;'
+            'if (prev) prev.setAttribute("aria-disabled", page <= 1 ? "true" : "false");'
+            'if (next) next.setAttribute("aria-disabled", page >= total ? "true" : "false");'
+            '};'
+            'prev?.addEventListener("click", (event) => {'
+            'event.preventDefault();'
+            'if (page > 1) { page -= 1; render(); }'
+            '});'
+            'next?.addEventListener("click", (event) => {'
+            'event.preventDefault();'
+            'if (page < total) { page += 1; render(); }'
+            '});'
+            'render();'
+            '})();'
+            '</script>'
         )
 
     return (
@@ -581,8 +642,9 @@ def _render_recent_panel(recent: dict[str, Any] | None) -> str:
         '<span>Token</span><span>Price</span><span>1h %</span>'
         '<span>Volume 1h</span><span>Liquidity</span><span>Detected Signal</span>'
         '</div>'
-        f'<div class="dex-trending-list">{row_markup}</div>'
+        f'<div class="dex-trending-list">{"".join(rendered_rows)}</div>'
         '</div>'
+        f'{pagination}{pagination_script}'
     )
 
 

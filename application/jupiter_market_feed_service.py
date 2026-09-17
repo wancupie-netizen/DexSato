@@ -14,6 +14,11 @@ from application.dexscreener_sol_pair_resolver import (
     resolve_exact_sol_pairs,
 )
 from application.trending_signal_interpreter import interpret_trending_signal
+from application.recent_market_store import (
+    RECENT_V2_RETENTION_SECONDS,
+    RecentMarketStore,
+    RecentMarketStoreUnavailable,
+)
 
 
 JUPITER_TRENDING_1H_URL = "https://api.jup.ag/tokens/v2/toptrending/1h"
@@ -68,7 +73,7 @@ _ORGANIC_FLOW_RECENT_ELIGIBLE_ROWS: dict[
 JUPITER_RECENT_URL = "https://api.jup.ag/tokens/v2/recent"
 RECENT_FETCH_LIMIT = 50
 RECENT_DISPLAY_LIMIT = 30
-RECENT_MIN_EXACT_POOL_LIQUIDITY_USD = 50_000.0
+RECENT_MIN_EXACT_POOL_LIQUIDITY_USD = 25_000.0
 RECENT_CACHE_SECONDS = 60.0
 _RECENT_MARKET_CACHE_LOCK = threading.Lock()
 _RECENT_MARKET_CACHE_AT = 0.0
@@ -77,6 +82,69 @@ RECENT_WORKSPACE_GRACE_SECONDS = 900.0
 _RECENT_RECENT_ELIGIBLE_ROWS: dict[
     str, tuple[float, dict[str, Any]]
 ] = {}
+_RECENT_V2_STORE_INIT_LOCK = threading.Lock()
+_RECENT_V2_STORE: RecentMarketStore | None = None
+
+
+def _recent_v2_store() -> RecentMarketStore:
+    """Return the process-local Recent V2 persistent-store instance."""
+    global _RECENT_V2_STORE
+    with _RECENT_V2_STORE_INIT_LOCK:
+        if _RECENT_V2_STORE is None:
+            _RECENT_V2_STORE = RecentMarketStore()
+        return _RECENT_V2_STORE
+
+
+def _merge_recent_snapshot_into_store(
+    payload: dict[str, Any],
+    *,
+    store: RecentMarketStore | None = None,
+) -> dict[str, Any]:
+    """Persist eligible snapshot rows and expose the rolling 24h Recent feed."""
+    if payload.get("connected") is not True:
+        return dict(payload)
+
+    rows = payload.get("rows")
+    snapshot_rows = [
+        dict(row)
+        for row in (rows if isinstance(rows, list) else [])
+        if isinstance(row, dict)
+    ]
+    snapshot_eligible_count = len(snapshot_rows)
+
+    try:
+        active_store = store or _recent_v2_store()
+        for row in snapshot_rows:
+            active_store.upsert(row)
+        active_store.expire()
+        rolling_rows = active_store.active_rows()
+    except RecentMarketStoreUnavailable:
+        fallback = dict(payload)
+        fallback["rows"] = snapshot_rows
+        fallback["snapshot_eligible_count"] = snapshot_eligible_count
+        fallback["eligible_count"] = snapshot_eligible_count
+        fallback["retention_seconds"] = RECENT_V2_RETENTION_SECONDS
+        fallback["market_feed"] = "recent_live_snapshot"
+        fallback["store_status"] = "unavailable"
+        fallback["message"] = (
+            "Jupiter Recent live snapshot is available. Rolling 24h "
+            "persistence is temporarily unavailable."
+        )
+        return fallback
+
+    merged = dict(payload)
+    merged["rows"] = rolling_rows
+    merged["snapshot_eligible_count"] = snapshot_eligible_count
+    merged["eligible_count"] = len(rolling_rows)
+    merged["retention_seconds"] = RECENT_V2_RETENTION_SECONDS
+    merged["market_feed"] = "recent_rolling_24h"
+    merged["store_status"] = "ready"
+    merged["ordering"] = "recent_first_pool_created_at_desc"
+    merged["message"] = (
+        "DexSato rolling 24h Recent feed sourced from Jupiter Recent and "
+        "canonical exact WSOL pools."
+    )
+    return merged
 
 
 def _number(value: Any) -> float | None:
@@ -789,8 +857,6 @@ def _fetch_recent(
         if pair is None:
             continue
         rows.append(_normalize_recent_row(token, pair))
-        if len(rows) >= RECENT_DISPLAY_LIMIT:
-            break
 
     return {
         "connected": True,
@@ -830,10 +896,11 @@ def load_jupiter_recent_feed(
         ):
             return dict(_RECENT_MARKET_CACHE_PAYLOAD)
 
-    payload = _fetch_recent(
+    snapshot = _fetch_recent(
         request_get=request_get,
         pair_resolver=pair_resolver,
     )
+    payload = _merge_recent_snapshot_into_store(snapshot)
     with _RECENT_MARKET_CACHE_LOCK:
         _RECENT_MARKET_CACHE_AT = now
         _RECENT_MARKET_CACHE_PAYLOAD = dict(payload)
