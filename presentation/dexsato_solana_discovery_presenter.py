@@ -2228,8 +2228,8 @@ def render_solana_discovery_page(
     .shell{padding-top:84px;display:flex;flex-direction:column;gap:16px}
 
     .dex-volume-panel{
-      position:relative;min-height:210px;overflow:hidden;
-      border:1px solid var(--line);background:
+      position:relative;min-height:230px;overflow:hidden;
+      border:1px solid var(--line);border-radius:8px;background:
         radial-gradient(ellipse 800px 230px at 18% 0%,rgba(76,244,214,.075),transparent 62%),
         var(--panel)
     }
@@ -2270,7 +2270,7 @@ def render_solana_discovery_page(
     .dex-terminal-section{display:flex;flex-direction:column;gap:8px}
     .dex-section-label{display:flex;align-items:center;gap:10px}
     .dex-section-label i{height:1px;flex:1;background:var(--line)}
-    .dex-panel-shell{min-width:0;border:1px solid var(--line);background:var(--panel)}
+    .dex-panel-shell{min-width:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
     .dex-panel-head{
       min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:12px;
       padding:0 13px;border-bottom:1px solid var(--line)
@@ -2389,7 +2389,7 @@ def render_solana_discovery_page(
       color:var(--faint);font:500 10.5px "JetBrains Mono",monospace
     }
 
-    .dex-token-list .feed-panel{width:100%;border-radius:0;background:var(--panel)}
+    .dex-token-list .feed-panel{width:100%;border-radius:8px;overflow:hidden;background:var(--panel)}
     .dex-token-list .feed-head{padding:14px 16px}
     .dex-token-list .feed-head h2{margin:3px 0 0;font:600 18px "Space Grotesk",sans-serif}
     .dex-token-list .feed-head p{font-size:11px;line-height:1.5}
@@ -2479,12 +2479,14 @@ def render_solana_discovery_page(
     .dex-volume-primary{
       display:flex;
       align-items:baseline;
-      gap:14px;
+      gap:16px;
     }
     .dex-volume-change{
+      position:relative;
+      top:-2px;
       font-family:"JetBrains Mono",monospace;
-      font-size:14px;
-      font-weight:600;
+      font-size:16px;
+      font-weight:700;
       color:var(--faint);
       white-space:nowrap;
     }
