@@ -648,6 +648,148 @@ def _render_recent_panel(recent: dict[str, Any] | None) -> str:
     )
 
 
+def _render_live_signals_panel(
+    trending: dict[str, Any] | None,
+    top_traded: dict[str, Any] | None,
+    organic_flow: dict[str, Any] | None,
+    recent: dict[str, Any] | None,
+) -> str:
+    """Render up to six compact existing DexSato signals; never recompute them."""
+    sources = (
+        ("Trending", trending),
+        ("Top Traded", top_traded),
+        ("Organic Flow", organic_flow),
+        ("Recent", recent),
+    )
+
+    def recent_row_is_within_2h(row: dict[str, Any]) -> bool:
+        # Trending / Top Traded / Organic Flow are fetched as current live views.
+        # Recent is rolling for 24h, so only retain a row here when its existing
+        # last_seen_at proves it was observed within the last two hours.
+        value = str(row.get("last_seen_at") or "").strip()
+        if not value:
+            return False
+        candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
+        try:
+            from datetime import datetime, timezone
+
+            observed = datetime.fromisoformat(candidate)
+            if observed.tzinfo is None:
+                observed = observed.replace(tzinfo=timezone.utc)
+            age_seconds = (
+                datetime.now(timezone.utc) - observed.astimezone(timezone.utc)
+            ).total_seconds()
+        except (TypeError, ValueError):
+            return False
+        return 0 <= age_seconds <= 2 * 60 * 60
+
+    merged: dict[str, dict[str, Any]] = {}
+    display_order: list[str] = []
+
+    for source_name, payload in sources:
+        data = payload if isinstance(payload, dict) else {}
+        rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if source_name == "Recent" and not recent_row_is_within_2h(row):
+                continue
+
+            signal = row.get("detected_signal")
+            primary = ""
+            evidence: list[str] = []
+            direction = "neutral"
+            if isinstance(signal, dict):
+                primary = str(signal.get("primary_signal") or "").strip()
+                raw_evidence = signal.get("secondary_evidence")
+                if isinstance(raw_evidence, list):
+                    evidence = [
+                        str(value).strip()
+                        for value in raw_evidence[:2]
+                        if str(value).strip()
+                    ]
+                raw_direction = str(
+                    signal.get("direction") or "neutral"
+                ).strip().lower()
+                if raw_direction in {"bullish", "bearish", "mixed", "neutral"}:
+                    direction = raw_direction
+            elif signal:
+                primary = str(signal).strip()
+
+            if not primary:
+                continue
+
+            token_address = str(row.get("token_address") or "").strip()
+            if not token_address or token_address in merged:
+                continue
+
+            merged[token_address] = {
+                "symbol": str(row.get("symbol") or "Unknown").strip()[:40],
+                "icon": str(row.get("icon") or "").strip(),
+                "href": str(row.get("href") or "").strip(),
+                "primary_signal": primary,
+                "evidence": evidence,
+                "direction": direction,
+            }
+            display_order.append(token_address)
+            if len(display_order) >= 6:
+                break
+
+        if len(display_order) >= 6:
+            break
+
+    if not display_order:
+        return (
+            '<div class="dex-empty-stream"><span class="dex-empty-icon" '
+            'aria-hidden="true">↗</span><div>'
+            '<strong>No active signals in the last 2h</strong>'
+            '<small>Signals appear only when existing DexSato market-view '
+            'interpreters produce current evidence.</small></div></div>'
+        )
+
+    rows_markup: list[str] = []
+    for token_address in display_order:
+        item = merged[token_address]
+        symbol_raw = str(item["symbol"])
+        symbol = escape(symbol_raw)
+        icon = str(item["icon"])
+        href = escape(str(item["href"]), quote=True)
+        primary = escape(str(item["primary_signal"]))
+        direction = str(item["direction"])
+        evidence = item["evidence"]
+        evidence_text = " · ".join(str(value) for value in evidence) or "Signal evidence available"
+        icon_markup = (
+            f'<img src="{escape(icon, quote=True)}" alt="" loading="lazy" '
+            'referrerpolicy="no-referrer">'
+            if icon.startswith("https://")
+            else f'<span>{escape(symbol_raw[:2].upper())}</span>'
+        )
+        identity_markup = (
+            f'<a class="dex-live-signal-identity" href="{href}">'
+            f'{icon_markup}<b>{symbol}</b></a>'
+            if href
+            else (
+                '<div class="dex-live-signal-identity">'
+                f'{icon_markup}<b>{symbol}</b></div>'
+            )
+        )
+        rows_markup.append(
+            '<article class="dex-live-signal-row">'
+            f'{identity_markup}'
+            '<div class="dex-live-signal-content">'
+            f'<strong class="is-{direction}">{primary}</strong>'
+            f'<span>{escape(evidence_text)}</span>'
+            '</div></article>'
+        )
+
+    return (
+        '<div class="dex-live-signals-list" '
+        'aria-label="Six recent existing DexSato signals">'
+        + "".join(rows_markup)
+        + '</div>'
+    )
+
+
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     symbol = escape(str(candidate.get("symbol") or "Unknown"))
     name = escape(str(candidate.get("name") or "Unknown token"))
@@ -697,6 +839,12 @@ def render_solana_discovery_page(
     top_traded_panel = _render_top_traded_panel(top_traded)
     organic_flow_panel = _render_organic_flow_panel(organic_flow)
     recent_panel = _render_recent_panel(recent)
+    live_signals_panel = _render_live_signals_panel(
+        trending,
+        top_traded,
+        organic_flow,
+        recent,
+    )
     dex_card = _solana_dex_card_metrics()
     dex_volume_24h = dex_card["volume"]
     dex_volume_change = dex_card["change"]
@@ -1891,6 +2039,47 @@ def render_solana_discovery_page(
     }
     .dex-signals-intelligence-grid>.dex-terminal-section{min-width:0}
     .dex-signals-intelligence-grid .dex-panel-shell{min-height:155px}
+    .dex-live-signals-list{display:grid}
+    .dex-live-signal-row{
+      min-height:58px;display:grid;grid-template-columns:92px minmax(0,1fr);
+      align-items:center;gap:14px;padding:9px 14px;border-bottom:1px solid var(--line)
+    }
+    .dex-live-signal-row:last-child{border-bottom:0}
+    .dex-live-signal-identity{
+      min-width:0;display:flex;align-items:center;gap:9px;
+      color:inherit;text-decoration:none
+    }
+    a.dex-live-signal-identity:hover b{color:var(--cyan)}
+    a.dex-live-signal-identity:focus-visible{
+      outline:2px solid var(--cyan);outline-offset:3px
+    }
+    .dex-live-signal-identity img,.dex-live-signal-identity>span{
+      width:30px;height:30px;flex:0 0 30px;border:1px solid var(--line2);
+      border-radius:50%;background:var(--panel2)
+    }
+    .dex-live-signal-identity img{object-fit:cover}
+    .dex-live-signal-identity>span{
+      display:grid;place-items:center;color:var(--cyan);
+      font:700 8.5px "JetBrains Mono",monospace
+    }
+    .dex-live-signal-identity b{
+      min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      color:var(--text);font:700 13.5px "Space Grotesk",sans-serif
+    }
+    .dex-live-signal-content{min-width:0}
+    .dex-live-signal-content strong{
+      display:block;color:var(--text);
+      font:700 15px/1.25 "Space Grotesk",sans-serif;
+      letter-spacing:.005em
+    }
+    .dex-live-signal-content strong.is-bullish{color:var(--cyan)}
+    .dex-live-signal-content strong.is-bearish{color:var(--risk)}
+    .dex-live-signal-content strong.is-mixed{color:var(--violet)}
+    .dex-live-signal-content span{
+      display:block;margin-top:3px;color:var(--muted);
+      font:650 11.5px/1.3 "JetBrains Mono",monospace;
+      letter-spacing:.01em
+    }
     .dex-empty-stream,.dex-intelligence-empty{
       min-height:108px;display:flex;align-items:center;gap:12px;padding:16px
     }
@@ -2413,8 +2602,8 @@ def render_solana_discovery_page(
     <section class="dex-terminal-section dex-signals-panel" aria-label="Live signals">
       <div class="dex-section-label"><span>LIVE SIGNALS</span><i></i></div>
       <div class="dex-panel-shell">
-        <div class="dex-panel-head"><strong>Live market signal stream</strong><span>Solana discovery</span></div>
-        <div class="dex-empty-stream"><span class="dex-empty-icon" aria-hidden="true">↗</span><div><strong>No signal data displayed yet</strong><small>Presentation shell only. Existing signal logic is unchanged.</small></div></div>
+        <div class="dex-panel-head"><strong>6 signals in the last 2h</strong></div>
+        __LIVE_SIGNALS_PANEL__
       </div>
     </section>
 
@@ -2656,6 +2845,7 @@ def render_solana_discovery_page(
         .replace("__TOP_TRADED_PANEL__", top_traded_panel)
         .replace("__ORGANIC_FLOW_PANEL__", organic_flow_panel)
         .replace("__RECENT_PANEL__", recent_panel)
+        .replace("__LIVE_SIGNALS_PANEL__", live_signals_panel)
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))
