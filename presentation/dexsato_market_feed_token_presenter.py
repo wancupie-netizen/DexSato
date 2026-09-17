@@ -92,6 +92,34 @@ def _top_traded_source_context(detail: dict[str, Any]) -> str:
     )
 
 
+def _recent_source_context(detail: dict[str, Any]) -> str:
+    first_pool = escape(
+        str(detail.get("first_pool_created_at") or "Unavailable")
+    )
+    dex_id = escape(str(detail.get("dex_id") or "Unknown"))
+    liquidity = detail.get("liquidity_usd")
+    try:
+        liquidity_text = f"${float(liquidity):,.0f}"
+    except (TypeError, ValueError):
+        liquidity_text = "Unavailable"
+
+    return (
+        '<section class="card market-feed-context-v02c">'
+        '<h3>Recent Context</h3>'
+        '<div class="metrics">'
+        '<div class="metric"><span>Source</span>'
+        '<b class="value" style="font-size:13px">Jupiter Recent</b></div>'
+        '<div class="metric"><span>First Pool</span>'
+        f'<b class="value" style="font-size:13px">{first_pool}</b></div>'
+        '<div class="metric"><span>Exact SOL pool</span>'
+        f'<b class="value" style="font-size:13px">{dex_id}</b></div>'
+        '<div class="metric"><span>Pool liquidity</span>'
+        f'<b class="value">{escape(liquidity_text)}</b></div>'
+        '</div>'
+        '</section>'
+    )
+
+
 def _organic_flow_source_context(detail: dict[str, Any]) -> str:
     rank = detail.get("organic_flow_rank")
     rank_text = f"#{rank}" if isinstance(rank, int) and rank > 0 else "—"
@@ -121,6 +149,90 @@ def _organic_flow_source_context(detail: dict[str, Any]) -> str:
         '</div>'
         '</section>'
     )
+
+
+def render_recent_token_page(
+    detail: dict[str, Any],
+    *,
+    feed: dict[str, Any],
+) -> str:
+    """Reuse the stable Token Workspace shell with Recent-only semantics."""
+    html = render_solana_discovery_token_page(detail, feed=feed)
+    token_address = escape(
+        str(detail.get("token_address") or ""),
+        quote=True,
+    )
+
+    html = html.replace(
+        f"/api/discovery/solana/{token_address}/candles",
+        f"/api/market/recent/{token_address}/candles",
+    )
+    html = html.replace(
+        f"/api/discovery/solana/{token_address}/transactions",
+        f"/api/market/recent/{token_address}/transactions",
+    )
+    html = html.replace(
+        'href="/discovery/solana/',
+        'href="/market/recent/',
+    )
+
+    html = html.replace(
+        " · Solana Discovery</title>",
+        " · Recent Workspace</title>",
+        1,
+    )
+    html = html.replace(
+        '<span class="eyebrow">Qualified exact-token workspace</span>',
+        '<span class="eyebrow">Recent market workspace · Jupiter</span>',
+        1,
+    )
+    html = html.replace(
+        "Review observed market activity, exact-pool identity and disclosed risk before taking any action.",
+        "Review recent first-pool context and exact-pool market evidence. "
+        "Recent inclusion is separate from DexSato Discovery qualification.",
+        1,
+    )
+
+    html = _remove_section(
+        html,
+        '<section class="qualification qualification-vp0d3',
+    )
+    html = _remove_section(
+        html,
+        '<section class="discovery-engine-v12',
+    )
+    # Bind the inherited production Jupiter trade UI to the separate
+    # Recent execution route contract.
+    html = html.replace(
+        'data-jupiter-sandbox data-token-address=',
+        f'data-jupiter-sandbox data-api-base="/api/market/recent/{token_address}" data-token-address=',
+        1,
+    )
+
+    context = _recent_source_context(detail)
+    html = html.replace(
+        '<section class="card market-snapshot-v26">',
+        context + '<section class="card market-snapshot-v26">',
+        1,
+    )
+
+    html = html.replace(
+        "<h2>Token List</h2>",
+        "<h2>Recent Tokens</h2>",
+        1,
+    )
+    html = html.replace(
+        '<span class="token-list-chain-v07a">SOLANA</span>',
+        '<span class="token-list-chain-v07a">JUPITER · RECENT</span>',
+        1,
+    )
+    html = html.replace(
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Token list views">',
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Recent market feed" hidden>',
+        1,
+    )
+
+    return html
 
 
 def render_organic_flow_token_page(

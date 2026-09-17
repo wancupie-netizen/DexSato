@@ -61,6 +61,24 @@ _ORGANIC_FLOW_RECENT_ELIGIBLE_ROWS: dict[
 ] = {}
 
 
+# RECENT-05A: Jupiter Recent market feed.
+# Recent means first pool creation time from Jupiter, not mint creation time.
+# Provider order is preserved; DexSato only adds exact token/WSOL eligibility,
+# the shared $100k exact-pool liquidity floor, and stateless signal context.
+JUPITER_RECENT_URL = "https://api.jup.ag/tokens/v2/recent"
+RECENT_FETCH_LIMIT = 50
+RECENT_DISPLAY_LIMIT = 30
+RECENT_MIN_EXACT_POOL_LIQUIDITY_USD = 50_000.0
+RECENT_CACHE_SECONDS = 60.0
+_RECENT_MARKET_CACHE_LOCK = threading.Lock()
+_RECENT_MARKET_CACHE_AT = 0.0
+_RECENT_MARKET_CACHE_PAYLOAD: dict[str, Any] | None = None
+RECENT_WORKSPACE_GRACE_SECONDS = 900.0
+_RECENT_RECENT_ELIGIBLE_ROWS: dict[
+    str, tuple[float, dict[str, Any]]
+] = {}
+
+
 def _number(value: Any) -> float | None:
     try:
         number = float(value)
@@ -594,6 +612,234 @@ def load_recent_jupiter_organic_flow_row(
             now - seen_at,
         )
         return result
+
+
+def _remember_recent_eligible_rows(
+    payload: dict[str, Any],
+    *,
+    observed_at: float,
+) -> None:
+    """Remember only Recent rows that already passed live feed eligibility."""
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        return
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        mint = str(row.get("token_address") or "").strip()
+        if not mint:
+            continue
+        _RECENT_RECENT_ELIGIBLE_ROWS[mint] = (observed_at, dict(row))
+
+
+def load_recent_jupiter_recent_row(
+    token_address: str,
+    *,
+    now_monotonic: Callable[[], float] = time.monotonic,
+) -> dict[str, Any] | None:
+    """Return a recently displayed eligible Recent row inside the grace window."""
+    address = str(token_address or "").strip()
+    if not address:
+        return None
+
+    now = float(now_monotonic())
+    with _RECENT_MARKET_CACHE_LOCK:
+        item = _RECENT_RECENT_ELIGIBLE_ROWS.get(address)
+        if item is None:
+            return None
+
+        seen_at, row = item
+        if (
+            now < seen_at
+            or (now - seen_at) >= RECENT_WORKSPACE_GRACE_SECONDS
+        ):
+            _RECENT_RECENT_ELIGIBLE_ROWS.pop(address, None)
+            return None
+
+        result = dict(row)
+        result["recent_feed_state"] = "recent"
+        result["recent_observed_age_seconds"] = max(0.0, now - seen_at)
+        return result
+
+
+def _normalize_recent_row(
+    token: dict[str, Any],
+    pair: dict[str, Any],
+) -> dict[str, Any]:
+    """Normalize one Jupiter Recent row without inventing a DexSato rank."""
+    stats = token.get("stats1h")
+    if not isinstance(stats, dict):
+        stats = {}
+    first_pool = token.get("firstPool")
+    if not isinstance(first_pool, dict):
+        first_pool = {}
+    mint = str(token.get("id") or "").strip()
+    return {
+        "token_address": mint,
+        "symbol": str(token.get("symbol") or "Unknown").strip()[:40],
+        "name": str(token.get("name") or "Unknown token").strip()[:100],
+        "icon": str(token.get("icon") or "").strip(),
+        "price_usd": _number(token.get("usdPrice")),
+        "change_1h": _number(stats.get("priceChange")),
+        "volume_1h_usd": _volume_1h(stats),
+        "liquidity_usd": _number(pair.get("liquidity_usd")),
+        "pair_address": str(pair.get("pair_address") or "").strip(),
+        "dex_id": str(pair.get("dex_id") or "").strip(),
+        "quote_address": str(pair.get("quote_address") or "").strip(),
+        "quote_symbol": str(pair.get("quote_symbol") or "SOL").strip(),
+        "recent_source_position": token.get("_recent_source_position"),
+        "first_pool_id": str(first_pool.get("id") or "").strip(),
+        "first_pool_created_at": str(first_pool.get("createdAt") or "").strip(),
+        "detected_signal": interpret_trending_signal(stats),
+        "market_source": "jupiter_recent",
+        "href": f"/market/recent/{mint}",
+    }
+
+
+def _fetch_recent(
+    *,
+    request_get: Callable[..., Any],
+    pair_resolver: Callable[..., dict[str, Any]],
+) -> dict[str, Any]:
+    api_key = os.getenv("JUPITER_API_KEY", "").strip()
+    if not api_key:
+        return {
+            "connected": False,
+            "status": "not_configured",
+            "message": "Recent data is unavailable.",
+            "rows": [],
+            "raw_count": 0,
+            "eligible_count": 0,
+        }
+
+    try:
+        # Jupiter documents Recent as provider-ordered by first-pool creation.
+        # No unsupported limit parameter is sent; DexSato caps what it consumes.
+        response = request_get(
+            JUPITER_RECENT_URL,
+            headers={"x-api-key": api_key, "accept": "application/json"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, RuntimeError, TypeError, ValueError):
+        return {
+            "connected": False,
+            "status": "unavailable",
+            "message": "Recent data is temporarily unavailable.",
+            "rows": [],
+            "raw_count": 0,
+            "eligible_count": 0,
+        }
+
+    if not isinstance(payload, list):
+        return {
+            "connected": False,
+            "status": "invalid_response",
+            "message": "Recent data is temporarily unavailable.",
+            "rows": [],
+            "raw_count": 0,
+            "eligible_count": 0,
+        }
+
+    recent_tokens: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for position, token in enumerate(payload[:RECENT_FETCH_LIMIT], start=1):
+        if not isinstance(token, dict):
+            continue
+        mint = str(token.get("id") or "").strip()
+        if not mint or mint in seen:
+            continue
+        seen.add(mint)
+        recent = dict(token)
+        recent["_recent_source_position"] = position
+        recent_tokens.append(recent)
+
+    try:
+        resolution = pair_resolver(
+            [str(token.get("id") or "").strip() for token in recent_tokens],
+            min_liquidity_usd=RECENT_MIN_EXACT_POOL_LIQUIDITY_USD,
+            request_get=request_get,
+        )
+    except (ExactSolPairResolverUnavailable, RuntimeError, TypeError, ValueError):
+        return {
+            "connected": False,
+            "status": "pair_resolution_unavailable",
+            "message": "Recent exact SOL-pair resolution is temporarily unavailable.",
+            "rows": [],
+            "raw_count": min(len(payload), RECENT_FETCH_LIMIT),
+            "eligible_count": 0,
+        }
+
+    pair_rows = resolution.get("rows") if isinstance(resolution, dict) else None
+    if not isinstance(pair_rows, list):
+        pair_rows = []
+    pair_by_mint = {
+        str(pair.get("token_address") or "").strip(): pair
+        for pair in pair_rows
+        if isinstance(pair, dict)
+        and str(pair.get("token_address") or "").strip()
+    }
+
+    rows: list[dict[str, Any]] = []
+    for token in recent_tokens:
+        mint = str(token.get("id") or "").strip()
+        pair = pair_by_mint.get(mint)
+        if pair is None:
+            continue
+        rows.append(_normalize_recent_row(token, pair))
+        if len(rows) >= RECENT_DISPLAY_LIMIT:
+            break
+
+    return {
+        "connected": True,
+        "status": "live",
+        "message": (
+            "Jupiter Recent tokens resolved to canonical exact WSOL pools. "
+            "Source order follows first-pool recency."
+        ),
+        "rows": rows,
+        "raw_count": min(len(payload), RECENT_FETCH_LIMIT),
+        "eligible_count": len(rows),
+        "provider_pair_count": (
+            resolution.get("provider_pair_count")
+            if isinstance(resolution, dict)
+            else None
+        ),
+        "fetch_limit": RECENT_FETCH_LIMIT,
+        "display_limit": RECENT_DISPLAY_LIMIT,
+        "min_liquidity_usd": RECENT_MIN_EXACT_POOL_LIQUIDITY_USD,
+        "ordering": "jupiter_first_pool_recency",
+    }
+
+
+def load_jupiter_recent_feed(
+    *,
+    request_get: Callable[..., Any] = requests.get,
+    pair_resolver: Callable[..., dict[str, Any]] = resolve_exact_sol_pairs,
+    now_monotonic: Callable[[], float] = time.monotonic,
+) -> dict[str, Any]:
+    """Return the bounded Jupiter Recent feed with a short process cache."""
+    global _RECENT_MARKET_CACHE_AT, _RECENT_MARKET_CACHE_PAYLOAD
+    now = float(now_monotonic())
+    with _RECENT_MARKET_CACHE_LOCK:
+        if (
+            _RECENT_MARKET_CACHE_PAYLOAD is not None
+            and now - _RECENT_MARKET_CACHE_AT < RECENT_CACHE_SECONDS
+        ):
+            return dict(_RECENT_MARKET_CACHE_PAYLOAD)
+
+    payload = _fetch_recent(
+        request_get=request_get,
+        pair_resolver=pair_resolver,
+    )
+    with _RECENT_MARKET_CACHE_LOCK:
+        _RECENT_MARKET_CACHE_AT = now
+        _RECENT_MARKET_CACHE_PAYLOAD = dict(payload)
+        if payload.get("connected") is True:
+            _remember_recent_eligible_rows(payload, observed_at=now)
+    return dict(payload)
 
 
 def load_jupiter_organic_flow_feed(

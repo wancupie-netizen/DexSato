@@ -534,6 +534,58 @@ def _render_organic_flow_panel(organic_flow: dict[str, Any] | None) -> str:
     )
 
 
+def _render_recent_panel(recent: dict[str, Any] | None) -> str:
+    """Render Jupiter Recent with the locked market-feed table UI."""
+    data = recent if isinstance(recent, dict) else {}
+    rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+    valid_rows = [row for row in rows if isinstance(row, dict)]
+
+    liquidity_values: list[float] = []
+    for row in valid_rows:
+        try:
+            liquidity_values.append(
+                max(0.0, float(row.get("liquidity_usd") or 0))
+            )
+        except (TypeError, ValueError):
+            continue
+    liquidity_max = max(liquidity_values, default=0.0)
+
+    rendered_rows: list[str] = []
+    for display_position, item in enumerate(valid_rows, start=1):
+        source_position = item.get("recent_source_position")
+        if not isinstance(source_position, int) or source_position <= 0:
+            source_position = display_position
+        rendered_rows.append(
+            _trending_row(item, source_position, liquidity_max=liquidity_max)
+        )
+    row_markup = "".join(rendered_rows)
+
+    if not row_markup:
+        message = escape(
+            str(
+                data.get("message")
+                or "No eligible recent exact-SOL pools are available right now."
+            )
+        )
+        return (
+            '<div class="dex-category-placeholder"><div>'
+            '<strong>No eligible Recent tokens displayed</strong>'
+            f'<small>{message} DexSato keeps the $50K exact-pool liquidity floor '
+            'and does not fabricate replacement rows.</small>'
+            '</div></div>'
+        )
+
+    return (
+        '<div class="dex-trending-table">'
+        '<div class="dex-trending-head" aria-hidden="true">'
+        '<span>Token</span><span>Price</span><span>1h %</span>'
+        '<span>Volume 1h</span><span>Liquidity</span><span>Detected Signal</span>'
+        '</div>'
+        f'<div class="dex-trending-list">{row_markup}</div>'
+        '</div>'
+    )
+
+
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
     symbol = escape(str(candidate.get("symbol") or "Unknown"))
     name = escape(str(candidate.get("name") or "Unknown token"))
@@ -575,12 +627,14 @@ def render_solana_discovery_page(
     trending: dict[str, Any] | None = None,
     top_traded: dict[str, Any] | None = None,
     organic_flow: dict[str, Any] | None = None,
+    recent: dict[str, Any] | None = None,
 ) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
     trending_panel = _render_trending_panel(trending)
     top_traded_panel = _render_top_traded_panel(top_traded)
     organic_flow_panel = _render_organic_flow_panel(organic_flow)
+    recent_panel = _render_recent_panel(recent)
     dex_card = _solana_dex_card_metrics()
     dex_volume_24h = dex_card["volume"]
     dex_volume_change = dex_card["change"]
@@ -2329,7 +2383,7 @@ def render_solana_discovery_page(
         </section>
       </section>
       <section id="dex-market-panel-recent" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-recent" data-market-panel="recent" hidden>
-        <div class="dex-category-placeholder"><div><strong>Recent market feed is not connected yet</strong><small>No data is generated or simulated in this UI phase.</small></div></div>
+        __RECENT_PANEL__
       </section>
     </div>
   </section>
@@ -2529,6 +2583,7 @@ def render_solana_discovery_page(
         .replace("__TRENDING_PANEL__", trending_panel)
         .replace("__TOP_TRADED_PANEL__", top_traded_panel)
         .replace("__ORGANIC_FLOW_PANEL__", organic_flow_panel)
+        .replace("__RECENT_PANEL__", recent_panel)
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))
