@@ -26,6 +26,7 @@ This module does NOT:
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -283,6 +284,19 @@ def _content_cookie_secure(request: Request) -> bool:
     return trusted_proxy_headers() and forwarded.lower() == "https"
 
 
+def _load_discovery_market_feeds() -> dict[str, dict[str, object]]:
+    """Load independent Discovery market feeds concurrently."""
+    loaders = {
+        "trending": load_jupiter_trending_feed,
+        "top_traded": load_jupiter_top_traded_feed,
+        "organic_flow": load_jupiter_organic_flow_feed,
+        "recent": load_jupiter_recent_feed,
+    }
+    with ThreadPoolExecutor(max_workers=len(loaders)) as executor:
+        futures = {name: executor.submit(loader) for name, loader in loaders.items()}
+        return {name: futures[name].result() for name in loaders}
+
+
 # LIVE-02 — Solana Discovery is the public app landing experience.
 @app.get(
     "/",
@@ -290,12 +304,13 @@ def _content_cookie_secure(request: Request) -> bool:
 )
 def app_home() -> str:
     """Display Solana Discovery as the DexSato main app."""
+    market_feeds = _load_discovery_market_feeds()
     return render_solana_discovery_page(
         load_solana_discovery_feed(view="qualified", page=1, page_size=25, query=""),
-        trending=load_jupiter_trending_feed(),
-        top_traded=load_jupiter_top_traded_feed(),
-        organic_flow=load_jupiter_organic_flow_feed(),
-        recent=load_jupiter_recent_feed(),
+        trending=market_feeds["trending"],
+        top_traded=market_feeds["top_traded"],
+        organic_flow=market_feeds["organic_flow"],
+        recent=market_feeds["recent"],
     )
 
 
@@ -330,12 +345,13 @@ def major_assets() -> str:
 )
 def solana_discovery(view: str = "qualified", page: int = 1, q: str = "") -> str:
     """Display the read-only Solana Discovery D1 prototype."""
+    market_feeds = _load_discovery_market_feeds()
     return render_solana_discovery_page(
         load_solana_discovery_feed(view=view, page=page, page_size=25, query=q),
-        trending=load_jupiter_trending_feed(),
-        top_traded=load_jupiter_top_traded_feed(),
-        organic_flow=load_jupiter_organic_flow_feed(),
-        recent=load_jupiter_recent_feed(),
+        trending=market_feeds["trending"],
+        top_traded=market_feeds["top_traded"],
+        organic_flow=market_feeds["organic_flow"],
+        recent=market_feeds["recent"],
     )
 
 
