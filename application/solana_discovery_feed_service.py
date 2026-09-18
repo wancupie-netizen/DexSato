@@ -738,18 +738,21 @@ def load_solana_discovery_feed(
     generated_at = status.get("generated_at")
     updated_label, fresh = _freshness_label(generated_at, now=current_time)
     collector_status = str(status.get("collector_status") or "Unknown").strip().title()
-    archive_feed, archive_total, qualified_count = _read_archive_front_feed(
-        directory,
-        fresh=fresh,
-        generated_at=generated_at,
-    )
-    terminal_data = (
-        _terminal_archive_view(
+    if view is not None:
+        terminal_data = _terminal_archive_view(
             directory, view=view, page=page, page_size=page_size, now=current_time, query=query,
             fresh=fresh, generated_at=generated_at
         )
-        if view is not None else {}
-    )
+        archive_feed: list[dict[str, Any]] = []
+        archive_total = _integer(terminal_data.get("archive_total"))
+        qualified_count = _integer(terminal_data.get("qualified_total"))
+    else:
+        archive_feed, archive_total, qualified_count = _read_archive_front_feed(
+            directory,
+            fresh=fresh,
+            generated_at=generated_at,
+        )
+        terminal_data = {}
     return {
         "connected": True,
         "fresh": fresh,
