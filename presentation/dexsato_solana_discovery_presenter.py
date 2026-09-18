@@ -4,10 +4,37 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from functools import wraps
 from html import escape, unescape
 from typing import Any
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+
+
+def _presentation_ttl_cache(ttl_seconds: float):
+    """Cache presentation-only helper results for a short in-process TTL."""
+    def decorator(func):
+        cached_value = None
+        expires_at = 0.0
+        has_value = False
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            nonlocal cached_value, expires_at, has_value
+            now = time.monotonic()
+            if has_value and now < expires_at:
+                return cached_value
+
+            value = func(*args, **kwargs)
+            cached_value = value
+            expires_at = time.monotonic() + ttl_seconds
+            has_value = True
+            return value
+
+        return wrapper
+
+    return decorator
 
 
 def _usd(value: Any) -> str:
@@ -53,6 +80,7 @@ def _liquidity_meter_pct(value: Any, maximum: float) -> int:
     return max(12, min(100, round((ratio ** 0.5) * 100)))
 
 
+@_presentation_ttl_cache(60.0)
 def _solana_dex_card_metrics() -> dict[str, str]:
     """Fetch presentation-only Solana DEX card metrics from public DefiLlama endpoints."""
     metrics = {
@@ -164,6 +192,7 @@ def _solana_dex_card_metrics() -> dict[str, str]:
     return metrics
 
 
+@_presentation_ttl_cache(60.0)
 def _solana_perps_volume_24h() -> str:
     # SOLANA-UI-03C.1 — Replace Trades with Perps Volume 24H
     """Read Solana 24h perps volume for presentation only."""
@@ -220,6 +249,7 @@ def _solana_perps_volume_24h() -> str:
     return "—"
 
 
+@_presentation_ttl_cache(10.0)
 def _solana_priority_fee() -> tuple[str, str]:
     """Read a presentation-only recent Solana priority fee from public RPC."""
     endpoint = "https://api.mainnet-beta.solana.com"
