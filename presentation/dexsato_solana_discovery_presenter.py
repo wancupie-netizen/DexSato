@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from html import escape, unescape
 from typing import Any
@@ -357,6 +358,18 @@ def _solana_priority_fee() -> tuple[str, str]:
     except Exception:
         return "Gas · —", " is-offline"
 
+
+
+def load_solana_discovery_presenter_context() -> dict[str, Any]:
+    """Load independent presentation-only market metrics concurrently."""
+    loaders = {
+        "dex_card": _solana_dex_card_metrics,
+        "perps_volume_24h": _solana_perps_volume_24h,
+        "priority_fee": _solana_priority_fee,
+    }
+    with ThreadPoolExecutor(max_workers=len(loaders)) as executor:
+        futures = {name: executor.submit(loader) for name, loader in loaders.items()}
+        return {name: futures[name].result() for name in loaders}
 
 def _short_address(value: str) -> str:
     return f"{value[:7]}…{value[-7:]}" if len(value) > 18 else value
@@ -1143,6 +1156,7 @@ def render_solana_discovery_page(
     top_traded: dict[str, Any] | None = None,
     organic_flow: dict[str, Any] | None = None,
     recent: dict[str, Any] | None = None,
+    presenter_context: dict[str, Any] | None = None,
 ) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
@@ -1156,7 +1170,10 @@ def render_solana_discovery_page(
         organic_flow,
         recent,
     )
-    dex_card = _solana_dex_card_metrics()
+    context = presenter_context if isinstance(presenter_context, dict) else load_solana_discovery_presenter_context()
+    dex_card = context.get("dex_card")
+    if not isinstance(dex_card, dict):
+        dex_card = _solana_dex_card_metrics()
     dex_volume_24h = dex_card["volume"]
     dex_volume_change = dex_card["change"]
     market_intelligence_panel = _render_market_intelligence_panel(
@@ -1172,8 +1189,18 @@ def render_solana_discovery_page(
     dex_volume_dot_class = dex_card["dot_class"]
     dex_volume_line = dex_card["line_path"]
     dex_volume_area = dex_card["area_path"]
-    perps_volume_24h = _solana_perps_volume_24h()
-    solana_gas_label, solana_gas_dot_class = _solana_priority_fee()
+    perps_volume_24h = context.get("perps_volume_24h")
+    if not isinstance(perps_volume_24h, str):
+        perps_volume_24h = _solana_perps_volume_24h()
+    priority_fee = context.get("priority_fee")
+    if (
+        isinstance(priority_fee, (list, tuple))
+        and len(priority_fee) == 2
+        and all(isinstance(item, str) for item in priority_fee)
+    ):
+        solana_gas_label, solana_gas_dot_class = priority_fee
+    else:
+        solana_gas_label, solana_gas_dot_class = _solana_priority_fee()
     connected = data.get("connected") is True
     fresh = data.get("fresh") is True
     status_heading = "Collector live" if connected and fresh else (

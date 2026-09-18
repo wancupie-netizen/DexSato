@@ -164,6 +164,7 @@ from presentation.dexsato_user_dashboard_presenter import (
     render_user_dashboard,
 )
 from presentation.dexsato_solana_discovery_presenter import (
+    load_solana_discovery_presenter_context,
     render_solana_discovery_page,
 )
 from presentation.dexsato_solana_discovery_token_presenter import (
@@ -301,6 +302,14 @@ def _load_discovery_market_feeds() -> dict[str, dict[str, object]]:
         return {name: futures[name].result() for name in loaders}
 
 
+def _load_discovery_page_context() -> tuple[dict[str, dict[str, object]], dict[str, object]]:
+    """Overlap independent market-feed and presenter-metric refresh work."""
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        market_future = executor.submit(_load_discovery_market_feeds)
+        presenter_future = executor.submit(load_solana_discovery_presenter_context)
+        return market_future.result(), presenter_future.result()
+
+
 # LIVE-02 — Solana Discovery is the public app landing experience.
 @app.get(
     "/",
@@ -308,13 +317,14 @@ def _load_discovery_market_feeds() -> dict[str, dict[str, object]]:
 )
 def app_home() -> str:
     """Display Solana Discovery as the DexSato main app."""
-    market_feeds = _load_discovery_market_feeds()
+    market_feeds, presenter_context = _load_discovery_page_context()
     return render_solana_discovery_page(
         load_solana_discovery_feed(view="qualified", page=1, page_size=25, query=""),
         trending=market_feeds["trending"],
         top_traded=market_feeds["top_traded"],
         organic_flow=market_feeds["organic_flow"],
         recent=market_feeds["recent"],
+        presenter_context=presenter_context,
     )
 
 
@@ -349,13 +359,14 @@ def major_assets() -> str:
 )
 def solana_discovery(view: str = "qualified", page: int = 1, q: str = "") -> str:
     """Display the read-only Solana Discovery D1 prototype."""
-    market_feeds = _load_discovery_market_feeds()
+    market_feeds, presenter_context = _load_discovery_page_context()
     return render_solana_discovery_page(
         load_solana_discovery_feed(view=view, page=page, page_size=25, query=q),
         trending=market_feeds["trending"],
         top_traded=market_feeds["top_traded"],
         organic_flow=market_feeds["organic_flow"],
         recent=market_feeds["recent"],
+        presenter_context=presenter_context,
     )
 
 
