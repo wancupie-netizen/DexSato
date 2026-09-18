@@ -119,15 +119,35 @@ def _solana_dex_card_metrics() -> dict[str, str]:
         "&excludeTotalDataChartBreakdown=true"
         "&dataType=dailyVolume"
     )
-    try:
+    tvl_endpoint = "https://api.llama.fi/v2/historicalChainTvl/Solana"
+
+    def fetch_json(endpoint: str) -> Any:
         request = Request(
-            dex_endpoint,
+            endpoint,
             headers={"Accept": "application/json", "User-Agent": "DexSato/1.0"},
         )
         with urlopen(request, timeout=4) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+            return json.loads(response.read().decode("utf-8"))
 
-        total = float(payload.get("total24h"))
+    dex_payload: Any = None
+    tvl_payload: Any = None
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        dex_future = executor.submit(fetch_json, dex_endpoint)
+        tvl_future = executor.submit(fetch_json, tvl_endpoint)
+        try:
+            dex_payload = dex_future.result()
+        except Exception:
+            pass
+        try:
+            tvl_payload = tvl_future.result()
+        except Exception:
+            pass
+
+    try:
+        if not isinstance(dex_payload, dict):
+            raise ValueError("invalid dex payload")
+
+        total = float(dex_payload.get("total24h"))
         if total < 0:
             raise ValueError("negative total24h")
 
@@ -137,14 +157,14 @@ def _solana_dex_card_metrics() -> dict[str, str]:
 
         change_value = None
         try:
-            previous_value = float(payload.get("total48hto24h"))
+            previous_value = float(dex_payload.get("total48hto24h"))
             if previous_value > 0:
                 change_value = ((total - previous_value) / previous_value) * 100
         except (TypeError, ValueError):
             change_value = None
 
         points: list[float] = []
-        chart = payload.get("totalDataChart")
+        chart = dex_payload.get("totalDataChart")
         if isinstance(chart, list):
             for item in chart[-30:]:
                 if not isinstance(item, (list, tuple)) or len(item) < 2:
@@ -192,15 +212,7 @@ def _solana_dex_card_metrics() -> dict[str, str]:
     except Exception:
         pass
 
-    tvl_endpoint = "https://api.llama.fi/v2/historicalChainTvl/Solana"
     try:
-        request = Request(
-            tvl_endpoint,
-            headers={"Accept": "application/json", "User-Agent": "DexSato/1.0"},
-        )
-        with urlopen(request, timeout=4) as response:
-            tvl_payload = json.loads(response.read().decode("utf-8"))
-
         if isinstance(tvl_payload, list) and tvl_payload:
             latest = tvl_payload[-1]
             if isinstance(latest, dict):
