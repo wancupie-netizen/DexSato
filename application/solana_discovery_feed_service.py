@@ -710,15 +710,31 @@ def load_solana_discovery_feed(
         "message": "Collector output is not available yet.",
     }
     try:
-        state = _read_object(directory / "state.json")
         status = _read_object(directory / "status.json")
     except (OSError, json.JSONDecodeError, ValueError):
         return disconnected
 
-    if not isinstance(state.get("candidates"), dict) or not isinstance(status.get("metrics"), dict):
+    if not isinstance(status.get("metrics"), dict):
         return {**disconnected, "message": "Collector output schema is not ready for public use."}
 
     metrics = status["metrics"]
+    tokens_observed_raw = metrics.get("tokens_observed")
+    tokens_observed = (
+        tokens_observed_raw
+        if isinstance(tokens_observed_raw, int)
+        and not isinstance(tokens_observed_raw, bool)
+        and tokens_observed_raw >= 0
+        else None
+    )
+    if tokens_observed is None:
+        try:
+            state = _read_object(directory / "state.json")
+        except (OSError, json.JSONDecodeError, ValueError):
+            return disconnected
+        candidates = state.get("candidates")
+        if not isinstance(candidates, dict):
+            return {**disconnected, "message": "Collector output schema is not ready for public use."}
+        tokens_observed = len(candidates)
     generated_at = status.get("generated_at")
     updated_label, fresh = _freshness_label(generated_at, now=current_time)
     collector_status = str(status.get("collector_status") or "Unknown").strip().title()
@@ -738,7 +754,7 @@ def load_solana_discovery_feed(
         "connected": True,
         "fresh": fresh,
         "collector_status": collector_status,
-        "tokens_observed": len(state["candidates"]),
+        "tokens_observed": tokens_observed,
         "pair_resolved": _integer(metrics.get("pair_resolved")),
         "pair_ready_percent": metrics.get("pair_ready_percent"),
         "qualified_candidates": qualified_count,

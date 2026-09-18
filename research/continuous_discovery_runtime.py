@@ -260,6 +260,7 @@ def metrics(state: dict[str, Any], current: datetime) -> dict[str, Any]:
     duration = max((ends - started).total_seconds(), 1)
     progress = min(max((current - started).total_seconds() / duration * 100, 0), 100)
     return {
+        "tokens_observed": len(candidates),
         "birdeye_unique": len(birdeye),
         "dex_profiles_unique": len(profiles),
         "provider_overlap": len(overlap),
