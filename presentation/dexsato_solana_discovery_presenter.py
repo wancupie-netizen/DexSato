@@ -11,6 +11,8 @@ from typing import Any
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from application.presenter_metrics_store import PresenterMetricsStore
+
 
 def _presentation_ttl_cache(ttl_seconds: float):
     """Cache presentation-only helper results for a short in-process TTL."""
@@ -35,6 +37,18 @@ def _presentation_ttl_cache(ttl_seconds: float):
         return wrapper
 
     return decorator
+
+
+_PRESENTER_METRICS_STORE = PresenterMetricsStore()
+_PERSISTENT_BOOTSTRAP_ATTEMPTED: set[str] = set()
+
+
+def _persistent_presenter_metric_once(key: str, *, max_age_seconds: float) -> Any | None:
+    """Read one persistent bootstrap value at most once per process."""
+    if key in _PERSISTENT_BOOTSTRAP_ATTEMPTED:
+        return None
+    _PERSISTENT_BOOTSTRAP_ATTEMPTED.add(key)
+    return _PRESENTER_METRICS_STORE.load(key, max_age_seconds=max_age_seconds)
 
 
 def _usd(value: Any) -> str:
@@ -83,6 +97,10 @@ def _liquidity_meter_pct(value: Any, maximum: float) -> int:
 @_presentation_ttl_cache(60.0)
 def _solana_dex_card_metrics() -> dict[str, str]:
     """Fetch presentation-only Solana DEX card metrics from public DefiLlama endpoints."""
+    persistent = _persistent_presenter_metric_once("dex_card", max_age_seconds=30 * 60)
+    if isinstance(persistent, dict) and persistent.get("state") == "LIVE":
+        return {str(key): str(value) for key, value in persistent.items()}
+
     metrics = {
         "volume": "—",
         "change": "—",
@@ -189,6 +207,8 @@ def _solana_dex_card_metrics() -> dict[str, str]:
     except Exception:
         pass
 
+    if metrics.get("state") == "LIVE":
+        _PRESENTER_METRICS_STORE.save("dex_card", metrics)
     return metrics
 
 
@@ -196,6 +216,10 @@ def _solana_dex_card_metrics() -> dict[str, str]:
 def _solana_perps_volume_24h() -> str:
     # SOLANA-UI-03C.1 — Replace Trades with Perps Volume 24H
     """Read Solana 24h perps volume for presentation only."""
+    persistent = _persistent_presenter_metric_once("perps_volume_24h", max_age_seconds=30 * 60)
+    if isinstance(persistent, str) and persistent != "—":
+        return persistent
+
     api_endpoint = (
         "https://api.llama.fi/overview/derivatives/Solana"
         "?excludeTotalDataChart=true"
@@ -211,7 +235,9 @@ def _solana_perps_volume_24h() -> str:
             payload = json.loads(response.read().decode("utf-8"))
         total = float(payload.get("total24h"))
         if total >= 0:
-            return _compact_usd(total)
+            value = _compact_usd(total)
+            _PRESENTER_METRICS_STORE.save("perps_volume_24h", value)
+            return value
     except Exception:
         pass
 
@@ -242,7 +268,9 @@ def _solana_perps_volume_24h() -> str:
             amount = float(match.group(1).replace(",", ""))
             suffix = match.group(2).lower()
             multiplier = {"k": 1_000.0, "m": 1_000_000.0, "b": 1_000_000_000.0}.get(suffix, 1.0)
-            return _compact_usd(amount * multiplier)
+            value = _compact_usd(amount * multiplier)
+            _PRESENTER_METRICS_STORE.save("perps_volume_24h", value)
+            return value
     except Exception:
         pass
 
@@ -252,6 +280,15 @@ def _solana_perps_volume_24h() -> str:
 @_presentation_ttl_cache(10.0)
 def _solana_priority_fee() -> tuple[str, str]:
     """Read a presentation-only recent Solana priority fee from public RPC."""
+    persistent = _persistent_presenter_metric_once("priority_fee", max_age_seconds=5 * 60)
+    if (
+        isinstance(persistent, list)
+        and len(persistent) == 2
+        and all(isinstance(item, str) for item in persistent)
+        and persistent[1] != " is-offline"
+    ):
+        return persistent[0], persistent[1]
+
     endpoint = "https://api.mainnet-beta.solana.com"
     payload = json.dumps(
         {
@@ -303,7 +340,9 @@ def _solana_priority_fee() -> tuple[str, str]:
 
         # HEADER V1.1A — Zero Priority Fee Display Fix
         if median == 0:
-            return "Gas · Low", ""
+            value = ("Gas · Low", "")
+            _PRESENTER_METRICS_STORE.save("priority_fee", value)
+            return value
 
         if median >= 1_000_000:
             label = f"{median / 1_000_000:.2f}".rstrip("0").rstrip(".") + "M"
@@ -312,7 +351,9 @@ def _solana_priority_fee() -> tuple[str, str]:
         else:
             label = f"{median:,}"
 
-        return f"Gas · {label} µLam/CU", ""
+        value = (f"Gas · {label} µLam/CU", "")
+        _PRESENTER_METRICS_STORE.save("priority_fee", value)
+        return value
     except Exception:
         return "Gas · —", " is-offline"
 
