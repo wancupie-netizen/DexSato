@@ -88,6 +88,7 @@ _RECENT_RECENT_ELIGIBLE_ROWS: dict[
 ] = {}
 _RECENT_V2_STORE_INIT_LOCK = threading.Lock()
 _RECENT_V2_STORE: RecentMarketStore | None = None
+_RECENT_STORE_BOOTSTRAP_ATTEMPTED = False
 
 _RANKED_MARKET_FEED_STORE = RankedMarketFeedStore()
 _RANKED_MARKET_BOOTSTRAP_LOCK = threading.Lock()
@@ -141,6 +142,49 @@ def _recent_v2_store() -> RecentMarketStore:
         if _RECENT_V2_STORE is None:
             _RECENT_V2_STORE = RecentMarketStore()
         return _RECENT_V2_STORE
+
+
+def _load_recent_store_bootstrap_once() -> dict[str, Any] | None:
+    """Restore the rolling Recent feed from its existing store once per process."""
+    global _RECENT_STORE_BOOTSTRAP_ATTEMPTED
+
+    if not os.getenv("JUPITER_API_KEY", "").strip():
+        return None
+
+    with _RECENT_MARKET_CACHE_LOCK:
+        if _RECENT_STORE_BOOTSTRAP_ATTEMPTED:
+            return None
+        _RECENT_STORE_BOOTSTRAP_ATTEMPTED = True
+
+    try:
+        store = _recent_v2_store()
+        store.expire()
+        rows = store.active_rows()
+    except RecentMarketStoreUnavailable:
+        return None
+
+    if not rows:
+        return None
+
+    return {
+        "connected": True,
+        "status": "live",
+        "message": (
+            "DexSato rolling 24h Recent feed restored from persisted "
+            "eligible Jupiter Recent observations."
+        ),
+        "rows": rows,
+        "eligible_count": len(rows),
+        "retention_seconds": RECENT_V2_RETENTION_SECONDS,
+        "market_feed": "recent_rolling_24h",
+        "store_status": "ready",
+        "ordering": "recent_first_pool_created_at_desc",
+        "display_limit": RECENT_DISPLAY_LIMIT,
+        "min_liquidity_usd": RECENT_MIN_EXACT_POOL_LIQUIDITY_USD,
+        "bootstrap_source": "recent_market_store",
+        "bootstrap_row_count": len(rows),
+        "bootstrap_snapshot_refresh": False,
+    }
 
 
 def _merge_recent_snapshot_into_store(
@@ -943,6 +987,14 @@ def load_jupiter_recent_feed(
             and now - _RECENT_MARKET_CACHE_AT < RECENT_CACHE_SECONDS
         ):
             return dict(_RECENT_MARKET_CACHE_PAYLOAD)
+
+    persistent = _load_recent_store_bootstrap_once()
+    if persistent is not None:
+        with _RECENT_MARKET_CACHE_LOCK:
+            _RECENT_MARKET_CACHE_AT = now
+            _RECENT_MARKET_CACHE_PAYLOAD = dict(persistent)
+            _remember_recent_eligible_rows(persistent, observed_at=now)
+        return dict(persistent)
 
     snapshot = _fetch_recent(
         request_get=request_get,
