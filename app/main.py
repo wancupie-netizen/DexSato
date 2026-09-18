@@ -63,9 +63,6 @@ from application.content_control_service import (
     password_matches,
     session_is_valid,
 )
-from application.founder_snapshot_service import (
-    read_latest_snapshot,
-)
 from application.solana_discovery_feed_service import (
     load_solana_discovery_engine_feed,
     load_solana_discovery_feed,
@@ -127,9 +124,6 @@ from application.solana_wallet_balance_service import (
 
 from application.telegram_notifier import (
     send_telegram_alert,
-)
-from application.system_health_dashboard import (
-    collect_system_dashboard_status,
 )
 from application.production_security import (
     ApplicationBoundaryMiddleware,
@@ -246,8 +240,18 @@ def load_current_snapshot() -> dict[str, object]:
     """
     Read the latest generated DexSato snapshot.
     """
+    from application.founder_snapshot_service import read_latest_snapshot
 
     return read_latest_snapshot()
+
+
+def _collect_system_dashboard_status() -> dict[str, object]:
+    """Load founder system-health dependencies only when requested."""
+    from application.system_health_dashboard import (
+        collect_system_dashboard_status as _collect_status,
+    )
+
+    return _collect_status()
 
 
 def build_current_dashboard_data() -> list[dict[str, object]]:
@@ -331,7 +335,7 @@ def major_assets() -> str:
             detail="Market snapshot is temporarily unavailable.",
         ) from error
 
-    system_status = collect_system_dashboard_status()
+    system_status = _collect_system_dashboard_status()
 
     return render_founder_snapshot_dashboard(
         snapshot,
@@ -1680,7 +1684,7 @@ def admin_system() -> str:
 
     return render_admin_system_page(
         snapshot,
-        system_status=collect_system_dashboard_status(),
+        system_status=_collect_system_dashboard_status(),
     )
 
 
@@ -1887,7 +1891,7 @@ def system_status_api() -> dict[str, object]:
     Return operational health without running a market scan.
     """
 
-    return collect_system_dashboard_status()
+    return _collect_system_dashboard_status()
 
 
 @app.post(
