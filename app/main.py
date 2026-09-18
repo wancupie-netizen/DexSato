@@ -68,10 +68,8 @@ from application.solana_discovery_feed_service import (
     load_solana_discovery_feed,
 )
 from application.jupiter_market_feed_service import (
-    load_jupiter_organic_flow_feed,
+    load_jupiter_ranked_market_feeds,
     load_jupiter_recent_feed,
-    load_jupiter_top_traded_feed,
-    load_jupiter_trending_feed,
 )
 from application.solana_discovery_token_service import (
     load_solana_discovery_live_candles,
@@ -290,16 +288,17 @@ def _content_cookie_secure(request: Request) -> bool:
 
 
 def _load_discovery_market_feeds() -> dict[str, dict[str, object]]:
-    """Load independent Discovery market feeds concurrently."""
-    loaders = {
-        "trending": load_jupiter_trending_feed,
-        "top_traded": load_jupiter_top_traded_feed,
-        "organic_flow": load_jupiter_organic_flow_feed,
-        "recent": load_jupiter_recent_feed,
-    }
-    with ThreadPoolExecutor(max_workers=len(loaders)) as executor:
-        futures = {name: executor.submit(loader) for name, loader in loaders.items()}
-        return {name: futures[name].result() for name in loaders}
+    """Load shared ranked feeds and independent Recent concurrently."""
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        ranked_future = executor.submit(load_jupiter_ranked_market_feeds)
+        recent_future = executor.submit(load_jupiter_recent_feed)
+        ranked = ranked_future.result()
+        return {
+            "trending": ranked["trending"],
+            "top_traded": ranked["top_traded"],
+            "organic_flow": ranked["organic_flow"],
+            "recent": recent_future.result(),
+        }
 
 
 def _load_discovery_page_context() -> tuple[dict[str, dict[str, object]], dict[str, object]]:

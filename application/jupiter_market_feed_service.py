@@ -5,12 +5,14 @@ from __future__ import annotations
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 import requests
 
 from application.dexscreener_sol_pair_resolver import (
     ExactSolPairResolverUnavailable,
+    resolve_exact_sol_pair_groups,
     resolve_exact_sol_pairs,
 )
 from application.trending_signal_interpreter import interpret_trending_signal
@@ -237,6 +239,130 @@ def _merge_recent_snapshot_into_store(
         "canonical exact WSOL pools."
     )
     return merged
+
+
+
+class _SharedRankedExactSolResolution:
+    """Request-scoped barrier that resolves live ranked token groups once."""
+
+    _NAMES = ("trending", "top_traded", "organic_flow")
+
+    def __init__(
+        self,
+        pair_group_resolver: Callable[..., dict[str, dict[str, Any]]],
+    ) -> None:
+        self._pair_group_resolver = pair_group_resolver
+        self._lock = threading.Lock()
+        self._requests: dict[
+            str,
+            tuple[list[Any], float, Callable[..., Any]] | None,
+        ] = {}
+        self._results: dict[str, dict[str, Any]] = {}
+        self._error: Exception | None = None
+        self._barrier = threading.Barrier(len(self._NAMES), action=self._resolve)
+
+    def resolve(
+        self,
+        name: str,
+        token_addresses: list[Any],
+        *,
+        min_liquidity_usd: float,
+        request_get: Callable[..., Any],
+    ) -> dict[str, Any]:
+        with self._lock:
+            self._requests[name] = (
+                list(token_addresses),
+                float(min_liquidity_usd),
+                request_get,
+            )
+        self._barrier.wait()
+        if self._error is not None:
+            raise self._error
+        result = self._results.get(name)
+        if not isinstance(result, dict):
+            raise ExactSolPairResolverUnavailable(
+                "Shared exact SOL pair resolution did not return this ranked feed."
+            )
+        return result
+
+    def skip(self, name: str) -> None:
+        with self._lock:
+            self._requests.setdefault(name, None)
+        self._barrier.wait()
+
+    def skip_if_unregistered(self, name: str) -> None:
+        with self._lock:
+            registered = name in self._requests
+        if not registered:
+            self.skip(name)
+
+    def _resolve(self) -> None:
+        with self._lock:
+            active = {
+                name: request
+                for name, request in self._requests.items()
+                if request is not None
+            }
+        if not active:
+            return
+
+        minimums = {request[1] for request in active.values()}
+        request_gets = {id(request[2]): request[2] for request in active.values()}
+        if len(minimums) != 1 or len(request_gets) != 1:
+            self._error = ValueError(
+                "Shared ranked resolution requires one liquidity floor and request client."
+            )
+            return
+
+        groups = {
+            name: request[0]
+            for name, request in active.items()
+        }
+        try:
+            self._results = self._pair_group_resolver(
+                groups,
+                min_liquidity_usd=next(iter(minimums)),
+                request_get=next(iter(request_gets.values())),
+            )
+        except (
+            ExactSolPairResolverUnavailable,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as error:
+            self._error = error
+
+
+def _shared_ranked_pair_resolver(
+    shared: _SharedRankedExactSolResolution | None,
+    name: str,
+    default_resolver: Callable[..., dict[str, Any]],
+) -> tuple[Callable[..., dict[str, Any]], Callable[[], None]]:
+    if shared is None:
+        return default_resolver, lambda: None
+
+    used = False
+
+    def resolver(
+        token_addresses: list[Any],
+        *,
+        min_liquidity_usd: float,
+        request_get: Callable[..., Any],
+    ) -> dict[str, Any]:
+        nonlocal used
+        used = True
+        return shared.resolve(
+            name,
+            token_addresses,
+            min_liquidity_usd=min_liquidity_usd,
+            request_get=request_get,
+        )
+
+    def finish() -> None:
+        if not used:
+            shared.skip(name)
+
+    return resolver, finish
 
 
 def _number(value: Any) -> float | None:
@@ -1014,6 +1140,7 @@ def load_jupiter_organic_flow_feed(
     request_get: Callable[..., Any] = requests.get,
     pair_resolver: Callable[..., dict[str, Any]] = resolve_exact_sol_pairs,
     now_monotonic: Callable[[], float] = time.monotonic,
+    _shared_resolution: _SharedRankedExactSolResolution | None = None,
 ) -> dict[str, Any]:
     """Return cached Organic Flow / 1h data without touching Discovery state."""
     global _ORGANIC_FLOW_CACHE_AT, _ORGANIC_FLOW_CACHE_PAYLOAD
@@ -1025,6 +1152,8 @@ def load_jupiter_organic_flow_feed(
             and now >= _ORGANIC_FLOW_CACHE_AT
             and (now - _ORGANIC_FLOW_CACHE_AT) < ORGANIC_FLOW_CACHE_SECONDS
         ):
+            if _shared_resolution is not None:
+                _shared_resolution.skip("organic_flow")
             return dict(_ORGANIC_FLOW_CACHE_PAYLOAD)
 
     persistent = _load_ranked_market_bootstrap_once(
@@ -1038,10 +1167,16 @@ def load_jupiter_organic_flow_feed(
             _remember_organic_flow_eligible_rows(persistent, observed_at=now)
         return dict(persistent)
 
+    ranked_pair_resolver, finish_shared_resolution = _shared_ranked_pair_resolver(
+        _shared_resolution,
+        "organic_flow",
+        pair_resolver,
+    )
     payload = _fetch_organic_flow(
         request_get=request_get,
-        pair_resolver=pair_resolver,
+        pair_resolver=ranked_pair_resolver,
     )
+    finish_shared_resolution()
 
     with _ORGANIC_FLOW_CACHE_LOCK:
         _ORGANIC_FLOW_CACHE_AT = now
@@ -1121,6 +1256,7 @@ def load_jupiter_top_traded_feed(
     request_get: Callable[..., Any] = requests.get,
     pair_resolver: Callable[..., dict[str, Any]] = resolve_exact_sol_pairs,
     now_monotonic: Callable[[], float] = time.monotonic,
+    _shared_resolution: _SharedRankedExactSolResolution | None = None,
 ) -> dict[str, Any]:
     """Return cached Top Traded / 24h data without touching Discovery state."""
     global _TOP_TRADED_CACHE_AT, _TOP_TRADED_CACHE_PAYLOAD
@@ -1132,6 +1268,8 @@ def load_jupiter_top_traded_feed(
             and now >= _TOP_TRADED_CACHE_AT
             and (now - _TOP_TRADED_CACHE_AT) < TOP_TRADED_CACHE_SECONDS
         ):
+            if _shared_resolution is not None:
+                _shared_resolution.skip("top_traded")
             return dict(_TOP_TRADED_CACHE_PAYLOAD)
 
     persistent = _load_ranked_market_bootstrap_once(
@@ -1145,10 +1283,16 @@ def load_jupiter_top_traded_feed(
             _remember_top_traded_eligible_rows(persistent, observed_at=now)
         return dict(persistent)
 
+    ranked_pair_resolver, finish_shared_resolution = _shared_ranked_pair_resolver(
+        _shared_resolution,
+        "top_traded",
+        pair_resolver,
+    )
     payload = _fetch_top_traded(
         request_get=request_get,
-        pair_resolver=pair_resolver,
+        pair_resolver=ranked_pair_resolver,
     )
+    finish_shared_resolution()
 
     with _TOP_TRADED_CACHE_LOCK:
         _TOP_TRADED_CACHE_AT = now
@@ -1222,6 +1366,7 @@ def load_jupiter_trending_feed(
     request_get: Callable[..., Any] = requests.get,
     pair_resolver: Callable[..., dict[str, Any]] = resolve_exact_sol_pairs,
     now_monotonic: Callable[[], float] = time.monotonic,
+    _shared_resolution: _SharedRankedExactSolResolution | None = None,
 ) -> dict[str, Any]:
     """Return cached Trending/1h data; failures never block Discovery rendering."""
     global _CACHE_AT, _CACHE_PAYLOAD
@@ -1233,6 +1378,8 @@ def load_jupiter_trending_feed(
             and now >= _CACHE_AT
             and (now - _CACHE_AT) < TRENDING_CACHE_SECONDS
         ):
+            if _shared_resolution is not None:
+                _shared_resolution.skip("trending")
             return dict(_CACHE_PAYLOAD)
 
     persistent = _load_ranked_market_bootstrap_once(
@@ -1246,10 +1393,16 @@ def load_jupiter_trending_feed(
             _remember_eligible_rows(persistent, observed_at=now)
         return dict(persistent)
 
+    ranked_pair_resolver, finish_shared_resolution = _shared_ranked_pair_resolver(
+        _shared_resolution,
+        "trending",
+        pair_resolver,
+    )
     payload = _fetch_trending(
         request_get=request_get,
-        pair_resolver=pair_resolver,
+        pair_resolver=ranked_pair_resolver,
     )
+    finish_shared_resolution()
 
     with _CACHE_LOCK:
         _CACHE_AT = now
@@ -1259,3 +1412,39 @@ def load_jupiter_trending_feed(
     _save_ranked_market_lkg("trending", payload)
 
     return payload
+
+
+def load_jupiter_ranked_market_feeds(
+    *,
+    request_get: Callable[..., Any] = requests.get,
+    pair_group_resolver: Callable[..., dict[str, dict[str, Any]]] = (
+        resolve_exact_sol_pair_groups
+    ),
+) -> dict[str, dict[str, Any]]:
+    """Load the three $100k ranked feeds with request-scoped shared resolution."""
+    shared = _SharedRankedExactSolResolution(pair_group_resolver)
+    loaders = {
+        "trending": load_jupiter_trending_feed,
+        "top_traded": load_jupiter_top_traded_feed,
+        "organic_flow": load_jupiter_organic_flow_feed,
+    }
+
+    def run(name: str, loader: Callable[..., dict[str, Any]]) -> dict[str, Any]:
+        try:
+            return loader(
+                request_get=request_get,
+                _shared_resolution=shared,
+            )
+        except Exception:
+            shared.skip_if_unregistered(name)
+            raise
+
+    with ThreadPoolExecutor(max_workers=len(loaders)) as executor:
+        futures = {
+            name: executor.submit(run, name, loader)
+            for name, loader in loaders.items()
+        }
+        return {
+            name: futures[name].result()
+            for name in loaders
+        }

@@ -7,7 +7,8 @@ qualification, engine, swap, referral, collector, or storage semantics.
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Iterable, Mapping
 
 import requests
 
@@ -250,3 +251,116 @@ def resolve_exact_sol_pairs(
         "min_liquidity_usd": float(minimum),
         "rows": rows,
     }
+
+
+def resolve_exact_sol_pair_groups(
+    token_groups: Mapping[str, Iterable[Any]],
+    *,
+    min_liquidity_usd: float = DEFAULT_MIN_LIQUIDITY_USD,
+    request_get: Callable[..., Any] = requests.get,
+) -> dict[str, dict[str, Any]]:
+    """Resolve shared exact-WSOL evidence for multiple <=50-token groups.
+
+    Each group keeps the same per-call address normalization, input ordering,
+    liquidity floor, and highest-liquidity pair selection as
+    ``resolve_exact_sol_pairs``. Provider work is deduplicated across the union.
+    """
+    minimum = _number(min_liquidity_usd)
+    if minimum is None or minimum < 0:
+        raise ValueError("min_liquidity_usd must be a non-negative finite number.")
+
+    normalized_groups: dict[str, list[str]] = {
+        str(name): _normalize_token_addresses(values)
+        for name, values in token_groups.items()
+    }
+
+    union_addresses: list[str] = []
+    union_seen: set[str] = set()
+    for addresses in normalized_groups.values():
+        for address in addresses:
+            if address in union_seen:
+                continue
+            union_seen.add(address)
+            union_addresses.append(address)
+
+    if not union_addresses:
+        return {
+            name: {
+                "status": "ok",
+                "requested_count": 0,
+                "provider_pair_count": 0,
+                "resolved_count": 0,
+                "min_liquidity_usd": float(minimum),
+                "rows": [],
+            }
+            for name in normalized_groups
+        }
+
+    batches = list(_chunks(union_addresses, DEXSCREENER_BATCH_SIZE))
+    with ThreadPoolExecutor(max_workers=min(4, len(batches))) as executor:
+        futures = [
+            executor.submit(_fetch_pairs, batch, request_get=request_get)
+            for batch in batches
+        ]
+        # Preserve union batch order even though provider requests overlap.
+        provider_pairs = [
+            pair
+            for future in futures
+            for pair in future.result()
+        ]
+
+    results: dict[str, dict[str, Any]] = {}
+    for name, addresses in normalized_groups.items():
+        requested = set(addresses)
+        group_pairs: list[dict[str, Any]] = []
+        best_by_token: dict[str, dict[str, Any]] = {}
+
+        for pair in provider_pairs:
+            base = pair.get("baseToken")
+            quote = pair.get("quoteToken")
+            if not isinstance(base, dict) or not isinstance(quote, dict):
+                continue
+
+            base_address = str(base.get("address") or "").strip()
+            quote_address = str(quote.get("address") or "").strip()
+
+            candidates: list[str] = []
+            if base_address in requested:
+                candidates.append(base_address)
+            if quote_address in requested and quote_address != base_address:
+                candidates.append(quote_address)
+            if not candidates:
+                continue
+
+            group_pairs.append(pair)
+            for token_address in candidates:
+                normalized = _pair_for_token(
+                    pair,
+                    token_address,
+                    min_liquidity_usd=float(minimum),
+                )
+                if normalized is None:
+                    continue
+                previous = best_by_token.get(token_address)
+                if (
+                    previous is None
+                    or float(normalized["liquidity_usd"])
+                    > float(previous["liquidity_usd"])
+                ):
+                    best_by_token[token_address] = normalized
+
+        rows = [
+            best_by_token[address]
+            for address in addresses
+            if address in best_by_token
+        ]
+        results[name] = {
+            "status": "ok",
+            "requested_count": len(addresses),
+            "provider_pair_count": len(group_pairs),
+            "resolved_count": len(rows),
+            "min_liquidity_usd": float(minimum),
+            "rows": rows,
+        }
+
+    return results
