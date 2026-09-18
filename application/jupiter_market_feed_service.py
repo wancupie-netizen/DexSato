@@ -14,6 +14,7 @@ from application.dexscreener_sol_pair_resolver import (
     resolve_exact_sol_pairs,
 )
 from application.trending_signal_interpreter import interpret_trending_signal
+from application.ranked_market_feed_store import RankedMarketFeedStore
 from application.recent_market_store import (
     RECENT_V2_RETENTION_SECONDS,
     RecentMarketStore,
@@ -26,6 +27,7 @@ TRENDING_FETCH_LIMIT = 50
 TRENDING_DISPLAY_LIMIT = 30
 TRENDING_MIN_EXACT_POOL_LIQUIDITY_USD = 100_000.0
 TRENDING_CACHE_SECONDS = 60.0
+TRENDING_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS = 5 * 60.0
 # Workspace continuity only: a token that was genuinely eligible and rendered
 # may remain open briefly even if Jupiter's live Top Trending ranking refreshes.
 # This does not put the token back into the public Trending list.
@@ -43,6 +45,7 @@ TOP_TRADED_FETCH_LIMIT = 50
 TOP_TRADED_DISPLAY_LIMIT = 30
 TOP_TRADED_MIN_EXACT_POOL_LIQUIDITY_USD = 100_000.0
 TOP_TRADED_CACHE_SECONDS = 60.0
+TOP_TRADED_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS = 10 * 60.0
 _TOP_TRADED_CACHE_LOCK = threading.Lock()
 _TOP_TRADED_CACHE_AT = 0.0
 _TOP_TRADED_CACHE_PAYLOAD: dict[str, Any] | None = None
@@ -57,6 +60,7 @@ ORGANIC_FLOW_FETCH_LIMIT = 50
 ORGANIC_FLOW_DISPLAY_LIMIT = 30
 ORGANIC_FLOW_MIN_EXACT_POOL_LIQUIDITY_USD = 100_000.0
 ORGANIC_FLOW_CACHE_SECONDS = 60.0
+ORGANIC_FLOW_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS = 5 * 60.0
 _ORGANIC_FLOW_CACHE_LOCK = threading.Lock()
 _ORGANIC_FLOW_CACHE_AT = 0.0
 _ORGANIC_FLOW_CACHE_PAYLOAD: dict[str, Any] | None = None
@@ -84,6 +88,50 @@ _RECENT_RECENT_ELIGIBLE_ROWS: dict[
 ] = {}
 _RECENT_V2_STORE_INIT_LOCK = threading.Lock()
 _RECENT_V2_STORE: RecentMarketStore | None = None
+
+_RANKED_MARKET_FEED_STORE = RankedMarketFeedStore()
+_RANKED_MARKET_BOOTSTRAP_LOCK = threading.Lock()
+_RANKED_MARKET_BOOTSTRAP_ATTEMPTED: set[str] = set()
+
+
+def _load_ranked_market_bootstrap_once(
+    key: str,
+    *,
+    max_age_seconds: float,
+) -> dict[str, Any] | None:
+    """Load one valid final feed payload from disk at most once per process."""
+    with _RANKED_MARKET_BOOTSTRAP_LOCK:
+        if key in _RANKED_MARKET_BOOTSTRAP_ATTEMPTED:
+            return None
+        _RANKED_MARKET_BOOTSTRAP_ATTEMPTED.add(key)
+
+    loaded = _RANKED_MARKET_FEED_STORE.load(key, max_age_seconds=max_age_seconds)
+    if loaded is None:
+        return None
+    payload, age_seconds = loaded
+    if (
+        payload.get("connected") is not True
+        or payload.get("status") != "live"
+        or not isinstance(payload.get("rows"), list)
+    ):
+        return None
+    result = dict(payload)
+    result["bootstrap_source"] = "persistent_lkg"
+    result["bootstrap_age_seconds"] = max(0.0, float(age_seconds))
+    return result
+
+
+def _save_ranked_market_lkg(key: str, payload: dict[str, Any]) -> None:
+    """Persist only successful final ranked-feed payloads."""
+    if (
+        payload.get("connected") is True
+        and payload.get("status") == "live"
+        and isinstance(payload.get("rows"), list)
+    ):
+        clean = dict(payload)
+        clean.pop("bootstrap_source", None)
+        clean.pop("bootstrap_age_seconds", None)
+        _RANKED_MARKET_FEED_STORE.save(key, clean)
 
 
 def _recent_v2_store() -> RecentMarketStore:
@@ -927,6 +975,17 @@ def load_jupiter_organic_flow_feed(
         ):
             return dict(_ORGANIC_FLOW_CACHE_PAYLOAD)
 
+    persistent = _load_ranked_market_bootstrap_once(
+        "organic_flow",
+        max_age_seconds=ORGANIC_FLOW_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+    )
+    if persistent is not None:
+        with _ORGANIC_FLOW_CACHE_LOCK:
+            _ORGANIC_FLOW_CACHE_AT = now
+            _ORGANIC_FLOW_CACHE_PAYLOAD = dict(persistent)
+            _remember_organic_flow_eligible_rows(persistent, observed_at=now)
+        return dict(persistent)
+
     payload = _fetch_organic_flow(
         request_get=request_get,
         pair_resolver=pair_resolver,
@@ -937,6 +996,7 @@ def load_jupiter_organic_flow_feed(
         _ORGANIC_FLOW_CACHE_PAYLOAD = dict(payload)
         if payload.get("connected") is True:
             _remember_organic_flow_eligible_rows(payload, observed_at=now)
+    _save_ranked_market_lkg("organic_flow", payload)
 
     return payload
 
@@ -1022,6 +1082,17 @@ def load_jupiter_top_traded_feed(
         ):
             return dict(_TOP_TRADED_CACHE_PAYLOAD)
 
+    persistent = _load_ranked_market_bootstrap_once(
+        "top_traded",
+        max_age_seconds=TOP_TRADED_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+    )
+    if persistent is not None:
+        with _TOP_TRADED_CACHE_LOCK:
+            _TOP_TRADED_CACHE_AT = now
+            _TOP_TRADED_CACHE_PAYLOAD = dict(persistent)
+            _remember_top_traded_eligible_rows(persistent, observed_at=now)
+        return dict(persistent)
+
     payload = _fetch_top_traded(
         request_get=request_get,
         pair_resolver=pair_resolver,
@@ -1032,6 +1103,7 @@ def load_jupiter_top_traded_feed(
         _TOP_TRADED_CACHE_PAYLOAD = dict(payload)
         if payload.get("connected") is True:
             _remember_top_traded_eligible_rows(payload, observed_at=now)
+    _save_ranked_market_lkg("top_traded", payload)
 
     return payload
 
@@ -1111,6 +1183,17 @@ def load_jupiter_trending_feed(
         ):
             return dict(_CACHE_PAYLOAD)
 
+    persistent = _load_ranked_market_bootstrap_once(
+        "trending",
+        max_age_seconds=TRENDING_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+    )
+    if persistent is not None:
+        with _CACHE_LOCK:
+            _CACHE_AT = now
+            _CACHE_PAYLOAD = dict(persistent)
+            _remember_eligible_rows(persistent, observed_at=now)
+        return dict(persistent)
+
     payload = _fetch_trending(
         request_get=request_get,
         pair_resolver=pair_resolver,
@@ -1121,5 +1204,6 @@ def load_jupiter_trending_feed(
         _CACHE_PAYLOAD = dict(payload)
         if payload.get("connected") is True:
             _remember_eligible_rows(payload, observed_at=now)
+    _save_ranked_market_lkg("trending", payload)
 
     return payload
