@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
+import pytest
+
 from application.production_readiness import (
     collector_fresh,
     collector_storage_ready,
@@ -10,6 +12,15 @@ from application.production_readiness import (
     production_configuration_ready,
     validate_production_configuration,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_state_validation_cache():
+    from application import production_readiness
+
+    production_readiness._state_validation_cache.clear()
+    yield
+    production_readiness._state_validation_cache.clear()
 
 
 def _production_environment(**overrides):
@@ -126,6 +137,106 @@ def test_collector_integrity_requires_expected_json_mappings(tmp_path):
     assert collector_storage_ready(tmp_path) is True
     (tmp_path / "state.json").write_text('{"candidates": []}', encoding="utf-8")
     assert collector_storage_ready(tmp_path) is False
+
+
+def test_state_cache_skips_second_json_parse_for_identical_bytes(tmp_path, monkeypatch):
+    from application import production_readiness
+
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps({"candidates": {"A": {}}}), encoding="utf-8")
+    (tmp_path / "status.json").write_text(json.dumps({"metrics": {}}), encoding="utf-8")
+
+    original_loads = production_readiness.json.loads
+    state_parse_count = 0
+
+    def counted_loads(value, *args, **kwargs):
+        nonlocal state_parse_count
+        if isinstance(value, bytes):
+            state_parse_count += 1
+        return original_loads(value, *args, **kwargs)
+
+    monkeypatch.setattr(production_readiness.json, "loads", counted_loads)
+    assert collector_storage_ready(tmp_path) is True
+    assert collector_storage_ready(tmp_path) is True
+    assert state_parse_count == 1
+
+
+def test_state_cache_detects_same_path_in_place_overwrite(tmp_path):
+    state = tmp_path / "state.json"
+    status = tmp_path / "status.json"
+    state.write_text('{"candidates": {}}', encoding="utf-8")
+    status.write_text('{"metrics": {}}', encoding="utf-8")
+    assert collector_storage_ready(tmp_path) is True
+    state.write_text('{"candidates": []}', encoding="utf-8")
+    assert collector_storage_ready(tmp_path) is False
+
+
+def test_state_cache_invalidates_atomic_valid_to_invalid(tmp_path):
+    state = tmp_path / "state.json"
+    status = tmp_path / "status.json"
+    state.write_text('{"candidates": {}}', encoding="utf-8")
+    status.write_text('{"metrics": {}}', encoding="utf-8")
+    assert collector_storage_ready(tmp_path) is True
+    replacement = tmp_path / "state.json.tmp"
+    replacement.write_text('{"candidates": []}', encoding="utf-8")
+    replacement.replace(state)
+    assert collector_storage_ready(tmp_path) is False
+
+
+def test_state_cache_recovers_atomic_invalid_to_valid(tmp_path):
+    state = tmp_path / "state.json"
+    status = tmp_path / "status.json"
+    state.write_text('{"candidates": []}', encoding="utf-8")
+    status.write_text('{"metrics": {}}', encoding="utf-8")
+    assert collector_storage_ready(tmp_path) is False
+    replacement = tmp_path / "state.json.tmp"
+    replacement.write_text('{"candidates": {}}', encoding="utf-8")
+    replacement.replace(state)
+    assert collector_storage_ready(tmp_path) is True
+
+
+def test_state_cache_never_returns_stale_true_after_delete(tmp_path):
+    state = tmp_path / "state.json"
+    status = tmp_path / "status.json"
+    state.write_text('{"candidates": {}}', encoding="utf-8")
+    status.write_text('{"metrics": {}}', encoding="utf-8")
+    assert collector_storage_ready(tmp_path) is True
+    state.unlink()
+    assert collector_storage_ready(tmp_path) is False
+
+
+def test_status_json_is_still_validated_every_call(tmp_path):
+    state = tmp_path / "state.json"
+    status = tmp_path / "status.json"
+    state.write_text('{"candidates": {}}', encoding="utf-8")
+    status.write_text('{"metrics": {}}', encoding="utf-8")
+    assert collector_storage_ready(tmp_path) is True
+    status.write_text('{"metrics": []}', encoding="utf-8")
+    assert collector_storage_ready(tmp_path) is False
+
+
+def test_state_cache_retries_generation_changed_during_read(tmp_path, monkeypatch):
+    from application import production_readiness
+
+    state = tmp_path / "state.json"
+    status = tmp_path / "status.json"
+    state.write_text('{"candidates": {}}', encoding="utf-8")
+    status.write_text('{"metrics": {}}', encoding="utf-8")
+
+    original = production_readiness._state_fingerprint
+    calls = 0
+
+    def unstable_once(path):
+        nonlocal calls
+        calls += 1
+        value = original(path)
+        if calls == 2:
+            return (value[0], value[1], value[2] + 1, value[3], value[4])
+        return value
+
+    monkeypatch.setattr(production_readiness, "_state_fingerprint", unstable_once)
+    assert collector_storage_ready(tmp_path) is True
+    assert calls >= 4
 
 
 def test_collector_freshness_accepts_recent_generated_at(tmp_path):

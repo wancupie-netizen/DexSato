@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -81,6 +82,22 @@ def production_configuration_ready() -> bool:
     return True
 
 
+_StateFingerprint = tuple[int, int, int, int, int]
+_StateCacheEntry = tuple[_StateFingerprint, bytes]
+_state_validation_cache: dict[Path, _StateCacheEntry] = {}
+
+
+def _state_fingerprint(path: Path) -> _StateFingerprint:
+    stat = path.stat()
+    return (
+        stat.st_dev,
+        stat.st_ino,
+        stat.st_size,
+        stat.st_mtime_ns,
+        stat.st_ctime_ns,
+    )
+
+
 def _valid_json_object(path: Path, *, required_mapping: str) -> bool:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -89,9 +106,47 @@ def _valid_json_object(path: Path, *, required_mapping: str) -> bool:
     return isinstance(payload, dict) and isinstance(payload.get(required_mapping), dict)
 
 
+def _state_json_ready(path: Path) -> bool:
+    """Validate fully on content change; reuse validation only for identical bytes."""
+    for _attempt in range(2):
+        try:
+            before = _state_fingerprint(path)
+            data = path.read_bytes()
+            after = _state_fingerprint(path)
+        except OSError:
+            return False
+
+        if before != after:
+            continue
+
+        content_digest = hashlib.sha256(data).digest()
+        if _state_validation_cache.get(path) == (after, content_digest):
+            return True
+
+        try:
+            payload = json.loads(data)
+        except (UnicodeError, json.JSONDecodeError):
+            return False
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("candidates"), dict):
+            return False
+
+        try:
+            final = _state_fingerprint(path)
+        except OSError:
+            return False
+        if final != after:
+            continue
+
+        _state_validation_cache[path] = (final, content_digest)
+        return True
+
+    return False
+
+
 def collector_storage_ready(directory: Path) -> bool:
     """Validate stored collector schemas without contacting an upstream provider."""
-    return _valid_json_object(directory / "state.json", required_mapping="candidates") and _valid_json_object(
+    return _state_json_ready(directory / "state.json") and _valid_json_object(
         directory / "status.json", required_mapping="metrics"
     )
 
