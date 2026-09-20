@@ -115,7 +115,7 @@ def test_should_render_read_only_solana_discovery(mock_feed, mock_render):
     mock_render.return_value = "<html>Solana Discovery</html>"
 
     assert solana_discovery() == "<html>Solana Discovery</html>"
-    mock_feed.assert_called_once_with(view="qualified", page=1, page_size=25, query="")
+    mock_feed.assert_called_once_with(view="rolling", page=1, page_size=25, query="")
     mock_render.assert_called_once_with({"connected": True})
 
 

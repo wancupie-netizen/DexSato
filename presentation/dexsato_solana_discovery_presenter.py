@@ -1127,7 +1127,8 @@ def _render_market_intelligence_panel(
 
 
 def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
-    symbol = escape(str(candidate.get("symbol") or "Unknown"))
+    symbol_raw = str(candidate.get("symbol") or "Unknown")
+    symbol = escape(symbol_raw)
     name = escape(str(candidate.get("name") or "Unknown token"))
     quote_symbol = escape(str(candidate.get("quote_symbol") or "Unknown"))
     address_raw = str(candidate.get("token_address") or "")
@@ -1144,20 +1145,37 @@ def _candidate_row(candidate: dict[str, Any], rank: int) -> str:
         change, change_class = "Unavailable", ""
     age = escape(str(candidate.get("pair_age") or "Unavailable"))
     observation = "Currently qualified" if candidate.get("currently_qualified") is True else "Previously qualified"
+    icon = str(candidate.get("icon") or candidate.get("image_url") or "").strip()
+    avatar = (
+        f'<img src="{escape(icon, quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer">'
+        if icon.startswith("https://")
+        else f'<span class="dex-discovery-avatar">{escape(symbol_raw[:2].upper())}</span>'
+    )
+    token_link = (
+        f'<a class="dex-discovery-token-link" href="/discovery/solana/{quote(address_raw, safe="")}">'
+        f'{avatar}<span><strong>{symbol} / {quote_symbol}</strong>'
+        f'<small>{name} · {dex}</small></span></a>'
+        if address_raw
+        else (
+            f'<div class="dex-discovery-token-link">{avatar}<span>'
+            f'<strong>{symbol} / {quote_symbol}</strong>'
+            f'<small>{name} · {dex}</small></span></div>'
+        )
+    )
     source = (
         f'<a class="inspect-link" href="/discovery/solana/{quote(address_raw, safe="")}">'
         'Open Analysis &rarr;</a>'
     ) if address_raw else ""
     return (
-        f'<article class="candidate-row candidate-row-v32" data-token-address="{address}">'
-        f'<div class="token-cell compact-token"><span class="rank">{rank:02d}</span><div>'
-        f'<strong>{symbol} / {quote_symbol}</strong><span>{name}</span><small>{dex} / exact pool</small></div></div>'
-        f'<div class="feed-value"><span>Price / 24h</span><strong>{price}</strong><small class="{change_class}">{escape(change)}</small></div>'
-        f'<div class="feed-value"><span>Liquidity</span><strong>{liquidity}</strong></div>'
-        f'<div class="feed-value"><span>24h Vol</span><strong>{volume}</strong></div>'
-        f'<div class="feed-value"><span>Age</span><strong>{age}</strong></div>'
-        f'<div class="why-now"><span>Observation</span><strong><i class="why-dot" aria-hidden="true"></i>{observation}</strong></div>'
-        f'<div class="feed-action">{source}</div></article>'
+        f'<article class="dex-discovery-row candidate-row-v32" data-token-address="{address}">'
+        f'<div class="dex-discovery-token"><span class="dex-discovery-rank">{rank:02d}</span>{token_link}</div>'
+        f'<div class="dex-discovery-value dex-discovery-price"><strong>{price}</strong>'
+        f'<small class="{change_class}">{escape(change)}</small></div>'
+        f'<div class="dex-discovery-value"><strong>{volume}</strong></div>'
+        f'<div class="dex-discovery-value"><strong>{liquidity}</strong></div>'
+        f'<div class="dex-discovery-value"><strong>{age}</strong></div>'
+        f'<div class="dex-discovery-observation"><strong><i class="why-dot" aria-hidden="true"></i>{observation}</strong></div>'
+        f'<div class="dex-discovery-action">{source}</div></article>'
     )
 
 
@@ -1228,7 +1246,7 @@ def render_solana_discovery_page(
     status_label = str(data.get("collector_status") or "Prototype state")
     candidates = data.get("candidates") if isinstance(data.get("candidates"), list) else []
     qualified = str(data.get("qualified_candidates")) if data.get("qualified_candidates") is not None else "—"
-    view = str(data.get("view") or "qualified")
+    view = str(data.get("view") or "rolling")
     page_number = int(data.get("page") or 1)
     page_size = int(data.get("page_size") or 25)
     page_count = int(data.get("page_count") or 1)
@@ -1254,12 +1272,24 @@ def render_solana_discovery_page(
     txns_label = f'{int(txns):,}' if isinstance(txns, (int, float)) else "Unavailable"
     observed_volume_raw = data.get("observed_volume_24h_usd")
     observed_volume = "$0.00" if observed_volume_raw == 0 else _usd(observed_volume_raw)
-    sort_label = {"qualified": "Last observed", "recent": "First qualified", "archive": "Last qualified"}.get(view, "Last qualified")
+    sort_label = {
+        "rolling": "Last qualified",
+        "qualified": "Last observed",
+        "recent": "First qualified",
+        "archive": "Last qualified",
+    }.get(view, "Last qualified")
     clear_search = f'<a class="clear-search" href="/discovery/solana?view={quote(view)}&page=1">Clear</a>' if search_query else ""
     if search_query:
         empty_heading = "No matching token found."
         empty_copy = "Try another name, symbol, contract, pair address or DEX."
         empty_actions = f'<a class="primary-link" href="/discovery/solana?view={quote(view)}&page=1">Clear search</a>'
+    elif view == "rolling":
+        empty_heading = "No tokens qualified in the last 24 hours."
+        empty_copy = (
+            "Tokens remain visible here for 24 hours after their latest "
+            "successful qualification."
+        )
+        empty_actions = ""
     elif view == "qualified":
         empty_heading = "No qualified SOL pairs right now."
         empty_copy = "Tokens appear here only after identity, liquidity, activity and freshness checks pass."
@@ -1282,8 +1312,9 @@ def render_solana_discovery_page(
     )
     discovery_feed = (
         '<div class="sort-note"><span>__VIEW_TOTAL__ matching observations</span><span>Sorted by: __SORT_LABEL__</span></div>'
-        '<div class="feed-columns-v33" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Liquidity</span><span>24h Vol</span><span>Age</span><span>Observation</span><span></span></div>'
-        f'<div class="candidate-list">{candidate_rows}</div>{pagination}'
+        '<div class="dex-discovery-table">'
+        '<div class="dex-discovery-head" aria-hidden="true"><span>Token</span><span>Price / 24h</span><span>Volume 24h</span><span>Liquidity</span><span>Age</span><span>Observation</span><span>Analysis</span></div>'
+        f'<div class="dex-discovery-list">{candidate_rows}</div></div>{pagination}'
         if candidate_rows
         else empty_state
     )
@@ -2843,6 +2874,46 @@ def render_solana_discovery_page(
       .dex-trending-table{overflow-x:auto;overscroll-behavior-inline:contain}
       .dex-trending-head,.dex-trending-row{min-width:920px}
     }
+    /* DISCOVERY-UI-DEBT-01 — align Discovery with the current market-feed table. */
+    .dex-discovery-table{min-width:0;background:var(--panel)}
+    .dex-discovery-head,.dex-discovery-row{
+      display:grid;
+      grid-template-columns:minmax(230px,1.25fr) minmax(110px,.66fr) minmax(110px,.68fr) minmax(110px,.68fr) minmax(72px,.42fr) minmax(155px,.92fr) minmax(118px,.65fr);
+      align-items:center
+    }
+    .dex-discovery-head{min-height:34px;border-bottom:1px solid var(--line);background:var(--panel2)}
+    .dex-discovery-head span{padding:0 12px;color:var(--faint);font:600 11.5px "JetBrains Mono",monospace;letter-spacing:.055em;text-transform:uppercase}
+    .dex-discovery-head span:not(:first-child){text-align:right}
+    .dex-discovery-head span:nth-last-child(2),.dex-discovery-head span:last-child{text-align:left;padding-left:16px}
+    .dex-discovery-row{min-height:58px;border-bottom:1px solid rgba(42,56,71,.72);transition:background .12s ease,box-shadow .12s ease}
+    .dex-discovery-row:last-child{border-bottom:0}
+    .dex-discovery-row:hover{background:rgba(76,244,214,.035);box-shadow:inset 2px 0 0 rgba(76,244,214,.72)}
+    .dex-discovery-token{display:flex;align-items:center;gap:9px;min-width:0;padding:8px 12px}
+    .dex-discovery-rank{width:22px;flex:0 0 22px;color:var(--faint);font:500 11px "JetBrains Mono",monospace}
+    .dex-discovery-token-link{display:flex;align-items:center;gap:10px;min-width:0;color:inherit;text-decoration:none;border-radius:6px}
+    .dex-discovery-token-link:focus-visible{outline:2px solid var(--cyan);outline-offset:4px}
+    .dex-discovery-token-link img,.dex-discovery-avatar{width:32px;height:32px;flex:0 0 32px;border:1px solid var(--line2);border-radius:50%;background:var(--panel2)}
+    .dex-discovery-token-link img{object-fit:cover}
+    .dex-discovery-avatar{display:grid;place-items:center;color:var(--cyan);font:600 9px "JetBrains Mono",monospace}
+    .dex-discovery-token-link span{min-width:0}
+    .dex-discovery-token-link strong{display:block;color:var(--text);font:700 15px/1.15 "Space Grotesk",sans-serif;letter-spacing:.005em}
+    .dex-discovery-token-link small{display:block;max-width:190px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--faint);font:500 11px/1.2 "JetBrains Mono",monospace}
+    .dex-discovery-value{padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums}
+    .dex-discovery-value strong{color:var(--text);font:650 14px "JetBrains Mono",monospace}
+    .dex-discovery-price small{display:block;margin-top:3px;color:var(--faint);font:650 10.5px "JetBrains Mono",monospace}
+    .dex-discovery-price small.up{color:var(--cyan)}
+    .dex-discovery-price small.down{color:var(--risk)}
+    .dex-discovery-observation{padding:8px 14px 8px 16px;text-align:left}
+    .dex-discovery-observation strong{display:flex;align-items:center;gap:7px;color:var(--text);font:650 13px/1.3 "Space Grotesk",sans-serif}
+    .dex-discovery-action{display:flex;align-items:center;min-height:58px;padding:8px 12px 8px 16px}
+    .dex-discovery-action .inspect-link{margin:0;white-space:nowrap}
+    @media(max-width:1180px){
+      .dex-discovery-head,.dex-discovery-row{grid-template-columns:minmax(220px,1.2fr) 110px 110px 110px 72px 155px 118px}
+    }
+    @media(max-width:980px){
+      .dex-discovery-table{overflow-x:auto;overscroll-behavior-inline:contain}
+      .dex-discovery-head,.dex-discovery-row{min-width:1020px}
+    }
     .dex-category-placeholder{min-height:260px;display:grid;place-items:center;padding:28px;text-align:center}
     .dex-category-placeholder strong{display:block;color:var(--muted);font:600 14px "Space Grotesk",sans-serif}
     .dex-category-placeholder small{display:block;max-width:520px;margin-top:6px;color:var(--faint);font:500 11px "JetBrains Mono",monospace;line-height:1.55}
@@ -3023,15 +3094,6 @@ def render_solana_discovery_page(
       </section>
       <section id="dex-market-panel-discovery" class="dex-market-panel dex-token-list" role="tabpanel" aria-labelledby="dex-market-tab-discovery" data-market-panel="discovery">
         <section class="feed-panel">
-          <div class="feed-head">
-            <div><span class="eyebrow">SOLANA DISCOVERY</span><h2>Token List</h2><p>Persistent, server-paginated observations. Historical inclusion does not mean current qualification.</p></div>
-            <form class="terminal-search" method="get" action="/discovery/solana"><input type="hidden" name="view" value="__VIEW__"><input type="hidden" name="page" value="1"><input type="search" name="q" value="__SEARCH_QUERY__" placeholder="Search token, symbol, contract or DEX" aria-label="Search the discovery archive"><button type="submit">Search</button>__CLEAR_SEARCH__</form>
-          </div>
-          <nav class="discovery-segments-v1" aria-label="Solana discovery products">
-            <a class="discovery-segment-v1 active" href="/discovery/solana" aria-current="page"><span>New Discoveries</span><small>Active</small></a>
-            <span class="discovery-segment-v1 upcoming" aria-disabled="true"><span>Established Solana</span><small>Soon</small></span>
-          </nav>
-          <!-- TW-UI-03C: legacy discovery view controls intentionally omitted. -->
           __DISCOVERY_FEED__
         </section>
       </section>

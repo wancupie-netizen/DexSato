@@ -318,7 +318,7 @@ def app_home() -> str:
     """Display Solana Discovery as the DexSato main app."""
     market_feeds, presenter_context = _load_discovery_page_context()
     return render_solana_discovery_page(
-        load_solana_discovery_feed(view="qualified", page=1, page_size=25, query=""),
+        load_solana_discovery_feed(view="rolling", page=1, page_size=25, query=""),
         trending=market_feeds["trending"],
         top_traded=market_feeds["top_traded"],
         organic_flow=market_feeds["organic_flow"],
@@ -356,7 +356,7 @@ def major_assets() -> str:
     "/discovery/solana",
     response_class=HTMLResponse,
 )
-def solana_discovery(view: str = "qualified", page: int = 1, q: str = "") -> str:
+def solana_discovery(view: str = "rolling", page: int = 1, q: str = "") -> str:
     """Display the read-only Solana Discovery D1 prototype."""
     market_feeds, presenter_context = _load_discovery_page_context()
     return render_solana_discovery_page(

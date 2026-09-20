@@ -38,7 +38,7 @@ def test_solana_discovery_prototype_is_honest_and_read_only():
     assert "TOTAL DEX VOLUME · 24H · SOLANA" in html
     assert "LIVE SIGNALS" in html
     assert "No signal data displayed yet" in html
-    assert "No qualified SOL pairs right now." in html
+    assert "No tokens qualified in the last 24 hours." in html
     assert "Experimental discovery · evidence synthesis only · not financial advice." in html
     assert "Get buy quote" not in html
 
@@ -52,10 +52,10 @@ def test_solana_discovery_hides_legacy_views_and_has_no_fake_candidates():
     assert "Page 1 of 1" not in html
     assert 'class="sort-note"' not in html
     assert 'class="feed-columns-v33"' not in html
-    assert 'name="view" value="qualified"' in html
+    assert '<form class="terminal-search"' not in html
     assert 'href="/discovery/solana?view=recent' not in html
     assert 'href="/discovery/solana?view=archive' not in html
-    assert "TW-UI-03C: legacy discovery view controls intentionally omitted." in html
+    assert '<nav class="discovery-segments-v1"' not in html
     assert "data-token-address" not in html
 
 
@@ -117,7 +117,7 @@ def test_solana_discovery_market_tabs_have_exact_order_and_discovery_default():
     assert positions == sorted(positions)
     assert 'id="dex-market-tab-discovery" class="dex-market-tab" type="button" role="tab" aria-selected="true"' in html
     assert 'id="dex-market-panel-discovery" class="dex-market-panel dex-token-list" role="tabpanel"' in html
-    assert html.count("<h2>Token List</h2>") == 1
+    assert "<h2>Token List</h2>" not in html
     assert "fetch(" not in html
     assert 'event.key === "ArrowRight"' in html
     assert 'event.key === "ArrowLeft"' in html
@@ -167,7 +167,7 @@ def test_solana_discovery_renders_connected_telemetry_without_candidates():
 
     assert "3271</strong>\n            <span>ACTIVE PAIRS" in html
     assert "Qualified Now" not in html
-    assert 'name="view" value="qualified"' in html
+    assert '<form class="terminal-search"' not in html
     assert "Collector telemetry is connected; publication remains disabled." in html
 
 
@@ -192,7 +192,8 @@ def test_solana_discovery_renders_qualified_candidate_in_compact_feed():
     assert "$12.00K" in html and "$4.50K" in html
     assert "data-token-address=\"token-address\"" in html
     assert 'class="sort-note"' in html
-    assert 'class="feed-columns-v33"' in html
+    assert 'class="dex-discovery-head"' in html
+    assert 'class="dex-discovery-row candidate-row-v32"' in html
     assert "Page 1 of 1" in html
     assert "Inspect pool" not in html
     assert "Pool pool-address" not in html
@@ -221,7 +222,7 @@ def test_solana_discovery_v32_feed_is_compact_and_decision_focused():
     assert "EX / SOL" in html
     assert "Price" in html
     assert "Liquidity" in html
-    assert "24h Vol" in html
+    assert "Volume 24h" in html
     assert "Age" in html
     assert "Observation" in html
     assert "Previously qualified" in html
@@ -249,7 +250,7 @@ def test_solana_discovery_v33_feed_uses_safe_ascii_and_compact_header():
         }],
     })
 
-    assert 'class="feed-columns-v33"' in html
+    assert 'class="dex-discovery-head"' in html
     assert "Observation" in html
     assert "Open Analysis &rarr;" in html
     assert "Previously qualified" in html
@@ -299,7 +300,7 @@ def test_solana_discovery_v29a_has_pagination_and_observed_network_facts():
     assert "Qualified Now" not in html
     assert "Recent Discoveries" not in html
     assert "Full Archive" not in html
-    assert 'name="view" value="archive"' in html
+    assert '<form class="terminal-search"' not in html
     assert "Sorted by: Last qualified" in html
     assert "Page 3 of 3" in html
     assert "Archive Context" not in html
@@ -327,7 +328,7 @@ def test_solana_discovery_v291_explains_zero_qualification_without_broken_link()
     assert 'class="pagination"' not in html
 
 
-@pytest.mark.parametrize("view", ("qualified", "recent", "archive"))
+@pytest.mark.parametrize("view", ("rolling", "qualified", "recent", "archive"))
 def test_solana_discovery_keeps_server_view_context_without_legacy_navigation(view):
     html = render_solana_discovery_page({
         "view": view,
@@ -336,7 +337,7 @@ def test_solana_discovery_keeps_server_view_context_without_legacy_navigation(vi
         "candidates": [],
     })
 
-    assert f'name="view" value="{view}"' in html
+    assert '<form class="terminal-search"' not in html
     assert "Qualified Now" not in html
     assert "Recent Discoveries" not in html
     assert "Full Archive" not in html
@@ -345,7 +346,7 @@ def test_solana_discovery_keeps_server_view_context_without_legacy_navigation(vi
     assert 'class="pagination"' not in html
 
 
-def test_solana_discovery_v292_renders_server_search_and_sort_clarity():
+def test_solana_discovery_v292_keeps_server_search_result_without_search_controls():
     html = render_solana_discovery_page({
         "connected": True, "fresh": True, "view": "archive", "page": 2,
         "page_count": 4, "page_size": 25, "view_total": 76,
@@ -353,8 +354,8 @@ def test_solana_discovery_v292_renders_server_search_and_sort_clarity():
         "search_query": "BER mint", "search_counts": {"qualified": 1, "recent": 3, "archive": 76},
         "candidates": [],
     })
-    assert 'name="q" value="BER mint"' in html
-    assert "Search token, symbol, contract or DEX" in html
+    assert '<form class="terminal-search"' not in html
+    assert 'aria-label="Search the discovery archive"' not in html
     assert "Sorted by: Last qualified" not in html
     assert "76 matching observations" not in html
     assert "view=archive&page=3&q=BER%20mint" not in html
@@ -362,6 +363,21 @@ def test_solana_discovery_v292_renders_server_search_and_sort_clarity():
     assert "No matching token found." in html
     assert "Try another name, symbol, contract, pair address or DEX." in html
     assert "Clear search" in html
+
+
+def test_solana_discovery_rolling_empty_state_explains_retention_window():
+    html = render_solana_discovery_page({
+        "view": "rolling",
+        "page": 1,
+        "page_count": 1,
+        "candidates": [],
+    })
+
+    assert "No tokens qualified in the last 24 hours." in html
+    assert (
+        "Tokens remain visible here for 24 hours after their latest "
+        "successful qualification."
+    ) in html
 
 
 def test_solana_discovery_v03e_is_responsive_and_accessible():
@@ -373,12 +389,49 @@ def test_solana_discovery_v03e_is_responsive_and_accessible():
         'role="tablist" aria-label="Solana market categories" '
         'aria-orientation="horizontal"'
     ) in html
-    assert '<nav class="discovery-segments-v1" aria-label="Solana discovery products">' in html
-    assert 'class="discovery-segment-v1 active" href="/discovery/solana" aria-current="page"' in html
+    assert '<nav class="discovery-segments-v1"' not in html
+    assert '<form class="terminal-search"' not in html
     assert 'aria-label="Solana discovery products" role="tablist"' not in html
     assert 'href="/discovery/solana" role="tab"' not in html
     assert 'class="dex-empty-icon" aria-hidden="true">↗</span>' in html
     assert 'class="dex-empty-icon" aria-hidden="true">◇</span>' in html
-    assert ".dex-token-list .terminal-search{width:100%;min-width:0;flex-wrap:wrap}" in html
+    assert "/* DISCOVERY-UI-DEBT-01 — align Discovery with the current market-feed table. */" in html
     assert ".dex-volume-substat span{font-size:9px!important}" in html
     assert "@media(prefers-reduced-motion:reduce)" in html
+
+
+def test_discovery_ui_debt_cleanup_matches_current_market_table_without_removed_chrome():
+    html = render_solana_discovery_page({
+        "connected": True,
+        "fresh": True,
+        "view": "qualified",
+        "page": 1,
+        "page_count": 1,
+        "candidates": [{
+            "name": "Example token",
+            "symbol": "EX",
+            "quote_symbol": "SOL",
+            "token_address": "token-address",
+            "dex_id": "raydium",
+            "price_usd": 0.25,
+            "change_24h": 12.5,
+            "liquidity_usd": 12000,
+            "volume_24h_usd": 45000,
+            "pair_age": "2h",
+            "currently_qualified": True,
+        }],
+    })
+
+    assert "SOLANA DISCOVERY" not in html
+    assert "<h2>Token List</h2>" not in html
+    assert "Persistent, server-paginated observations." not in html
+    assert "New Discoveries" not in html
+    assert "Established Solana" not in html
+    assert '<form class="terminal-search"' not in html
+    assert 'class="dex-discovery-table"' in html
+    assert 'class="dex-discovery-head"' in html
+    assert 'class="dex-discovery-row candidate-row-v32"' in html
+    assert 'class="dex-discovery-avatar"' in html
+    assert "Currently qualified" in html
+    assert "Open Analysis &rarr;" in html
+    assert "Page 1 of 1" in html

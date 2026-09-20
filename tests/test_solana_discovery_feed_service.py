@@ -365,3 +365,95 @@ def test_terminal_recent_sort_uses_first_qualified_time(mock_qualify, tmp_path):
     mock_qualify.return_value = [newer]
     result = _refresh_and_load(tmp_path, view="recent")
     assert [item["token_address"] for item in result["candidates"]] == ["newer", "older"]
+
+
+@patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
+def test_terminal_rolling_retains_token_until_24h_after_last_qualification(
+    mock_qualify,
+    tmp_path,
+):
+    candidate = {
+        "token_address": "token-a",
+        "pair_address": "pair-a",
+        "symbol": "AAA",
+        "last_seen_at": "2026-08-22T12:00:00+00:00",
+    }
+    qualified_at = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+    boundary = datetime(2026, 8, 23, 12, 0, tzinfo=timezone.utc)
+    expired = datetime(2026, 8, 23, 12, 0, 1, tzinfo=timezone.utc)
+
+    _write_feed_files(tmp_path, {"a": candidate}, qualified_at.isoformat())
+    mock_qualify.return_value = [candidate]
+    _refresh_and_load(tmp_path, now=qualified_at)
+
+    _write_feed_files(tmp_path, {}, boundary.isoformat())
+    mock_qualify.return_value = []
+    at_boundary = _refresh_and_load(
+        tmp_path,
+        now=boundary,
+        view="rolling",
+    )
+    assert at_boundary["rolling_total"] == 1
+    assert [item["token_address"] for item in at_boundary["candidates"]] == [
+        "token-a"
+    ]
+    assert at_boundary["candidates"][0]["currently_qualified"] is False
+
+    _write_feed_files(tmp_path, {}, expired.isoformat())
+    after_boundary = _refresh_and_load(
+        tmp_path,
+        now=expired,
+        view="rolling",
+    )
+    assert after_boundary["rolling_total"] == 0
+    assert after_boundary["candidates"] == []
+    assert after_boundary["archive_total"] == 1
+
+
+@patch("application.solana_discovery_feed_service.qualify_discovery_candidates")
+def test_terminal_rolling_requalification_refreshes_retention_without_duplicate(
+    mock_qualify,
+    tmp_path,
+):
+    candidate = {
+        "token_address": "token-a",
+        "pair_address": "pair-a",
+        "symbol": "AAA",
+        "last_seen_at": "2026-08-22T12:00:00+00:00",
+    }
+    first = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+    requalified = datetime(2026, 8, 23, 13, 0, tzinfo=timezone.utc)
+    retained = datetime(2026, 8, 23, 14, 0, tzinfo=timezone.utc)
+
+    _write_feed_files(tmp_path, {"a": candidate}, first.isoformat())
+    mock_qualify.return_value = [candidate]
+    _refresh_and_load(tmp_path, now=first)
+
+    refreshed = {**candidate, "last_seen_at": requalified.isoformat()}
+    _write_feed_files(tmp_path, {"a": refreshed}, requalified.isoformat())
+    mock_qualify.return_value = [refreshed]
+    _refresh_and_load(tmp_path, now=requalified)
+
+    _write_feed_files(tmp_path, {}, retained.isoformat())
+    mock_qualify.return_value = []
+    result = _refresh_and_load(tmp_path, now=retained, view="rolling")
+
+    assert result["rolling_total"] == 1
+    assert result["archive_total"] == 1
+    assert [item["token_address"] for item in result["candidates"]] == [
+        "token-a"
+    ]
+    assert result["candidates"][0]["last_qualified_at"] == requalified.isoformat()
+
+
+def test_terminal_unknown_view_falls_back_to_rolling(tmp_path):
+    _write_feed_files(tmp_path, {})
+
+    result = load_solana_discovery_feed(
+        tmp_path,
+        now=NOW,
+        view="not-a-view",
+    )
+
+    assert result["view"] == "rolling"
+    assert result["rolling_total"] == 0

@@ -18,7 +18,8 @@ DISCOVERY_HISTORY_FILE = "discovery_feed_history.json"  # legacy v3.6 migration 
 DISCOVERY_ARCHIVE_DB = "discovery_archive.sqlite3"
 DISCOVERY_FEED_LIMIT = 100
 TERMINAL_PAGE_SIZE = 25
-TERMINAL_VIEWS = {"qualified", "recent", "archive"}
+TERMINAL_VIEWS = {"rolling", "qualified", "recent", "archive"}
+DISCOVERY_ROLLING_RETENTION_HOURS = 24
 
 _ENGINE_FEED_LOCK = threading.Lock()
 _ENGINE_FEED_GENERATED_AT: str | None = None
@@ -379,13 +380,22 @@ def _terminal_archive_view(
     fresh: bool = True,
     generated_at: Any = None,
 ) -> dict[str, Any]:
-    selected_view = view if view in TERMINAL_VIEWS else "qualified"
+    selected_view = view if view in TERMINAL_VIEWS else "rolling"
     safe_size = min(100, max(1, _integer(page_size) or TERMINAL_PAGE_SIZE))
     requested_page = max(1, _integer(page) or 1)
-    recent_cutoff = (now.astimezone(timezone.utc) - timedelta(hours=24)).isoformat()
+    recent_cutoff = (
+        now.astimezone(timezone.utc)
+        - timedelta(hours=DISCOVERY_ROLLING_RETENTION_HOURS)
+    ).isoformat()
     search_query = str(query or "").strip()[:120]
     qualified_where = "currently_qualified = 1" if fresh else "0 = 1"
+    rolling_where = (
+        "(currently_qualified = 1 OR datetime(last_qualified_at) >= datetime(?))"
+        if fresh
+        else "datetime(last_qualified_at) >= datetime(?)"
+    )
     clauses = {
+        "rolling": (rolling_where, (recent_cutoff,)),
         "qualified": (qualified_where, ()),
         "recent": ("datetime(first_qualified_at) >= datetime(?)", (recent_cutoff,)),
         "archive": ("1 = 1", ()),
@@ -405,6 +415,11 @@ def _terminal_archive_view(
         )"""
         search_parameters = (pattern,) * 5
     orders = {
+        "rolling": (
+            "currently_qualified DESC, last_qualified_at DESC, token_address ASC"
+            if fresh
+            else "last_qualified_at DESC, token_address ASC"
+        ),
         "qualified": "COALESCE(last_seen_at, '') DESC, last_qualified_at DESC, token_address ASC",
         "recent": "first_qualified_at DESC, token_address ASC",
         "archive": "last_qualified_at DESC, COALESCE(last_seen_at, '') DESC, token_address ASC",
@@ -415,7 +430,8 @@ def _terminal_archive_view(
             "candidates": [], "view": selected_view, "page": 1, "page_size": safe_size,
             "page_count": 1, "view_total": 0, "search_query": search_query,
             "search_counts": {key: 0 for key in TERMINAL_VIEWS},
-            "qualified_total": 0, "recent_total": 0, "archive_total": 0,
+            "qualified_total": 0, "rolling_total": 0,
+            "recent_total": 0, "archive_total": 0,
             "observed_volume_24h_usd": 0, "observed_txns_24h": 0, "observed_dex_ids": [],
         }
 
@@ -428,6 +444,10 @@ def _terminal_archive_view(
         )
         recent_total = int(connection.execute(
             "SELECT COUNT(*) FROM discoveries WHERE datetime(first_qualified_at) >= datetime(?)", (recent_cutoff,)
+        ).fetchone()[0])
+        rolling_total = int(connection.execute(
+            f"SELECT COUNT(*) FROM discoveries WHERE {rolling_where}",
+            (recent_cutoff,),
         ).fetchone()[0])
         archive_total = int(connection.execute("SELECT COUNT(*) FROM discoveries").fetchone()[0])
         filtered_counts = {}
@@ -503,6 +523,7 @@ def _terminal_archive_view(
         "search_query": search_query,
         "search_counts": filtered_counts,
         "qualified_total": qualified_total,
+        "rolling_total": rolling_total,
         "recent_total": recent_total,
         "archive_total": archive_total,
         "observed_volume_24h_usd": complete_sum("volume_24h_usd"),
@@ -766,12 +787,14 @@ def load_solana_discovery_feed(
         "feed_limit": DISCOVERY_FEED_LIMIT,
         "updated_label": updated_label,
         "message": (
-            "Qualified Now reflects the current scan. Discovery Feed keeps previously qualified "
-            "tokens for review; historical inclusion does not mean a token still qualifies now."
+            "Qualified Now reflects the current scan. Discovery keeps each token visible for "
+            "24 hours after its latest successful qualification; historical inclusion does not "
+            "mean a token still qualifies now."
             if qualified_count else
             "Collector telemetry is connected. No observed token currently passes the "
-            "required identity, liquidity, activity and freshness checks. Previously qualified "
-            "discoveries remain in the persistent archive."
+            "required identity, liquidity, activity and freshness checks. Tokens qualified "
+            "within the previous 24 hours remain visible; older discoveries remain in the "
+            "persistent archive."
         ),
         **terminal_data,
     }
