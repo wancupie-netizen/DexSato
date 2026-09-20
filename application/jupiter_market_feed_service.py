@@ -96,6 +96,90 @@ _RANKED_MARKET_FEED_STORE = RankedMarketFeedStore()
 _RANKED_MARKET_BOOTSTRAP_LOCK = threading.Lock()
 _RANKED_MARKET_BOOTSTRAP_ATTEMPTED: set[str] = set()
 
+_RANKED_REFRESH_LOCK = threading.Lock()
+_RANKED_REFRESH_IN_FLIGHT = False
+_RANKED_REFRESH_NEXT_ALLOWED_AT = 0.0
+_RANKED_REFRESH_FAILURE_COOLDOWN_SECONDS = 60.0
+
+_RANKED_LAST_GOOD_LOCK = threading.Lock()
+_RANKED_REFRESH_OUTCOMES_LOCK = threading.Lock()
+_RANKED_LAST_GOOD_AT: dict[str, float] = {}
+
+
+def _ranked_last_good_age(
+    name: str,
+    *,
+    now_monotonic: float,
+) -> float | None:
+    """Return monotonic age of one known successful ranked snapshot."""
+    with _RANKED_LAST_GOOD_LOCK:
+        observed_at = _RANKED_LAST_GOOD_AT.get(name)
+    if observed_at is None:
+        return None
+    if now_monotonic < observed_at:
+        return None
+    return now_monotonic - observed_at
+
+
+def _ranked_stale_is_servable(
+    name: str,
+    *,
+    now_monotonic: float,
+    max_age_seconds: float,
+) -> bool:
+    """Return whether one known last-good snapshot remains inside its hard age limit."""
+    age = _ranked_last_good_age(
+        name,
+        now_monotonic=now_monotonic,
+    )
+    return age is not None and age <= max_age_seconds
+
+
+def _remember_ranked_last_good(
+    name: str,
+    *,
+    now_monotonic: float,
+    existing_age_seconds: float = 0.0,
+) -> None:
+    """Remember the original observation time without resetting persistent LKG age."""
+    age = max(0.0, float(existing_age_seconds))
+    with _RANKED_LAST_GOOD_LOCK:
+        _RANKED_LAST_GOOD_AT[name] = now_monotonic - age
+
+
+def _try_begin_ranked_refresh(
+    *,
+    now_monotonic: float,
+) -> bool:
+    """Acquire process-local ownership for one ranked-group refresh."""
+    global _RANKED_REFRESH_IN_FLIGHT
+
+    with _RANKED_REFRESH_LOCK:
+        if _RANKED_REFRESH_IN_FLIGHT:
+            return False
+        if now_monotonic < _RANKED_REFRESH_NEXT_ALLOWED_AT:
+            return False
+        _RANKED_REFRESH_IN_FLIGHT = True
+        return True
+
+
+def _finish_ranked_refresh(
+    *,
+    now_monotonic: float,
+    failed: bool,
+) -> None:
+    """Release ranked refresh ownership and apply failure cooldown."""
+    global _RANKED_REFRESH_IN_FLIGHT, _RANKED_REFRESH_NEXT_ALLOWED_AT
+
+    with _RANKED_REFRESH_LOCK:
+        if failed:
+            _RANKED_REFRESH_NEXT_ALLOWED_AT = (
+                now_monotonic + _RANKED_REFRESH_FAILURE_COOLDOWN_SECONDS
+            )
+        else:
+            _RANKED_REFRESH_NEXT_ALLOWED_AT = 0.0
+        _RANKED_REFRESH_IN_FLIGHT = False
+
 
 def _load_ranked_market_bootstrap_once(
     key: str,
@@ -1141,6 +1225,7 @@ def load_jupiter_organic_flow_feed(
     pair_resolver: Callable[..., dict[str, Any]] = resolve_exact_sol_pairs,
     now_monotonic: Callable[[], float] = time.monotonic,
     _shared_resolution: _SharedRankedExactSolResolution | None = None,
+    _refresh_outcomes: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     """Return cached Organic Flow / 1h data without touching Discovery state."""
     global _ORGANIC_FLOW_CACHE_AT, _ORGANIC_FLOW_CACHE_PAYLOAD
@@ -1165,6 +1250,13 @@ def load_jupiter_organic_flow_feed(
             _ORGANIC_FLOW_CACHE_AT = now
             _ORGANIC_FLOW_CACHE_PAYLOAD = dict(persistent)
             _remember_organic_flow_eligible_rows(persistent, observed_at=now)
+        _remember_ranked_last_good(
+            "organic_flow",
+            now_monotonic=now,
+            existing_age_seconds=float(
+                persistent.get("bootstrap_age_seconds") or 0.0
+            ),
+        )
         return dict(persistent)
 
     ranked_pair_resolver, finish_shared_resolution = _shared_ranked_pair_resolver(
@@ -1178,12 +1270,46 @@ def load_jupiter_organic_flow_feed(
     )
     finish_shared_resolution()
 
+    live_success = (
+        payload.get("connected") is True
+        and payload.get("status") == "live"
+        and isinstance(payload.get("rows"), list)
+    )
+    if _refresh_outcomes is not None:
+        with _RANKED_REFRESH_OUTCOMES_LOCK:
+            _refresh_outcomes["organic_flow"] = live_success
+
     with _ORGANIC_FLOW_CACHE_LOCK:
-        _ORGANIC_FLOW_CACHE_AT = now
-        _ORGANIC_FLOW_CACHE_PAYLOAD = dict(payload)
-        if payload.get("connected") is True:
+        preserve_last_good = (
+            not live_success
+            and _ORGANIC_FLOW_CACHE_PAYLOAD is not None
+            and _ranked_stale_is_servable(
+                "organic_flow",
+                now_monotonic=now,
+                max_age_seconds=ORGANIC_FLOW_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+            )
+        )
+        preserved_payload = (
+            dict(_ORGANIC_FLOW_CACHE_PAYLOAD) if preserve_last_good else None
+        )
+
+        if not preserve_last_good:
+            _ORGANIC_FLOW_CACHE_AT = now
+            _ORGANIC_FLOW_CACHE_PAYLOAD = dict(payload)
+
+        if live_success:
             _remember_organic_flow_eligible_rows(payload, observed_at=now)
+
+    if live_success:
+        _remember_ranked_last_good(
+            "organic_flow",
+            now_monotonic=now,
+        )
+
     _save_ranked_market_lkg("organic_flow", payload)
+
+    if preserved_payload is not None:
+        return preserved_payload
 
     return payload
 
@@ -1257,6 +1383,7 @@ def load_jupiter_top_traded_feed(
     pair_resolver: Callable[..., dict[str, Any]] = resolve_exact_sol_pairs,
     now_monotonic: Callable[[], float] = time.monotonic,
     _shared_resolution: _SharedRankedExactSolResolution | None = None,
+    _refresh_outcomes: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     """Return cached Top Traded / 24h data without touching Discovery state."""
     global _TOP_TRADED_CACHE_AT, _TOP_TRADED_CACHE_PAYLOAD
@@ -1281,6 +1408,13 @@ def load_jupiter_top_traded_feed(
             _TOP_TRADED_CACHE_AT = now
             _TOP_TRADED_CACHE_PAYLOAD = dict(persistent)
             _remember_top_traded_eligible_rows(persistent, observed_at=now)
+        _remember_ranked_last_good(
+            "top_traded",
+            now_monotonic=now,
+            existing_age_seconds=float(
+                persistent.get("bootstrap_age_seconds") or 0.0
+            ),
+        )
         return dict(persistent)
 
     ranked_pair_resolver, finish_shared_resolution = _shared_ranked_pair_resolver(
@@ -1294,12 +1428,46 @@ def load_jupiter_top_traded_feed(
     )
     finish_shared_resolution()
 
+    live_success = (
+        payload.get("connected") is True
+        and payload.get("status") == "live"
+        and isinstance(payload.get("rows"), list)
+    )
+    if _refresh_outcomes is not None:
+        with _RANKED_REFRESH_OUTCOMES_LOCK:
+            _refresh_outcomes["top_traded"] = live_success
+
     with _TOP_TRADED_CACHE_LOCK:
-        _TOP_TRADED_CACHE_AT = now
-        _TOP_TRADED_CACHE_PAYLOAD = dict(payload)
-        if payload.get("connected") is True:
+        preserve_last_good = (
+            not live_success
+            and _TOP_TRADED_CACHE_PAYLOAD is not None
+            and _ranked_stale_is_servable(
+                "top_traded",
+                now_monotonic=now,
+                max_age_seconds=TOP_TRADED_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+            )
+        )
+        preserved_payload = (
+            dict(_TOP_TRADED_CACHE_PAYLOAD) if preserve_last_good else None
+        )
+
+        if not preserve_last_good:
+            _TOP_TRADED_CACHE_AT = now
+            _TOP_TRADED_CACHE_PAYLOAD = dict(payload)
+
+        if live_success:
             _remember_top_traded_eligible_rows(payload, observed_at=now)
+
+    if live_success:
+        _remember_ranked_last_good(
+            "top_traded",
+            now_monotonic=now,
+        )
+
     _save_ranked_market_lkg("top_traded", payload)
+
+    if preserved_payload is not None:
+        return preserved_payload
 
     return payload
 
@@ -1367,6 +1535,7 @@ def load_jupiter_trending_feed(
     pair_resolver: Callable[..., dict[str, Any]] = resolve_exact_sol_pairs,
     now_monotonic: Callable[[], float] = time.monotonic,
     _shared_resolution: _SharedRankedExactSolResolution | None = None,
+    _refresh_outcomes: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     """Return cached Trending/1h data; failures never block Discovery rendering."""
     global _CACHE_AT, _CACHE_PAYLOAD
@@ -1391,6 +1560,13 @@ def load_jupiter_trending_feed(
             _CACHE_AT = now
             _CACHE_PAYLOAD = dict(persistent)
             _remember_eligible_rows(persistent, observed_at=now)
+        _remember_ranked_last_good(
+            "trending",
+            now_monotonic=now,
+            existing_age_seconds=float(
+                persistent.get("bootstrap_age_seconds") or 0.0
+            ),
+        )
         return dict(persistent)
 
     ranked_pair_resolver, finish_shared_resolution = _shared_ranked_pair_resolver(
@@ -1404,14 +1580,119 @@ def load_jupiter_trending_feed(
     )
     finish_shared_resolution()
 
+    live_success = (
+        payload.get("connected") is True
+        and payload.get("status") == "live"
+        and isinstance(payload.get("rows"), list)
+    )
+    if _refresh_outcomes is not None:
+        with _RANKED_REFRESH_OUTCOMES_LOCK:
+            _refresh_outcomes["trending"] = live_success
+
     with _CACHE_LOCK:
-        _CACHE_AT = now
-        _CACHE_PAYLOAD = dict(payload)
-        if payload.get("connected") is True:
+        preserve_last_good = (
+            not live_success
+            and _CACHE_PAYLOAD is not None
+            and _ranked_stale_is_servable(
+                "trending",
+                now_monotonic=now,
+                max_age_seconds=TRENDING_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+            )
+        )
+        preserved_payload = (
+            dict(_CACHE_PAYLOAD) if preserve_last_good else None
+        )
+
+        if not preserve_last_good:
+            _CACHE_AT = now
+            _CACHE_PAYLOAD = dict(payload)
+
+        if live_success:
             _remember_eligible_rows(payload, observed_at=now)
+
+    if live_success:
+        _remember_ranked_last_good(
+            "trending",
+            now_monotonic=now,
+        )
+
     _save_ranked_market_lkg("trending", payload)
 
+    if preserved_payload is not None:
+        return preserved_payload
+
     return payload
+
+
+def _ranked_stale_group_snapshot(
+    *,
+    now_monotonic: float,
+) -> dict[str, dict[str, Any]] | None:
+    """Return a stale-but-servable ranked RAM group only when refresh is due."""
+    specs = (
+        (
+            "trending",
+            _CACHE_LOCK,
+            "_CACHE_AT",
+            "_CACHE_PAYLOAD",
+            TRENDING_CACHE_SECONDS,
+            TRENDING_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+        ),
+        (
+            "top_traded",
+            _TOP_TRADED_CACHE_LOCK,
+            "_TOP_TRADED_CACHE_AT",
+            "_TOP_TRADED_CACHE_PAYLOAD",
+            TOP_TRADED_CACHE_SECONDS,
+            TOP_TRADED_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+        ),
+        (
+            "organic_flow",
+            _ORGANIC_FLOW_CACHE_LOCK,
+            "_ORGANIC_FLOW_CACHE_AT",
+            "_ORGANIC_FLOW_CACHE_PAYLOAD",
+            ORGANIC_FLOW_CACHE_SECONDS,
+            ORGANIC_FLOW_PERSISTENT_BOOTSTRAP_MAX_AGE_SECONDS,
+        ),
+    )
+
+    snapshot: dict[str, dict[str, Any]] = {}
+    refresh_due = False
+
+    for (
+        name,
+        lock,
+        cache_at_name,
+        payload_name,
+        cache_seconds,
+        max_age_seconds,
+    ) in specs:
+        with lock:
+            cache_at = globals()[cache_at_name]
+            payload = globals()[payload_name]
+
+            if payload is None:
+                return None
+
+            if now_monotonic < cache_at:
+                return None
+
+            if not _ranked_stale_is_servable(
+                name,
+                now_monotonic=now_monotonic,
+                max_age_seconds=max_age_seconds,
+            ):
+                return None
+
+            if (now_monotonic - cache_at) >= cache_seconds:
+                refresh_due = True
+
+            snapshot[name] = dict(payload)
+
+    if not refresh_due:
+        return None
+
+    return snapshot
 
 
 def load_jupiter_ranked_market_feeds(
@@ -1420,8 +1701,59 @@ def load_jupiter_ranked_market_feeds(
     pair_group_resolver: Callable[..., dict[str, dict[str, Any]]] = (
         resolve_exact_sol_pair_groups
     ),
+    _force_refresh: bool = False,
+    _now_monotonic: Callable[[], float] = time.monotonic,
+    _refresh_outcomes: dict[str, bool] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Load the three $100k ranked feeds with request-scoped shared resolution."""
+    if not _force_refresh:
+        now = _now_monotonic()
+        stale_snapshot = _ranked_stale_group_snapshot(
+            now_monotonic=now,
+        )
+
+        if stale_snapshot is not None:
+            if _try_begin_ranked_refresh(
+                now_monotonic=now,
+            ):
+                def refresh_in_background() -> None:
+                    failed = False
+
+                    try:
+                        refresh_outcomes: dict[str, bool] = {}
+                        load_jupiter_ranked_market_feeds(
+                            request_get=request_get,
+                            pair_group_resolver=pair_group_resolver,
+                            _force_refresh=True,
+                            _now_monotonic=_now_monotonic,
+                            _refresh_outcomes=refresh_outcomes,
+                        )
+                        failed = (
+                            not refresh_outcomes
+                            or not all(refresh_outcomes.values())
+                        )
+                    except Exception:
+                        failed = True
+                    finally:
+                        _finish_ranked_refresh(
+                            now_monotonic=_now_monotonic(),
+                            failed=failed,
+                        )
+
+                try:
+                    threading.Thread(
+                        target=refresh_in_background,
+                        name="dexsato-ranked-refresh",
+                        daemon=True,
+                    ).start()
+                except Exception:
+                    _finish_ranked_refresh(
+                        now_monotonic=_now_monotonic(),
+                        failed=True,
+                    )
+
+            return stale_snapshot
+
     shared = _SharedRankedExactSolResolution(pair_group_resolver)
     loaders = {
         "trending": load_jupiter_trending_feed,
@@ -1433,7 +1765,9 @@ def load_jupiter_ranked_market_feeds(
         try:
             return loader(
                 request_get=request_get,
+                now_monotonic=_now_monotonic,
                 _shared_resolution=shared,
+                _refresh_outcomes=_refresh_outcomes,
             )
         except Exception:
             shared.skip_if_unregistered(name)
