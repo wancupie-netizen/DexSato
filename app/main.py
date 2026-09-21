@@ -39,6 +39,7 @@ from fastapi import (
     Request,
 )
 from fastapi.responses import (
+    FileResponse,
     HTMLResponse,
     JSONResponse,
 )
@@ -233,6 +234,17 @@ app.mount(
     ),
     name="static",
 )
+
+
+@app.get(
+    "/favicon.ico",
+    response_class=FileResponse,
+    include_in_schema=False,
+)
+def favicon() -> FileResponse:
+    """Serve the canonical DexSato favicon for browser fallback requests."""
+    favicon_path = Path(__file__).resolve().parents[1] / "static" / "branding" / "favicon.png"
+    return FileResponse(favicon_path, media_type="image/png")
 
 
 def load_current_snapshot() -> dict[str, object]:
