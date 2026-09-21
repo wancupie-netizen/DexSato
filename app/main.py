@@ -324,6 +324,7 @@ def app_home() -> str:
         organic_flow=market_feeds["organic_flow"],
         recent=market_feeds["recent"],
         presenter_context=presenter_context,
+        initial_market_tab="trending",
     )
 
 

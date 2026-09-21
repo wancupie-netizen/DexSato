@@ -124,6 +124,15 @@ def test_solana_discovery_market_tabs_have_exact_order_and_discovery_default():
     assert 'event.key === "ArrowLeft"' in html
 
 
+def test_solana_discovery_can_render_trending_as_initial_market_tab():
+    html = render_solana_discovery_page(initial_market_tab="trending")
+
+    assert 'id="dex-market-tab-trending" class="dex-market-tab" type="button" role="tab" aria-selected="true"' in html
+    assert 'id="dex-market-tab-discovery" class="dex-market-tab" type="button" role="tab" aria-selected="false"' in html
+    assert 'data-market-panel="trending">' in html
+    assert 'data-market-panel="discovery" hidden>' in html
+
+
 def test_solana_discovery_uses_terminal_typography_stack():
     html = render_solana_discovery_page()
 

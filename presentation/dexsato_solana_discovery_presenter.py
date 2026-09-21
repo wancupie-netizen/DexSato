@@ -1187,9 +1187,11 @@ def render_solana_discovery_page(
     organic_flow: dict[str, Any] | None = None,
     recent: dict[str, Any] | None = None,
     presenter_context: dict[str, Any] | None = None,
+    initial_market_tab: str = "discovery",
 ) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
+    trending_is_initial = initial_market_tab == "trending"
     trending_panel = _render_trending_panel(trending)
     top_traded_panel = _render_top_traded_panel(top_traded)
     organic_flow_panel = _render_organic_flow_panel(organic_flow)
@@ -3070,14 +3072,14 @@ def render_solana_discovery_page(
     <div class="dex-section-label"><span>MARKET VIEWS</span><i></i></div>
     <div class="dex-market-category-shell">
       <div class="dex-market-tabs" role="tablist" aria-label="Solana market categories" aria-orientation="horizontal">
-        <button id="dex-market-tab-trending" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-trending" tabindex="-1" data-market-tab="trending">Trending</button>
+        <button id="dex-market-tab-trending" class="dex-market-tab" type="button" role="tab" aria-selected="__TRENDING_SELECTED__" aria-controls="dex-market-panel-trending" tabindex="__TRENDING_TABINDEX__" data-market-tab="trending">Trending</button>
         <button id="dex-market-tab-top-traded" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-top-traded" tabindex="-1" data-market-tab="top-traded">Top Traded</button>
         <button id="dex-market-tab-organic" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-organic" tabindex="-1" data-market-tab="organic">Organic Flow</button>
-        <button id="dex-market-tab-discovery" class="dex-market-tab" type="button" role="tab" aria-selected="true" aria-controls="dex-market-panel-discovery" tabindex="0" data-market-tab="discovery">Discovery</button>
+        <button id="dex-market-tab-discovery" class="dex-market-tab" type="button" role="tab" aria-selected="__DISCOVERY_SELECTED__" aria-controls="dex-market-panel-discovery" tabindex="__DISCOVERY_TABINDEX__" data-market-tab="discovery">Discovery</button>
         <button id="dex-market-tab-recent" class="dex-market-tab" type="button" role="tab" aria-selected="false" aria-controls="dex-market-panel-recent" tabindex="-1" data-market-tab="recent">Recent</button>
       </div>
 
-      <section id="dex-market-panel-trending" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-trending" data-market-panel="trending" hidden>
+      <section id="dex-market-panel-trending" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-trending" data-market-panel="trending"__TRENDING_HIDDEN__>
         __TRENDING_PANEL__
       </section>
       <section id="dex-market-panel-top-traded" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-top-traded" data-market-panel="top-traded" hidden>
@@ -3086,7 +3088,7 @@ def render_solana_discovery_page(
       <section id="dex-market-panel-organic" class="dex-market-panel" role="tabpanel" aria-labelledby="dex-market-tab-organic" data-market-panel="organic" hidden>
         __ORGANIC_FLOW_PANEL__
       </section>
-      <section id="dex-market-panel-discovery" class="dex-market-panel dex-token-list" role="tabpanel" aria-labelledby="dex-market-tab-discovery" data-market-panel="discovery">
+      <section id="dex-market-panel-discovery" class="dex-market-panel dex-token-list" role="tabpanel" aria-labelledby="dex-market-tab-discovery" data-market-panel="discovery"__DISCOVERY_HIDDEN__>
         <section class="feed-panel">
           __DISCOVERY_FEED__
         </section>
@@ -3288,6 +3290,12 @@ def render_solana_discovery_page(
         .replace("__RECENT_PANEL__", recent_panel)
         .replace("__LIVE_SIGNALS_PANEL__", live_signals_panel)
         .replace("__MARKET_INTELLIGENCE_PANEL__", market_intelligence_panel)
+        .replace("__TRENDING_SELECTED__", "true" if trending_is_initial else "false")
+        .replace("__TRENDING_TABINDEX__", "0" if trending_is_initial else "-1")
+        .replace("__TRENDING_HIDDEN__", "" if trending_is_initial else " hidden")
+        .replace("__DISCOVERY_SELECTED__", "false" if trending_is_initial else "true")
+        .replace("__DISCOVERY_TABINDEX__", "-1" if trending_is_initial else "0")
+        .replace("__DISCOVERY_HIDDEN__", " hidden" if trending_is_initial else "")
         .replace("__PAGE__", str(page_number))
         .replace("__PAGE_COUNT__", str(page_count))
         .replace("__OBSERVED_VOLUME__", escape(observed_volume))
