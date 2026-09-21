@@ -327,10 +327,7 @@ def app_home() -> str:
     )
 
 
-@app.get(
-    "/major-assets",
-    response_class=HTMLResponse,
-)
+# TEMP-HIDE-MAJOR-ASSETS-01 - keep the legacy handler but do not expose a route.
 def major_assets() -> str:
     """Preserve the previous Major Assets dashboard as a secondary route."""
     try:

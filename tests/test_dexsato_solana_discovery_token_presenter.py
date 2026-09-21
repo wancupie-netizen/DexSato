@@ -1575,9 +1575,9 @@ def test_tw_ui_02a2_adds_collapsible_navigation_without_contract_changes():
     assert 'toggle.addEventListener("click"' in html
     assert 'event.key==="Escape"' in html
 
-    # Existing destinations and production integration hooks remain intact.
+    # Public destinations and production integration hooks remain intact.
     assert 'href="/discovery/solana"' in html
-    assert 'href="/major-assets"' in html
+    assert 'href="/major-assets"' not in html
     assert 'aria-label="Watchlist"' in html
     assert 'data-jupiter-sandbox' in html
     assert 'data-connect-wallet' in html

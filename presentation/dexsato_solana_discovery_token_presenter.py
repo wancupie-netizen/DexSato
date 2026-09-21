@@ -4435,12 +4435,6 @@ html:not([data-theme="plain"]) .tw-dex-content .candle-ohlc b{
         <path d="M5.2 5.2h12.9l-2.7 2.7H2.5l2.7-2.7Zm0 5.45h12.9l2.7 2.7H7.9l-2.7-2.7Zm0 5.45h12.9l-2.7 2.7H2.5l2.7-2.7Z"/>
       </svg>
     </a>
-    <a class="tw-side-icon-v08c" href="/major-assets" aria-label="Major Assets" title="Major Assets">
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <circle cx="12" cy="12" r="8"></circle>
-        <path d="M4 12h16M12 4c2.2 2.2 3.3 4.9 3.3 8S14.2 17.8 12 20M12 4C9.8 6.2 8.7 8.9 8.7 12S9.8 17.8 12 20"></path>
-      </svg>
-    </a>
     <span class="tw-side-icon-v08c" role="button" tabindex="0" aria-label="Watchlist" title="Watchlist">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="m12 4 2.35 4.76 5.25.76-3.8 3.7.9 5.23L12 16l-4.7 2.45.9-5.23-3.8-3.7 5.25-.76L12 4Z"></path>

@@ -68,6 +68,7 @@ def test_solana_discovery_is_responsive_and_preserves_dark_terminal_tokens():
     assert "--bg:#070b12" in html
     assert "--cyan:#14f1d9" in html
     assert 'href="/"' in html
+    assert 'href="/major-assets"' not in html
 
 
 def test_solana_discovery_uses_market_terminal_layout():
