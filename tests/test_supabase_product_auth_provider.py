@@ -2,7 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from application.product_auth_provider import ProductAuthVerificationError
+from application.product_auth_provider import (
+    ProductAuthUnavailableError,
+    ProductAuthVerificationError,
+)
 from application.supabase_product_auth_provider import SupabaseProductAuthProvider
 
 
@@ -74,4 +77,15 @@ def test_rejects_provider_identity_email_mismatch():
     )
     provider = SupabaseProductAuthProvider(lambda: SimpleNamespace(auth=auth))
     with pytest.raises(ProductAuthVerificationError):
+        provider.verify_email_otp(email="user@example.com", code="123456")
+
+
+def test_preserves_unavailable_classification_when_client_construction_fails():
+    def unavailable():
+        raise RuntimeError("provider detail must remain private")
+
+    provider = SupabaseProductAuthProvider(unavailable)
+    with pytest.raises(ProductAuthUnavailableError):
+        provider.request_email_otp(email="user@example.com")
+    with pytest.raises(ProductAuthUnavailableError):
         provider.verify_email_otp(email="user@example.com", code="123456")

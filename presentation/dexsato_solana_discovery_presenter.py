@@ -13,6 +13,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from application.presenter_metrics_store import PresenterMetricsStore
+from application.product_identity_models import ProductPrincipal
 
 
 def _presentation_ttl_cache(ttl_seconds: float):
@@ -1188,9 +1189,22 @@ def render_solana_discovery_page(
     recent: dict[str, Any] | None = None,
     presenter_context: dict[str, Any] | None = None,
     initial_market_tab: str = "discovery",
+    product_auth_available: bool = False,
+    product_principal: ProductPrincipal | None = None,
 ) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
+    principal = product_principal or ProductPrincipal.guest()
+    if not product_auth_available:
+        product_account = '<span class="dex-side-item" aria-disabled="true">Wallet Profile</span>'
+    elif principal.authenticated:
+        email_label = escape(principal.email_masked or "Account")
+        product_account = (
+            '<span class="dex-product-account" title="' + email_label + '">' + email_label + '</span>'
+            '<button id="dex-product-logout" class="dex-side-item dex-product-logout" type="button">Log out</button>'
+        )
+    else:
+        product_account = '<a class="dex-side-item dex-product-login" href="/login">Sign In</a>'
     trending_is_initial = initial_market_tab == "trending"
     trending_panel = _render_trending_panel(trending)
     top_traded_panel = _render_top_traded_panel(top_traded)
@@ -2212,6 +2226,9 @@ def render_solana_discovery_page(
       line-height:1.15;text-align:center;text-decoration:none;border:0;background:transparent
     }
     .dex-utility-nav .dex-side-item:hover{color:var(--muted)}
+    .dex-utility-nav .dex-product-login{color:var(--cyan);font-weight:700}
+    .dex-product-account{display:block;width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font:500 8px "JetBrains Mono",monospace;text-align:center}
+    .dex-utility-nav .dex-product-logout{color:var(--cyan);font-family:inherit;cursor:pointer}
     .dex-app-main{min-width:0}
     .dex-topbar{
       position:fixed;top:0;left:76px;right:0;height:64px;z-index:35;
@@ -2982,7 +2999,7 @@ def render_solana_discovery_page(
     </nav>
     <div class="dex-rail-spacer"></div>
     <nav class="dex-utility-nav" aria-label="Utility navigation">
-      <span class="dex-side-item" aria-disabled="true">Wallet Profile</span>
+      __PRODUCT_ACCOUNT__
       <span class="dex-side-item" aria-disabled="true">Documentation</span>
       <span class="dex-side-item" aria-disabled="true">Disclaimer</span>
     </nav>
@@ -3104,6 +3121,8 @@ def render_solana_discovery_page(
   </div>
 </div><script>
   const themeOptions=[...document.querySelectorAll("[data-theme-option]")];function applyTheme(theme){const value=theme==="plain"?"plain":theme==="intel"?"intel":"current";if(value==="current")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=value;themeOptions.forEach(button=>{const active=button.dataset.themeOption===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});try{localStorage.setItem("dexsato-theme",value);}catch(error){}}let saved="current";try{saved=localStorage.getItem("dexsato-theme")||"current";}catch(error){}applyTheme(saved);themeOptions.forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.themeOption)));
+
+  (()=>{const button=document.getElementById("dex-product-logout");if(!button)return;button.addEventListener("click",async()=>{button.disabled=true;try{const response=await fetch("/logout",{method:"POST",headers:{"content-type":"application/json"},credentials:"same-origin",body:"{}"});if(!response.ok)throw new Error("logout failed");window.location.assign("/")}catch(error){button.disabled=false;button.textContent="Retry"}})})();
 
   /* TW-UI-03B — Presentation-only market category navigation. */
   (() => {
@@ -3318,4 +3337,5 @@ def render_solana_discovery_page(
         .replace("__SOLANA_DEX_AREA_PATH__", escape(dex_volume_area, quote=True))
         .replace("__SOLANA_GAS_LABEL__", escape(solana_gas_label))
         .replace("__SOLANA_GAS_DOT_CLASS__", escape(solana_gas_dot_class, quote=True))
+        .replace("__PRODUCT_ACCOUNT__", product_account)
     )

@@ -53,7 +53,17 @@ def _request_id(scope: dict[str, object]) -> str:
 def _safe_route(path: str) -> str:
     """Classify routes without logging token mints, query strings, or unknown paths."""
     segments = [segment for segment in path.split("/") if segment]
-    if path in {"/", "/health", "/health/live", "/health/ready", "/discovery/solana"}:
+    if path in {
+        "/",
+        "/login",
+        "/logout",
+        "/auth/otp/request",
+        "/auth/otp/verify",
+        "/health",
+        "/health/live",
+        "/health/ready",
+        "/discovery/solana",
+    }:
         return path
     if len(segments) >= 4 and segments[:3] == ["api", "discovery", "solana"]:
         suffix = "/" + "/".join(segments[4:]) if len(segments) > 4 else ""
@@ -289,7 +299,11 @@ class SecurityHeadersMiddleware:
 
     @staticmethod
     def _requires_no_store(path: str) -> bool:
-        if path.startswith("/content-control") or path == "/telegram/send":
+        if (
+            path.startswith("/content-control")
+            or path.startswith("/auth/otp/")
+            or path in {"/login", "/logout", "/telegram/send"}
+        ):
             return True
         if not path.startswith("/api/discovery/solana/"):
             return False

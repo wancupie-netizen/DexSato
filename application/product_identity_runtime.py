@@ -74,8 +74,16 @@ def product_identity_configured() -> bool:
 
 def _default_create_client(url: str, key: str) -> Any:
     from supabase import create_client
+    from supabase.lib.client_options import ClientOptions
 
-    return create_client(url, key)
+    return create_client(
+        url,
+        key,
+        options=ClientOptions(
+            auto_refresh_token=False,
+            persist_session=False,
+        ),
+    )
 
 
 def build_product_auth_provider(

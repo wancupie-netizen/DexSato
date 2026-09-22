@@ -3,6 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from application.product_identity_runtime import (
+    _default_create_client,
     build_product_auth_provider,
     build_product_identity_repository,
     product_auth_enabled,
@@ -66,3 +67,13 @@ def test_runtime_uses_publishable_key_only_for_auth_and_secret_only_for_reposito
     assert "sb_publishable_public" not in repr(config)
     assert "sb_secret_server" not in repr(config)
     assert repository is not None
+
+
+def test_default_supabase_client_disables_provider_session_persistence():
+    sentinel = object()
+    with patch("supabase.create_client", return_value=sentinel) as create_client:
+        assert _default_create_client("https://project.supabase.co", "sb_publishable_public") is sentinel
+
+    options = create_client.call_args.kwargs["options"]
+    assert options.persist_session is False
+    assert options.auto_refresh_token is False

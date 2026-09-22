@@ -49,6 +49,10 @@ from application.token_workspace_rate_limit import (
     TokenWorkspaceRateLimitMiddleware,
     configure_rate_limit_store,
 )
+from application.product_auth_routes import (
+    product_auth_view,
+    router as product_auth_router,
+)
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -227,6 +231,8 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
 app.add_middleware(ProductionLoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
+app.include_router(product_auth_router)
+
 app.mount(
     "/static",
     StaticFiles(
@@ -326,8 +332,9 @@ def _load_discovery_page_context() -> tuple[dict[str, dict[str, object]], dict[s
     "/",
     response_class=HTMLResponse,
 )
-def app_home() -> str:
+def app_home(request: Request) -> str:
     """Display Solana Discovery as the DexSato main app."""
+    auth_view = product_auth_view(request)
     market_feeds, presenter_context = _load_discovery_page_context()
     return render_solana_discovery_page(
         load_solana_discovery_feed(view="rolling", page=1, page_size=25, query=""),
@@ -337,6 +344,8 @@ def app_home() -> str:
         recent=market_feeds["recent"],
         presenter_context=presenter_context,
         initial_market_tab="trending",
+        product_auth_available=auth_view.available,
+        product_principal=auth_view.principal,
     )
 
 
@@ -366,8 +375,9 @@ def major_assets() -> str:
     "/discovery/solana",
     response_class=HTMLResponse,
 )
-def solana_discovery(view: str = "rolling", page: int = 1, q: str = "") -> str:
+def solana_discovery(request: Request, view: str = "rolling", page: int = 1, q: str = "") -> str:
     """Display the read-only Solana Discovery D1 prototype."""
+    auth_view = product_auth_view(request)
     market_feeds, presenter_context = _load_discovery_page_context()
     return render_solana_discovery_page(
         load_solana_discovery_feed(view=view, page=page, page_size=25, query=q),
@@ -376,6 +386,8 @@ def solana_discovery(view: str = "rolling", page: int = 1, q: str = "") -> str:
         organic_flow=market_feeds["organic_flow"],
         recent=market_feeds["recent"],
         presenter_context=presenter_context,
+        product_auth_available=auth_view.available,
+        product_principal=auth_view.principal,
     )
 
 

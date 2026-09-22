@@ -249,6 +249,10 @@ RULES = {
     "jupiter-execute-wallet": RateLimitRule("jupiter-execute-wallet", 4),
     "jupiter-execute-global": RateLimitRule("jupiter-execute-global", 60),
     "content-login": RateLimitRule("content-login", 5, 900),
+    "product-otp-request-ip": RateLimitRule("product-otp-request-ip", 10, 900),
+    "product-otp-request-email": RateLimitRule("product-otp-request-email", 3, 900),
+    "product-otp-verify-ip": RateLimitRule("product-otp-verify-ip", 10, 900),
+    "product-otp-verify-email": RateLimitRule("product-otp-verify-email", 5, 900),
     "content-generate": RateLimitRule("content-generate", 20),
     "telegram-send": RateLimitRule("telegram-send", 3),
     "solana-api": RateLimitRule("solana-api", 90),
@@ -405,9 +409,45 @@ def _wallet_from_json(body: bytes) -> str | None:
     return value or None
 
 
-def _checks_for_request(*, method: str, path: str, ip: str, wallet: str | None) -> list[tuple[str, RateLimitRule]]:
+def _email_from_json(body: bytes) -> str | None:
+    if not body:
+        return None
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    value = str(payload.get("email") or "").strip().casefold()
+    if not value or len(value) > 254:
+        return None
+    return value
+
+
+def _checks_for_request(
+    *,
+    method: str,
+    path: str,
+    ip: str,
+    wallet: str | None,
+    email: str | None = None,
+) -> list[tuple[str, RateLimitRule]]:
     ip_key = _hash_identity(ip)
 
+    if path == "/auth/otp/request" and method == "POST":
+        checks = [(f"product-otp-request:ip:{ip_key}", RULES["product-otp-request-ip"])]
+        if email:
+            checks.append(
+                (f"product-otp-request:email:{_hash_identity(email)}", RULES["product-otp-request-email"])
+            )
+        return checks
+    if path == "/auth/otp/verify" and method == "POST":
+        checks = [(f"product-otp-verify:ip:{ip_key}", RULES["product-otp-verify-ip"])]
+        if email:
+            checks.append(
+                (f"product-otp-verify:email:{_hash_identity(email)}", RULES["product-otp-verify-email"])
+            )
+        return checks
     if path == "/content-control/login" and method == "POST":
         return [(f"content-login:ip:{ip_key}", RULES["content-login"])]
     if path == "/content-control/generate" and method == "POST":
@@ -494,12 +534,25 @@ class TokenWorkspaceRateLimitMiddleware:
         path = str(scope.get("path") or "")
         body = None
         wallet = None
+        email = None
 
-        if method == "POST" and (path.endswith("/jupiter-order") or path.endswith("/jupiter-execute")):
+        inspect_json_body = method == "POST" and (
+            path.endswith("/jupiter-order")
+            or path.endswith("/jupiter-execute")
+            or path in {"/auth/otp/request", "/auth/otp/verify"}
+        )
+        if inspect_json_body:
             body = await _read_body(receive)
             wallet = _wallet_from_json(body)
+            email = _email_from_json(body)
 
-        checks = _checks_for_request(method=method, path=path, ip=_client_ip(scope), wallet=wallet)
+        checks = _checks_for_request(
+            method=method,
+            path=path,
+            ip=_client_ip(scope),
+            wallet=wallet,
+            email=email,
+        )
         if checks:
             try:
                 if isinstance(self.limiter, RedisSlidingWindowRateLimiter):

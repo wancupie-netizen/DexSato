@@ -68,6 +68,8 @@ class SupabaseProductAuthProvider:
                     "options": {"should_create_user": True},
                 }
             )
+        except ProductAuthUnavailableError:
+            raise
         except Exception as error:
             raise ProductAuthDeliveryError("Unable to send a sign-in code.") from error
 
@@ -87,6 +89,8 @@ class SupabaseProductAuthProvider:
                     "type": "email",
                 }
             )
+        except ProductAuthUnavailableError:
+            raise
         except Exception as error:
             raise ProductAuthVerificationError("Unable to verify that code.") from error
 
