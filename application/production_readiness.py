@@ -20,6 +20,7 @@ from application.jupiter_fee_policy import (
     read_fee_policy,
 )
 from application.production_security import internal_endpoints_enabled, production_mode
+from application.product_identity_runtime import product_identity_runtime_config
 
 _PLACEHOLDER_PREFIXES = ("your-", "replace-with-", "changeme")
 
@@ -59,6 +60,7 @@ def validate_production_configuration() -> None:
     if read_fee_policy() != get_fee_policy():
         raise FeePolicyConfigurationError("Jupiter fee configuration changed; restart the server.")
     validate_collector_configuration()
+    product_identity_runtime_config()
     if not production_mode():
         return
     _required_secret("JUPITER_API_KEY")

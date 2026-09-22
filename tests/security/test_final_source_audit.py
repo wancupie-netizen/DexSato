@@ -8,7 +8,7 @@ def _read(relative): return (ROOT/relative).read_text(encoding="utf-8")
 
 def test_frontend_contains_no_server_secret_names_or_runtime_jsdelivr():
     text=_read("presentation/dexsato_solana_discovery_token_presenter.py") + _read("static/js/dexsato_solana_discovery_swap.js")
-    for secret in ("JUPITER_API_KEY","BIRDEYE_API_KEY","REDIS_URL","SUPABASE_KEY","TELEGRAM_BOT_TOKEN","OPENAI_API_KEY","DEXSATO_OPERATOR_TOKEN"):
+    for secret in ("JUPITER_API_KEY","BIRDEYE_API_KEY","REDIS_URL","SUPABASE_KEY","SUPABASE_SECRET_KEY","TELEGRAM_BOT_TOKEN","OPENAI_API_KEY","DEXSATO_OPERATOR_TOKEN"):
         assert secret not in text
     assert "cdn.jsdelivr.net" not in text
     assert "/static/vendor/solana-web3/1.98.4/index.iife.min.js" in text

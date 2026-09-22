@@ -127,6 +127,34 @@ def test_valid_production_configuration_returns_no_secret_material():
         assert production_configuration_ready() is True
 
 
+def test_product_identity_configuration_is_inert_until_enabled():
+    with patch.dict("os.environ", _production_environment(), clear=True):
+        assert validate_production_configuration() is None
+
+
+def test_enabled_product_identity_requires_separate_current_supabase_keys():
+    base = _production_environment(
+        DEXSATO_PRODUCT_AUTH_ENABLED="true",
+        SUPABASE_URL="https://project.supabase.co",
+        SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+        SUPABASE_SECRET_KEY="sb_secret_test",
+    )
+    with patch.dict("os.environ", base, clear=True):
+        assert validate_production_configuration() is None
+    _expect_configuration_error(
+        {**base, "SUPABASE_PUBLISHABLE_KEY": ""},
+        "SUPABASE_PUBLISHABLE_KEY",
+    )
+    _expect_configuration_error(
+        {**base, "SUPABASE_SECRET_KEY": "legacy-service-role-key"},
+        "SUPABASE_SECRET_KEY",
+    )
+    _expect_configuration_error(
+        {**base, "SUPABASE_URL": "http://project.supabase.co"},
+        "SUPABASE_URL",
+    )
+
+
 def test_collector_integrity_requires_expected_json_mappings(tmp_path):
     (tmp_path / "state.json").write_text(
         json.dumps({"candidates": {}}), encoding="utf-8"
