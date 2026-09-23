@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-SCHEMA_PATH = Path(__file__).parents[1] / "database" / "migrations" / "001_product_identity.sql"
+SCHEMA_PATH = Path(__file__).parents[1] / "supabase" / "migrations" / "20260922203951_product_identity.sql"
 
 
 def test_product_identity_schema_is_server_only_and_constrained() -> None:
