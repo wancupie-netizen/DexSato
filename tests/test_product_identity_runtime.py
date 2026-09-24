@@ -75,5 +75,6 @@ def test_default_supabase_client_disables_provider_session_persistence():
         assert _default_create_client("https://project.supabase.co", "sb_publishable_public") is sentinel
 
     options = create_client.call_args.kwargs["options"]
+    assert hasattr(options, "storage")
     assert options.persist_session is False
     assert options.auto_refresh_token is False

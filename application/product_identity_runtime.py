@@ -74,12 +74,12 @@ def product_identity_configured() -> bool:
 
 def _default_create_client(url: str, key: str) -> Any:
     from supabase import create_client
-    from supabase.lib.client_options import ClientOptions
+    from supabase.lib.client_options import SyncClientOptions
 
     return create_client(
         url,
         key,
-        options=ClientOptions(
+        options=SyncClientOptions(
             auto_refresh_token=False,
             persist_session=False,
         ),
