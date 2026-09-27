@@ -5,7 +5,9 @@ import pytest
 from application.product_identity_runtime import (
     _default_create_client,
     build_product_auth_provider,
+    build_product_entitlement_service,
     build_product_identity_repository,
+    build_product_subscription_repository,
     product_auth_enabled,
     product_identity_configured,
     product_identity_runtime_config,
@@ -78,3 +80,53 @@ def test_default_supabase_client_disables_provider_session_persistence():
     assert hasattr(options, "storage")
     assert options.persist_session is False
     assert options.auto_refresh_token is False
+
+
+def test_subscription_repository_uses_secret_key_only():
+    calls = []
+
+    class Client:
+        def table(self, name): raise AssertionError("not used")
+
+    def create_client(url, key):
+        calls.append((url, key))
+        return Client()
+
+    with patch.dict("os.environ", _enabled_environment(), clear=True):
+        repository = build_product_subscription_repository(create_client=create_client)
+
+    assert calls == [
+        ("https://project.supabase.co", "sb_secret_server"),
+    ]
+    assert repository is not None
+
+
+def test_entitlement_service_builder_uses_server_subscription_repository():
+    calls = []
+
+    class Client:
+        def table(self, name): raise AssertionError("not used")
+
+    def create_client(url, key):
+        calls.append((url, key))
+        return Client()
+
+    with patch.dict("os.environ", _enabled_environment(), clear=True):
+        service = build_product_entitlement_service(create_client=create_client)
+
+    assert calls == [
+        ("https://project.supabase.co", "sb_secret_server"),
+    ]
+    assert service is not None
+
+
+def test_subscription_and_entitlement_builders_are_disabled_with_auth_gate():
+    with patch.dict("os.environ", {}, clear=True):
+        with pytest.raises(RuntimeError, match="disabled"):
+            build_product_subscription_repository(
+                create_client=lambda url, key: object()
+            )
+        with pytest.raises(RuntimeError, match="disabled"):
+            build_product_entitlement_service(
+                create_client=lambda url, key: object()
+            )

@@ -8,10 +8,14 @@ import os
 from typing import Any
 from urllib.parse import urlparse
 
+from application.product_entitlement_service import ProductEntitlementService
 from application.product_identity_service import ProductIdentityService
 from application.supabase_product_auth_provider import SupabaseProductAuthProvider
 from application.supabase_product_identity_repository import (
     SupabaseProductIdentityRepository,
+)
+from application.supabase_product_subscription_repository import (
+    SupabaseProductSubscriptionRepository,
 )
 
 
@@ -116,4 +120,29 @@ def build_product_identity_service(
 ) -> ProductIdentityService:
     return ProductIdentityService(
         build_product_identity_repository(create_client=create_client)
+    )
+
+
+def build_product_subscription_repository(
+    *,
+    create_client: Callable[[str, str], Any] = _default_create_client,
+) -> SupabaseProductSubscriptionRepository:
+    """Build the server-only subscription reader with the Supabase secret key."""
+
+    config = product_identity_runtime_config()
+    if not config.enabled:
+        raise RuntimeError("Product authentication is disabled.")
+    return SupabaseProductSubscriptionRepository(
+        create_client(config.supabase_url, config.secret_key)
+    )
+
+
+def build_product_entitlement_service(
+    *,
+    create_client: Callable[[str, str], Any] = _default_create_client,
+) -> ProductEntitlementService:
+    """Build authoritative entitlement resolution without wiring it to routes yet."""
+
+    return ProductEntitlementService(
+        build_product_subscription_repository(create_client=create_client)
     )
