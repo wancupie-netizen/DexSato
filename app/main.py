@@ -57,6 +57,12 @@ from application.product_market_entitlement import (
     apply_market_feed_entitlements,
     resolve_market_entitlement_policy,
 )
+from application.product_surface_entitlement import (
+    ProductSurfaceAccessDenied,
+    locked_discovery_feed,
+    locked_recent_feed,
+    require_product_surface,
+)
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -309,24 +315,58 @@ def _content_cookie_secure(request: Request) -> bool:
     return trusted_proxy_headers() and forwarded.lower() == "https"
 
 
-def _load_discovery_market_feeds() -> dict[str, dict[str, object]]:
-    """Load shared ranked feeds and independent Recent concurrently."""
+def _request_entitlement_policy(request: Request):
+    auth_view = product_auth_view(request)
+    return auth_view, resolve_market_entitlement_policy(auth_view.principal)
+
+
+def _require_full_discovery(request: Request) -> None:
+    _, policy = _request_entitlement_policy(request)
+    try:
+        require_product_surface(policy, "full_discovery")
+    except ProductSurfaceAccessDenied as error:
+        raise HTTPException(status_code=403, detail="Pro access is required for Full Discovery.") from error
+
+
+def _require_recent_24h(request: Request) -> None:
+    _, policy = _request_entitlement_policy(request)
+    try:
+        require_product_surface(policy, "recent_24h")
+    except ProductSurfaceAccessDenied as error:
+        raise HTTPException(status_code=403, detail="Pro access is required for Recent 24H.") from error
+
+
+def _load_discovery_market_feeds(
+    *,
+    include_recent: bool,
+) -> dict[str, dict[str, object]]:
+    """Load ranked feeds and load Recent only when the entitlement allows it."""
     with ThreadPoolExecutor(max_workers=2) as executor:
         ranked_future = executor.submit(load_jupiter_ranked_market_feeds)
-        recent_future = executor.submit(load_jupiter_recent_feed)
+        recent_future = executor.submit(load_jupiter_recent_feed) if include_recent else None
         ranked = ranked_future.result()
         return {
             "trending": ranked["trending"],
             "top_traded": ranked["top_traded"],
             "organic_flow": ranked["organic_flow"],
-            "recent": recent_future.result(),
+            "recent": (
+                recent_future.result()
+                if recent_future is not None
+                else locked_recent_feed()
+            ),
         }
 
 
-def _load_discovery_page_context() -> tuple[dict[str, dict[str, object]], dict[str, object]]:
-    """Overlap independent market-feed and presenter-metric refresh work."""
+def _load_discovery_page_context(
+    *,
+    include_recent: bool,
+) -> tuple[dict[str, dict[str, object]], dict[str, object]]:
+    """Overlap permitted market-feed and presenter-metric refresh work."""
     with ThreadPoolExecutor(max_workers=2) as executor:
-        market_future = executor.submit(_load_discovery_market_feeds)
+        market_future = executor.submit(
+            _load_discovery_market_feeds,
+            include_recent=include_recent,
+        )
         presenter_future = executor.submit(load_solana_discovery_presenter_context)
         return market_future.result(), presenter_future.result()
 
@@ -338,14 +378,21 @@ def _load_discovery_page_context() -> tuple[dict[str, dict[str, object]], dict[s
 )
 def app_home(request: Request) -> str:
     """Display Solana Discovery as the DexSato main app."""
-    auth_view = product_auth_view(request)
-    market_feeds, presenter_context = _load_discovery_page_context()
+    auth_view, policy = _request_entitlement_policy(request)
+    market_feeds, presenter_context = _load_discovery_page_context(
+        include_recent=policy.recent_24h,
+    )
     market_feeds = apply_market_feed_entitlements(
         market_feeds,
-        resolve_market_entitlement_policy(auth_view.principal),
+        policy,
+    )
+    discovery_feed = (
+        load_solana_discovery_feed(view="rolling", page=1, page_size=25, query="")
+        if policy.full_discovery
+        else locked_discovery_feed("rolling")
     )
     return render_solana_discovery_page(
-        load_solana_discovery_feed(view="rolling", page=1, page_size=25, query=""),
+        discovery_feed,
         trending=market_feeds["trending"],
         top_traded=market_feeds["top_traded"],
         organic_flow=market_feeds["organic_flow"],
@@ -385,11 +432,19 @@ def major_assets() -> str:
 )
 def solana_discovery(request: Request, view: str = "rolling", page: int = 1, q: str = "") -> str:
     """Display the read-only Solana Discovery D1 prototype."""
-    auth_view = product_auth_view(request)
-    market_feeds, presenter_context = _load_discovery_page_context()
+    auth_view, policy = _request_entitlement_policy(request)
+    try:
+        require_product_surface(policy, "full_discovery")
+        if view == "archive":
+            require_product_surface(policy, "archive")
+    except ProductSurfaceAccessDenied as error:
+        raise HTTPException(status_code=403, detail="Pro access is required for this Discovery view.") from error
+    market_feeds, presenter_context = _load_discovery_page_context(
+        include_recent=policy.recent_24h,
+    )
     market_feeds = apply_market_feed_entitlements(
         market_feeds,
-        resolve_market_entitlement_policy(auth_view.principal),
+        policy,
     )
     return render_solana_discovery_page(
         load_solana_discovery_feed(view=view, page=page, page_size=25, query=q),
@@ -406,6 +461,7 @@ def solana_discovery(request: Request, view: str = "rolling", page: int = 1, q: 
 @app.get(
     "/discovery/solana/{token_address}",
     response_class=HTMLResponse,
+    dependencies=[Depends(_require_full_discovery)],
 )
 def solana_discovery_token(token_address: str) -> str:
     """Display one observed exact-token workspace and its controlled swap flow."""
@@ -419,6 +475,7 @@ def solana_discovery_token(token_address: str) -> str:
 @app.get(
     "/market/recent/{token_address}",
     response_class=HTMLResponse,
+    dependencies=[Depends(_require_recent_24h)],
 )
 def recent_token_workspace(token_address: str) -> str:
     """Display one current/recent eligible Jupiter Recent token."""
@@ -438,7 +495,7 @@ def recent_token_workspace(token_address: str) -> str:
     return render_recent_token_page(detail, feed=feed)
 
 
-@app.get("/api/market/recent/{token_address}/candles")
+@app.get("/api/market/recent/{token_address}/candles", dependencies=[Depends(_require_recent_24h)])
 def recent_token_candles(
     token_address: str,
     timeframe: str = "5m",
@@ -465,7 +522,7 @@ def recent_token_candles(
     return payload
 
 
-@app.get("/api/market/recent/{token_address}/transactions")
+@app.get("/api/market/recent/{token_address}/transactions", dependencies=[Depends(_require_recent_24h)])
 def recent_token_transactions(token_address: str) -> dict[str, object]:
     try:
         payload = load_recent_transactions(token_address)
@@ -694,13 +751,13 @@ def trending_token_transactions(token_address: str) -> dict[str, object]:
     return payload
 
 
-@app.get("/api/discovery/solana/engine")
+@app.get("/api/discovery/solana/engine", dependencies=[Depends(_require_full_discovery)])
 def solana_discovery_engine() -> dict[str, object]:
     """Return the lightweight qualified-token feed used by Discovery Engine."""
     return load_solana_discovery_engine_feed(limit=25)
 
 # CHART_V22_LIVE_CANDLE
-@app.get("/api/discovery/solana/{token_address}/candles")
+@app.get("/api/discovery/solana/{token_address}/candles", dependencies=[Depends(_require_full_discovery)])
 def solana_discovery_live_candles(
     token_address: str,
     timeframe: str = "5m",
@@ -724,7 +781,7 @@ def solana_discovery_live_candles(
 
 
 # TRANSACTIONS_FEED_V11_API_ROUTE
-@app.get("/api/discovery/solana/{token_address}/transactions")
+@app.get("/api/discovery/solana/{token_address}/transactions", dependencies=[Depends(_require_full_discovery)])
 def solana_discovery_transactions(token_address: str) -> dict[str, object]:
     """Return verified recent exact-pool transactions for one qualified token."""
     try:
@@ -760,7 +817,7 @@ def _require_recent_market_token(token_address: str) -> None:
         )
 
 
-@app.get("/api/market/recent/{token_address}/jupiter-quote")
+@app.get("/api/market/recent/{token_address}/jupiter-quote", dependencies=[Depends(_require_recent_24h)])
 def recent_jupiter_quote(
     token_address: str,
     amount_sol: str = "0.1",
@@ -797,7 +854,7 @@ def recent_jupiter_quote(
         ) from error
 
 
-@app.get("/api/market/recent/{token_address}/wallet-balance")
+@app.get("/api/market/recent/{token_address}/wallet-balance", dependencies=[Depends(_require_recent_24h)])
 async def recent_wallet_balance(
     token_address: str,
     wallet_address: str,
@@ -821,7 +878,7 @@ async def recent_wallet_balance(
         raise HTTPException(status_code=503, detail=str(error)) from error
 
 
-@app.post("/api/market/recent/{token_address}/jupiter-order")
+@app.post("/api/market/recent/{token_address}/jupiter-order", dependencies=[Depends(_require_recent_24h)])
 async def recent_jupiter_order(
     token_address: str,
     request: Request,
@@ -902,7 +959,7 @@ async def recent_jupiter_order(
         ) from error
 
 
-@app.post("/api/market/recent/{token_address}/jupiter-execute")
+@app.post("/api/market/recent/{token_address}/jupiter-execute", dependencies=[Depends(_require_recent_24h)])
 async def recent_jupiter_execute(
     token_address: str,
     request: Request,
@@ -1560,7 +1617,7 @@ async def trending_jupiter_execute(
         raise HTTPException(status_code=503, detail="Jupiter swap execution is temporarily unavailable.") from error
 
 
-@app.get("/api/discovery/solana/{token_address}/jupiter-quote")
+@app.get("/api/discovery/solana/{token_address}/jupiter-quote", dependencies=[Depends(_require_full_discovery)])
 def solana_discovery_jupiter_quote(
     token_address: str,
     amount_sol: str = "0.1",
@@ -1605,7 +1662,7 @@ async def _jupiter_swap_body(request: Request, permitted: set[str]) -> dict[str,
     return payload
 
 
-@app.get("/api/discovery/solana/{token_address}/wallet-balance")
+@app.get("/api/discovery/solana/{token_address}/wallet-balance", dependencies=[Depends(_require_full_discovery)])
 async def solana_discovery_wallet_balance(
     token_address: str,
     wallet_address: str,
@@ -1621,7 +1678,7 @@ async def solana_discovery_wallet_balance(
         raise HTTPException(status_code=503, detail=str(error)) from error
 
 
-@app.post("/api/discovery/solana/{token_address}/jupiter-order")
+@app.post("/api/discovery/solana/{token_address}/jupiter-order", dependencies=[Depends(_require_full_discovery)])
 async def solana_discovery_jupiter_order(
     token_address: str,
     request: Request,
@@ -1677,7 +1734,7 @@ async def solana_discovery_jupiter_order(
         raise HTTPException(status_code=503, detail=safe_jupiter_error_detail(error)) from error
 
 
-@app.post("/api/discovery/solana/{token_address}/jupiter-execute")
+@app.post("/api/discovery/solana/{token_address}/jupiter-execute", dependencies=[Depends(_require_full_discovery)])
 async def solana_discovery_jupiter_execute(
     token_address: str,
     request: Request,

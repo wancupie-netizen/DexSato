@@ -158,4 +158,5 @@ def test_discovery_routes_apply_projection_before_presenter() -> None:
     source = Path("app/main.py").read_text(encoding="utf-8")
 
     assert source.count("market_feeds = apply_market_feed_entitlements(") == 2
-    assert source.count("resolve_market_entitlement_policy(auth_view.principal)") == 2
+    assert source.count("auth_view, policy = _request_entitlement_policy(request)") == 2
+    assert source.count("resolve_market_entitlement_policy(auth_view.principal)") == 1
