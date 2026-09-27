@@ -53,6 +53,10 @@ from application.product_auth_routes import (
     product_auth_view,
     router as product_auth_router,
 )
+from application.product_market_entitlement import (
+    apply_market_feed_entitlements,
+    resolve_market_entitlement_policy,
+)
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -336,6 +340,10 @@ def app_home(request: Request) -> str:
     """Display Solana Discovery as the DexSato main app."""
     auth_view = product_auth_view(request)
     market_feeds, presenter_context = _load_discovery_page_context()
+    market_feeds = apply_market_feed_entitlements(
+        market_feeds,
+        resolve_market_entitlement_policy(auth_view.principal),
+    )
     return render_solana_discovery_page(
         load_solana_discovery_feed(view="rolling", page=1, page_size=25, query=""),
         trending=market_feeds["trending"],
@@ -379,6 +387,10 @@ def solana_discovery(request: Request, view: str = "rolling", page: int = 1, q: 
     """Display the read-only Solana Discovery D1 prototype."""
     auth_view = product_auth_view(request)
     market_feeds, presenter_context = _load_discovery_page_context()
+    market_feeds = apply_market_feed_entitlements(
+        market_feeds,
+        resolve_market_entitlement_policy(auth_view.principal),
+    )
     return render_solana_discovery_page(
         load_solana_discovery_feed(view=view, page=page, page_size=25, query=q),
         trending=market_feeds["trending"],
