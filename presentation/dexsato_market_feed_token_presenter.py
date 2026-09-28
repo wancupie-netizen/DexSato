@@ -10,6 +10,19 @@ from presentation.dexsato_solana_discovery_token_presenter import (
 )
 
 
+def _render_market_token_shell(
+    detail: dict[str, Any],
+    feed: dict[str, Any],
+) -> str:
+    """Use the shared workspace shell with navigation back to Markets."""
+    html = render_solana_discovery_token_page(detail, feed=feed)
+    return html.replace(
+        '<a class="tw-side-icon-v08c active" href="/discovery/solana" aria-label="Solana"',
+        '<a class="tw-side-icon-v08c active" href="/" aria-label="Solana"',
+        1,
+    )
+
+
 def _remove_section(html: str, marker: str) -> str:
     """Remove one complete section, including nested section elements."""
     start = html.find(marker)
@@ -157,7 +170,7 @@ def render_recent_token_page(
     feed: dict[str, Any],
 ) -> str:
     """Reuse the stable Token Workspace shell with Recent-only semantics."""
-    html = render_solana_discovery_token_page(detail, feed=feed)
+    html = _render_market_token_shell(detail, feed)
     token_address = escape(
         str(detail.get("token_address") or ""),
         quote=True,
@@ -241,7 +254,7 @@ def render_organic_flow_token_page(
     feed: dict[str, Any],
 ) -> str:
     """Reuse the stable Token Workspace shell with Organic Flow semantics."""
-    html = render_solana_discovery_token_page(detail, feed=feed)
+    html = _render_market_token_shell(detail, feed)
     token_address = escape(
         str(detail.get("token_address") or ""),
         quote=True,
@@ -327,7 +340,7 @@ def render_top_traded_token_page(
     feed: dict[str, Any],
 ) -> str:
     """Reuse the Token Workspace shell with Top Traded-only semantics."""
-    html = render_solana_discovery_token_page(detail, feed=feed)
+    html = _render_market_token_shell(detail, feed)
     token_address = escape(
         str(detail.get("token_address") or ""),
         quote=True,
@@ -413,7 +426,7 @@ def render_trending_token_page(
     feed: dict[str, Any],
 ) -> str:
     """Reuse the stable Token Workspace shell with Trending-only semantics."""
-    html = render_solana_discovery_token_page(detail, feed=feed)
+    html = _render_market_token_shell(detail, feed)
 
     # Separate route/API context. No Discovery archive semantics are introduced.
     html = html.replace(
