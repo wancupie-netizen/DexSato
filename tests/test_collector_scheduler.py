@@ -334,3 +334,35 @@ def test_collector_atomic_json_streams_and_replaces_unicode_payload(tmp_path):
     assert json.loads(target.read_text(encoding="utf-8")) == payload
     assert "Café" in target.read_text(encoding="utf-8")
     assert not (tmp_path / "state.json.tmp").exists()
+
+def test_prune_stale_candidates_keeps_recent_and_boundary_candidates():
+    from research.continuous_discovery_runtime import prune_stale_candidates
+
+    current = datetime(2026, 9, 29, 3, 0, tzinfo=timezone.utc)
+    state = {"candidates": {
+        "recent": {"last_seen_at": (current - timedelta(hours=24)).isoformat()},
+        "boundary": {"last_seen_at": (current - timedelta(hours=48)).isoformat()},
+        "expired": {"last_seen_at": (current - timedelta(hours=49)).isoformat()},
+        "unknown": {"last_seen_at": "bad timestamp"},
+    }}
+
+    assert prune_stale_candidates(state, current) == 1
+    assert set(state["candidates"]) == {"recent", "boundary", "unknown"}
+
+def test_collector_persists_rotation_across_one_shot_runs(tmp_path):
+    arguments = ["continuous_discovery_runtime.py", "--output-dir", str(tmp_path)]
+    profile_run = {"provider": "dexscreener-profiles", "latency_ms": 1.0, "received": 0}
+
+    with (
+        patch.dict("os.environ", {"BIRDEYE_API_KEY": "configured"}, clear=True),
+        patch("sys.argv", arguments),
+        patch("research.continuous_discovery_runtime.collect_birdeye", return_value=([], {})),
+        patch("research.continuous_discovery_runtime.collect_dex_profiles", return_value=([], profile_run)),
+        patch("research.continuous_discovery_runtime.refresh_solana_discovery_archive") as refresh,
+    ):
+        assert run_continuous_discovery() == 0
+        assert run_continuous_discovery() == 0
+
+    assert [call.kwargs["rotation_start"] for call in refresh.call_args_list] == [0, 12]
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["qualification_cursor"] == 24

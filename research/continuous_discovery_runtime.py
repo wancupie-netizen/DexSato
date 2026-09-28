@@ -26,6 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from application.solana_discovery_feed_service import refresh_solana_discovery_archive
+from application.solana_discovery_qualification import MAX_CANDIDATES_CHECKED
 
 try:
     from .phase0_solana_discovery_probe_v2 import (
@@ -50,6 +51,7 @@ PAIR_RETRY_MINUTES = (0, 15, 30, 60)
 DEFAULT_OUTPUT = "output/research/solana-discovery-phase0-seven-day"
 BIRDEYE_QUOTA_COOLDOWN_SECONDS = 60 * 60
 BIRDEYE_QUOTA_MESSAGE = "compute units usage limit exceeded"
+ACTIVE_CANDIDATE_HOURS = 48
 
 
 def _graceful_termination(signum: int, _frame: object) -> None:
@@ -203,6 +205,25 @@ def merge_discovery(
             candidate["name"] = candidate.get("name") or record.get("name")
             candidate["listed_at"] = candidate.get("listed_at") or record.get("listed_at")
     return created
+
+
+def prune_stale_candidates(state: dict[str, Any], current: datetime) -> int:
+    """Keep recent collector candidates; durable qualified history stays in SQLite."""
+    cutoff = current - timedelta(hours=ACTIVE_CANDIDATE_HOURS)
+    candidates = state["candidates"]
+    expired = []
+    for address, candidate in candidates.items():
+        if not isinstance(candidate, dict):
+            continue
+        try:
+            last_seen = parse_time(candidate.get("last_seen_at"))
+        except (TypeError, ValueError):
+            continue
+        if last_seen is not None and last_seen < cutoff:
+            expired.append(address)
+    for address in expired:
+        del candidates[address]
+    return len(expired)
 
 
 def resolve_due_pairs(state: dict[str, Any], current: datetime, timeout: float, events_path: Path) -> dict[str, Any]:
@@ -404,6 +425,8 @@ def main() -> int:
         state.setdefault("degraded_runs", 0)
         state.setdefault("birdeye_quota_retry_at", None)
         state.setdefault("birdeye_quota_exhausted_at", None)
+        state.setdefault("qualification_cursor", 0)
+        prune_stale_candidates(state, current)
 
         key = os.getenv("BIRDEYE_API_KEY", "").strip()
         errors: list[str] = []
@@ -503,9 +526,13 @@ def main() -> int:
             "phase_1_authorized": False,
             "runtime_mode": "MI v4.1 CONTINUOUS",
         }
+        rotation_start = int(state["qualification_cursor"])
+        state["qualification_cursor"] = rotation_start + MAX_CANDIDATES_CHECKED
         atomic_json(state_path, state)
         atomic_json(output / "status.json", summary)
-        refresh_solana_discovery_archive(output, now=current, state_snapshot=state)
+        refresh_solana_discovery_archive(
+            output, now=current, state_snapshot=state, rotation_start=rotation_start
+        )
         write_latest_run(output / "latest-run.txt", state, summary)
         write_html(output / "status.html", state, summary)
         print(f"MI v4.1 continuous run {state['run_count']}: {summary['collector_status']}")
