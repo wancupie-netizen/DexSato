@@ -70,6 +70,7 @@ from application.founder_snapshot_service import (
 from application.telegram_notifier import (
     send_change_digest,
 )
+from application.telegram_customer_dispatch import deliver_customer_changes
 from application.system_health_dashboard import (
     write_latest_run,
 )
@@ -247,6 +248,7 @@ def execute_founder_scheduler(
         ...,
         dict[str, object],
     ] = send_change_digest,
+    deliver_customers: Callable[..., dict[str, object]] = deliver_customer_changes,
 ) -> dict[str, object]:
     """
     Execute one complete automated DexSato run.
@@ -285,6 +287,10 @@ def execute_founder_scheduler(
         send_digest=send_digest,
     )
 
+    try:
+        customer_result = deliver_customers(changes=changes)
+    except Exception:
+        customer_result = {"status": "FAILED", "sent": 0, "failed": 0}
     telegram_status = str(
         telegram_result.get(
             "status",
@@ -300,6 +306,9 @@ def execute_founder_scheduler(
 
     return {
         "success": True,
+        "customer_telegram_status": customer_result.get("status", "FAILED"),
+        "customer_telegram_sent": customer_result.get("sent", 0),
+        "customer_telegram_failed": customer_result.get("failed", 0),
         "automation_status": automation_status,
         "baseline_created": (
             previous_snapshot is None
