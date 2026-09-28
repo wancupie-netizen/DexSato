@@ -53,6 +53,7 @@ from application.product_auth_routes import (
     product_auth_view,
     router as product_auth_router,
 )
+from application.telegram_account_link_routes import router as telegram_account_link_router
 from application.product_guest_identity import (
     ProductGuestIdentity,
     resolve_product_guest_identity,
@@ -257,6 +258,7 @@ app.add_middleware(ProductionLoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(product_auth_router)
+app.include_router(telegram_account_link_router)
 
 app.mount(
     "/static",

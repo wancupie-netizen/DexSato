@@ -17,6 +17,8 @@ from application.supabase_product_identity_repository import (
 from application.supabase_product_subscription_repository import (
     SupabaseProductSubscriptionRepository,
 )
+from application.supabase_telegram_account_link import SupabaseTelegramLinkRepository
+from application.telegram_account_link import TelegramLinkService
 
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -145,4 +147,16 @@ def build_product_entitlement_service(
 
     return ProductEntitlementService(
         build_product_subscription_repository(create_client=create_client)
+    )
+
+
+def build_telegram_link_service(
+    *, create_client: Callable[[str, str], Any] = _default_create_client,
+) -> TelegramLinkService:
+    """Keep Telegram identity persistence behind the server's secret client."""
+    config = product_identity_runtime_config()
+    if not config.enabled:
+        raise RuntimeError("Product authentication is disabled.")
+    return TelegramLinkService(
+        SupabaseTelegramLinkRepository(create_client(config.supabase_url, config.secret_key))
     )

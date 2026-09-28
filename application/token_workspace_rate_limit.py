@@ -255,6 +255,8 @@ RULES = {
     "product-otp-verify-email": RateLimitRule("product-otp-verify-email", 5, 900),
     "content-generate": RateLimitRule("content-generate", 20),
     "telegram-send": RateLimitRule("telegram-send", 3),
+    "telegram-link-issue": RateLimitRule("telegram-link-issue", 3, 900),
+    "telegram-link-webhook": RateLimitRule("telegram-link-webhook", 120),
     "solana-api": RateLimitRule("solana-api", 90),
     "general-api": RateLimitRule("general-api", 120),
 }
@@ -454,6 +456,10 @@ def _checks_for_request(
         return [(f"content-generate:ip:{ip_key}", RULES["content-generate"])]
     if path == "/telegram/send" and method == "POST":
         return [(f"telegram-send:ip:{ip_key}", RULES["telegram-send"])]
+    if path == "/auth/telegram/link" and method == "POST":
+        return [(f"telegram-link-issue:ip:{ip_key}", RULES["telegram-link-issue"])]
+    if path == "/telegram/link/webhook" and method == "POST":
+        return [(f"telegram-link-webhook:ip:{ip_key}", RULES["telegram-link-webhook"])]
 
     workspace = _TOKEN_WORKSPACE_ROUTE.fullmatch(path)
     if workspace and method == "GET":
