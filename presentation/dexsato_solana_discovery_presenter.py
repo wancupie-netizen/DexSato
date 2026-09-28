@@ -632,9 +632,34 @@ def _render_organic_flow_panel(organic_flow: dict[str, Any] | None) -> str:
     )
 
 
-def _render_recent_panel(recent: dict[str, Any] | None) -> str:
-    """Render rolling Recent rows with the locked market-feed table UI."""
+def _render_pro_access_notice(
+    feature: str, *, sign_in_available: bool
+) -> str:
+    """Explain a server-locked surface without suggesting checkout exists."""
+    action = (
+        '<a class="primary-link" href="/login">Sign in</a>'
+        if sign_in_available else ""
+    )
+    actions = f'<div class="empty-actions">{action}</div>' if action else ""
+    return (
+        '<div class="empty-state dex-pro-locked" role="status">'
+        '<div class="empty-icon" aria-hidden="true">◇</div><div>'
+        f'<h3>{escape(feature)} requires Pro access</h3>'
+        '<p>This feature is available to accounts with active Pro access. '
+        'Upgrades are not available here yet.</p>'
+        f'{actions}</div></div>'
+    )
+
+
+def _render_recent_panel(
+    recent: dict[str, Any] | None, *, sign_in_available: bool = False
+) -> str:
+    """Render rolling Recent rows or their server-provided access state."""
     data = recent if isinstance(recent, dict) else {}
+    if data.get("access_locked") is True:
+        return _render_pro_access_notice(
+            "Recent 24H", sign_in_available=sign_in_available
+        )
     rows = data.get("rows") if isinstance(data.get("rows"), list) else []
     valid_rows = [row for row in rows if isinstance(row, dict)]
 
@@ -1220,7 +1245,9 @@ def render_solana_discovery_page(
     trending_panel = _render_trending_panel(trending)
     top_traded_panel = _render_top_traded_panel(top_traded)
     organic_flow_panel = _render_organic_flow_panel(organic_flow)
-    recent_panel = _render_recent_panel(recent)
+    recent_panel = _render_recent_panel(
+        recent, sign_in_available=product_auth_available and not principal.authenticated
+    )
     live_signals_panel = _render_live_signals_panel(
         trending,
         top_traded,
@@ -1260,8 +1287,10 @@ def render_solana_discovery_page(
         solana_gas_label, solana_gas_dot_class = _solana_priority_fee()
     connected = data.get("connected") is True
     fresh = data.get("fresh") is True
-    status_heading = "Collector live" if connected and fresh else (
-        "Collector connected" if connected else "Feed unavailable"
+    status_heading = "Pro access required" if data.get("access_locked") is True else (
+        "Collector live" if connected and fresh else (
+            "Collector connected" if connected else "Feed unavailable"
+        )
     )
     status_message = str(
         data.get("message")
@@ -1345,6 +1374,11 @@ def render_solana_discovery_page(
         if candidate_rows
         else empty_state
     )
+    if data.get("access_locked") is True:
+        discovery_feed = _render_pro_access_notice(
+            "Full Discovery and Archive",
+            sign_in_available=product_auth_available and not principal.authenticated,
+        )
     page = """<!doctype html>
 <html lang="en">
 <head>
