@@ -59,12 +59,16 @@ def test_locked_discovery_feed_leaks_no_candidates_or_archive_counts() -> None:
     assert feed["required_tier"] == "pro"
 
 
-def test_app_wires_public_root_without_loading_locked_recent_or_discovery() -> None:
+def test_app_wires_root_without_loading_collector_archive() -> None:
     source = Path("app/main.py").read_text(encoding="utf-8")
+    root = source.split("def app_home(request: Request)", 1)[1].split(
+        "# TEMP-HIDE-MAJOR-ASSETS-01", 1
+    )[0]
 
-    assert "include_recent=policy.recent_24h" in source
-    assert "if policy.full_discovery" in source
-    assert "else locked_discovery_feed(" in source
+    assert "include_recent=policy.recent_24h" in root
+    assert 'discovery_feed = locked_discovery_feed("rolling")' in root
+    assert "load_solana_discovery_feed(" not in root
+    assert "show_discovery_tab=False" in root
 
 
 def test_full_discovery_routes_have_server_side_dependency_guards() -> None:
