@@ -19,6 +19,8 @@ from application.supabase_product_subscription_repository import (
 )
 from application.supabase_telegram_account_link import SupabaseTelegramLinkRepository
 from application.telegram_account_link import TelegramLinkService
+from application.telegram_pro_alert_gate import TelegramProAlertGate
+from application.supabase_telegram_pro_recipient import SupabaseTelegramCustomerLinkReader
 
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -159,4 +161,16 @@ def build_telegram_link_service(
         raise RuntimeError("Product authentication is disabled.")
     return TelegramLinkService(
         SupabaseTelegramLinkRepository(create_client(config.supabase_url, config.secret_key))
+    )
+
+def build_telegram_pro_alert_gate(
+    *, create_client: Callable[[str, str], Any] = _default_create_client,
+) -> TelegramProAlertGate:
+    """Reuse canonical subscription policy with a server-only linked-recipient reader."""
+    config = product_identity_runtime_config()
+    if not config.enabled:
+        raise RuntimeError("Product authentication is disabled.")
+    return TelegramProAlertGate(
+        SupabaseTelegramCustomerLinkReader(create_client(config.supabase_url, config.secret_key)),
+        build_product_entitlement_service(create_client=create_client),
     )
