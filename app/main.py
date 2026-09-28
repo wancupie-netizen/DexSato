@@ -172,6 +172,7 @@ from application.production_readiness import (
     collector_fresh,
     collector_storage_ready,
     discovery_archive_ready,
+    market_storage_ready,
     production_configuration_ready,
     validate_production_configuration,
 )
@@ -2143,7 +2144,7 @@ def health_liveness() -> dict[str, str]:
 
 
 def readiness_status() -> tuple[bool, dict[str, str]]:
-    """Check local resources required to serve the Discovery Terminal."""
+    """Check shared market storage and active collector dependencies."""
     from application.solana_discovery_feed_service import (
         DEFAULT_OUTPUT_DIR,
         DISCOVERY_ARCHIVE_DB,
@@ -2152,19 +2153,33 @@ def readiness_status() -> tuple[bool, dict[str, str]]:
     project_root = Path(__file__).resolve().parents[1]
     static_ready = (project_root / "static").is_dir()
     discovery_dir = discovery_storage_dir(DEFAULT_OUTPUT_DIR)
-    collector_ready = collector_storage_ready(discovery_dir)
-    archive_ready = discovery_archive_ready(discovery_dir, DISCOVERY_ARCHIVE_DB)
+    market_ready = market_storage_ready(discovery_dir)
     enabled = collector_enabled()
-    fresh = collector_fresh(discovery_dir) if enabled else True
+    collector_ready = collector_storage_ready(discovery_dir) if enabled else None
+    archive_ready = (
+        discovery_archive_ready(discovery_dir, DISCOVERY_ARCHIVE_DB)
+        if enabled else None
+    )
+    fresh = collector_fresh(discovery_dir) if enabled else None
     configuration_ready = production_configuration_ready()
     checks = {
         "static": "ready" if static_ready else "unavailable",
-        "collector_storage": "ready" if collector_ready else "unavailable",
-        "discovery_archive": "ready" if archive_ready else "unavailable",
-        "collector_fresh": "ready" if fresh else "stale",
+        "market_storage": "ready" if market_ready else "unavailable",
+        "collector_storage": (
+            "ready" if collector_ready else "unavailable"
+        ) if enabled else "not_required",
+        "discovery_archive": (
+            "ready" if archive_ready else "unavailable"
+        ) if enabled else "not_required",
+        "collector_fresh": (
+            "ready" if fresh else "stale"
+        ) if enabled else "not_required",
         "configuration": "ready" if configuration_ready else "unavailable",
     }
-    return all(value == "ready" for value in checks.values()), checks
+    ready = static_ready and market_ready and configuration_ready
+    if enabled:
+        ready = ready and bool(collector_ready and archive_ready and fresh)
+    return ready, checks
 
 
 @app.get("/health/ready")

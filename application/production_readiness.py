@@ -146,6 +146,13 @@ def _state_json_ready(path: Path) -> bool:
     return False
 
 
+def market_storage_ready(directory: Path) -> bool:
+    """Require the shared market volume even when the collector is disabled."""
+    return directory.is_dir() and os.access(
+        directory, os.R_OK | os.W_OK | os.X_OK
+    )
+
+
 def collector_storage_ready(directory: Path) -> bool:
     """Validate stored collector schemas without contacting an upstream provider."""
     return _state_json_ready(directory / "state.json") and _valid_json_object(

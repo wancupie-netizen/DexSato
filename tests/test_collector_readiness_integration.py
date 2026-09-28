@@ -20,8 +20,9 @@ def _write_ready_storage(directory, *, generated_at=None):
     return feed_service
 
 
-def test_disabled_collector_keeps_existing_readiness_contract_healthy(tmp_path):
-    feed_service = _write_ready_storage(tmp_path)
+def test_disabled_collector_needs_shared_volume_not_legacy_files(tmp_path):
+    from application import solana_discovery_feed_service as feed_service
+
     with (
         patch.dict("os.environ", {"DEXSATO_COLLECTOR_ENABLED": "false"}),
         patch.object(feed_service, "DEFAULT_OUTPUT_DIR", tmp_path),
@@ -30,10 +31,28 @@ def test_disabled_collector_keeps_existing_readiness_contract_healthy(tmp_path):
         response = health_readiness()
 
     assert ready is True
-    assert checks["collector_storage"] == "ready"
-    assert checks["discovery_archive"] == "ready"
-    assert checks["collector_fresh"] == "ready"
+    assert checks["market_storage"] == "ready"
+    assert checks["collector_storage"] == "not_required"
+    assert checks["discovery_archive"] == "not_required"
+    assert checks["collector_fresh"] == "not_required"
     assert response.status_code == 200
+
+
+def test_disabled_collector_rejects_missing_shared_volume(tmp_path):
+    from application import solana_discovery_feed_service as feed_service
+
+    missing = tmp_path / "missing-volume"
+    with (
+        patch.dict("os.environ", {"DEXSATO_COLLECTOR_ENABLED": "false"}),
+        patch.object(feed_service, "DEFAULT_OUTPUT_DIR", missing),
+    ):
+        ready, checks = readiness_status()
+        response = health_readiness()
+
+    assert ready is False
+    assert checks["market_storage"] == "unavailable"
+    assert checks["collector_storage"] == "not_required"
+    assert response.status_code == 503
 
 
 def test_enabled_collector_makes_stale_status_not_ready(tmp_path):
@@ -48,6 +67,7 @@ def test_enabled_collector_makes_stale_status_not_ready(tmp_path):
         response = health_readiness()
 
     assert ready is False
+    assert checks["market_storage"] == "ready"
     assert checks["collector_storage"] == "ready"
     assert checks["discovery_archive"] == "ready"
     assert checks["collector_fresh"] == "stale"
