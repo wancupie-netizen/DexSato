@@ -191,6 +191,7 @@ def qualify_discovery_candidates(
     now: datetime,
     request_get: Callable[..., Any] = requests.get,
     diagnostics: dict[str, dict[str, Any]] | None = None,
+    rotation_start: int | None = None,
 ) -> list[dict[str, Any]]:
     """Enrich only a bounded, newest-first set of unique resolved pools."""
     resolved = [item for item in candidates.values() if isinstance(item, dict) and item.get("token_address") and item.get("pair_address")]
@@ -236,7 +237,9 @@ def qualify_discovery_candidates(
 
         with _ENRICHMENT_CURSOR_LOCK:
 
-            start = _ENRICHMENT_CURSOR % len(unique_resolved)
+            start = (
+                _ENRICHMENT_CURSOR if rotation_start is None else rotation_start
+            ) % len(unique_resolved)
 
             take = min(MAX_CANDIDATES_CHECKED, len(unique_resolved))
 
@@ -248,7 +251,8 @@ def qualify_discovery_candidates(
 
             ]
 
-            _ENRICHMENT_CURSOR = (start + take) % len(unique_resolved)
+            if rotation_start is None:
+                _ENRICHMENT_CURSOR = (start + take) % len(unique_resolved)
     if diagnostics is not None:
         for item in unique_resolved:
             token = str(item["token_address"])

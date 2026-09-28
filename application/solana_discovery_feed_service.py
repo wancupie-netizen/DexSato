@@ -537,6 +537,7 @@ def refresh_solana_discovery_archive(
     *,
     now: datetime | None = None,
     state_snapshot: dict[str, Any] | None = None,
+    rotation_start: int | None = None,
 ) -> dict[str, int]:
     """Writer path: qualify one completed collector snapshot and persist discovery history."""
     directory = Path(output_dir) if output_dir is not None else discovery_storage_dir(DEFAULT_OUTPUT_DIR)
@@ -551,8 +552,14 @@ def refresh_solana_discovery_archive(
     _, fresh = _freshness_label(generated_at, now=current_time)
     diagnostics: dict[str, dict[str, Any]] = {}
     if fresh:
+        qualification_kwargs: dict[str, Any] = {
+            "now": current_time,
+            "diagnostics": diagnostics,
+        }
+        if rotation_start is not None:
+            qualification_kwargs["rotation_start"] = rotation_start
         qualified = qualify_discovery_candidates(
-            state["candidates"], now=current_time, diagnostics=diagnostics
+            state["candidates"], **qualification_kwargs
         )
         default_diagnostic = None
     else:

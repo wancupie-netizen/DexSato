@@ -195,3 +195,36 @@ def test_pair_age_fails_closed_when_exact_pair_created_at_is_invalid():
     assert result is not None
     assert result["pair_age"] == "Unavailable"
     assert result["pair_age_hours"] is None
+
+def test_explicit_rotation_start_survives_a_fresh_collector_process(monkeypatch):
+    import application.solana_discovery_qualification as qualification
+
+    seen = []
+    monkeypatch.setattr(
+        qualification, "_cached_pair",
+        lambda pair, request_get: seen.append(pair) or None,
+    )
+    candidates = {
+        f"token-{index}": {
+            "token_address": f"token-{index}",
+            "pair_address": f"pair-{index}",
+            "last_seen_at": f"2026-08-25T12:{59-index:02d}:00+00:00",
+        }
+        for index in range(30)
+    }
+
+    qualification._ENRICHMENT_CURSOR = 0
+    qualification.qualify_discovery_candidates(
+        candidates, now=NOW, rotation_start=12
+    )
+    assert set(seen) == {f"pair-{index}" for index in range(12, 24)}
+
+    qualification._ENRICHMENT_CURSOR = 0
+    seen.clear()
+    qualification.qualify_discovery_candidates(
+        candidates, now=NOW, rotation_start=24
+    )
+    assert set(seen) == {
+        *(f"pair-{index}" for index in range(24, 30)),
+        *(f"pair-{index}" for index in range(6)),
+    }
