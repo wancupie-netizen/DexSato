@@ -6,8 +6,11 @@ Founder MVP demonstrates how DexSato analyses multiple markets, produces trading
 
 ---
 
-# Features
+# Public / Pro and customer Telegram
 
+See [rollout status and activation checks](docs/DexSato-Public-Pro-Telegram-Rollout.md).
+
+# Features
 - Multi-coin dashboard
 - Production trading engine
 - Shared dashboard JSON API
