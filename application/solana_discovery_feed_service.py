@@ -536,11 +536,12 @@ def refresh_solana_discovery_archive(
     output_dir: Path | str | None = None,
     *,
     now: datetime | None = None,
+    state_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     """Writer path: qualify one completed collector snapshot and persist discovery history."""
     directory = Path(output_dir) if output_dir is not None else discovery_storage_dir(DEFAULT_OUTPUT_DIR)
     current_time = now or datetime.now(timezone.utc)
-    state = _read_object(directory / "state.json")
+    state = state_snapshot if state_snapshot is not None else _read_object(directory / "state.json")
     status = _read_object(directory / "status.json")
 
     if not isinstance(state.get("candidates"), dict) or not isinstance(status.get("metrics"), dict):

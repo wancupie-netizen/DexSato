@@ -144,7 +144,8 @@ def load_state(path: Path, current: datetime) -> dict[str, Any]:
 
 def atomic_json(path: Path, payload: Any) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, ensure_ascii=False)
     temporary.replace(path)
 
 
@@ -504,7 +505,7 @@ def main() -> int:
         }
         atomic_json(state_path, state)
         atomic_json(output / "status.json", summary)
-        refresh_solana_discovery_archive(output, now=current)
+        refresh_solana_discovery_archive(output, now=current, state_snapshot=state)
         write_latest_run(output / "latest-run.txt", state, summary)
         write_html(output / "status.html", state, summary)
         print(f"MI v4.1 continuous run {state['run_count']}: {summary['collector_status']}")

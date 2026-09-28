@@ -320,3 +320,17 @@ def test_quota_exhaustion_degrades_cycle_and_cooldown_skips_next_request(tmp_pat
     assert status["collector_status"] == "DEGRADED"
     assert status["last_run"]["errors"] == []
     assert status["last_run"]["provider_runs"][0]["request_attempted"] is False
+
+def test_collector_atomic_json_streams_and_replaces_unicode_payload(tmp_path):
+    from research.continuous_discovery_runtime import atomic_json
+
+    target = tmp_path / "state.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+    payload = {"candidates": {"token-a": {"symbol": "Café"}}}
+
+    with patch("research.continuous_discovery_runtime.json.dumps", side_effect=AssertionError("full JSON serialization")):
+        atomic_json(target, payload)
+
+    assert json.loads(target.read_text(encoding="utf-8")) == payload
+    assert "Café" in target.read_text(encoding="utf-8")
+    assert not (tmp_path / "state.json.tmp").exists()

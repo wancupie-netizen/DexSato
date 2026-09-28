@@ -457,3 +457,18 @@ def test_terminal_unknown_view_falls_back_to_rolling(tmp_path):
 
     assert result["view"] == "rolling"
     assert result["rolling_total"] == 0
+
+def test_archive_refresh_reuses_collector_state_without_reloading_file(tmp_path):
+    (tmp_path / "status.json").write_text(
+        json.dumps({"generated_at": NOW.isoformat(), "metrics": {}}),
+        encoding="utf-8",
+    )
+    state = {"candidates": {}}
+
+    result = refresh_solana_discovery_archive(
+        tmp_path, now=NOW, state_snapshot=state
+    )
+
+    assert result["qualified_candidates"] == 0
+    assert (tmp_path / "discovery_archive.sqlite3").is_file()
+    assert not (tmp_path / "state.json").exists()
