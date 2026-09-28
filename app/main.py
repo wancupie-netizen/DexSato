@@ -53,10 +53,25 @@ from application.product_auth_routes import (
     product_auth_view,
     router as product_auth_router,
 )
+from application.product_guest_identity import (
+    ProductGuestIdentity,
+    resolve_product_guest_identity,
+    set_product_guest_cookie,
+)
 from application.product_market_entitlement import (
     apply_market_feed_entitlements,
     resolve_market_entitlement_policy,
 )
+from application.product_signal_entitlement import (
+    ProductSignalEntitlementAdmission,
+    apply_detected_signal_entitlements,
+    product_signal_quota_subject_key,
+)
+from application.product_signal_projection import (
+    collect_detected_signal_token_addresses,
+    project_detected_signal_entitlements,
+)
+from application.product_signal_quota_store import ProductSignalQuotaStoreUnavailable
 from application.product_surface_entitlement import (
     ProductSurfaceAccessDenied,
     locked_discovery_feed,
@@ -320,6 +335,61 @@ def _request_entitlement_policy(request: Request):
     return auth_view, resolve_market_entitlement_policy(auth_view.principal)
 
 
+def _fail_closed_detected_signal_admission(policy) -> ProductSignalEntitlementAdmission:
+    return ProductSignalEntitlementAdmission(
+        allowed_token_addresses=(),
+        newly_admitted_token_addresses=(),
+        quota_limit=policy.detected_signals_unique_rolling_24h_max,
+        active_count=None,
+        remaining=None,
+    )
+
+
+def _apply_root_detected_signal_entitlements(
+    request: Request,
+    auth_view,
+    policy,
+    market_feeds: dict[str, dict[str, object]],
+) -> tuple[dict[str, object], ProductGuestIdentity | None]:
+    """Apply detected-signal quota to the public root without changing market rows."""
+    guest_identity = None
+    subject_key = None
+
+    if policy.detected_signals_unique_rolling_24h_max is not None:
+        try:
+            if auth_view.principal.authenticated:
+                subject_key = product_signal_quota_subject_key(auth_view.principal)
+            else:
+                guest_identity = resolve_product_guest_identity(request)
+                subject_key = product_signal_quota_subject_key(
+                    auth_view.principal,
+                    guest_id=guest_identity.guest_id,
+                )
+        except ValueError:
+            return (
+                project_detected_signal_entitlements(
+                    market_feeds,
+                    _fail_closed_detected_signal_admission(policy),
+                ),
+                guest_identity,
+            )
+
+    token_addresses = collect_detected_signal_token_addresses(market_feeds)
+    try:
+        admission = apply_detected_signal_entitlements(
+            token_addresses,
+            policy,
+            subject_key=subject_key,
+        )
+    except ProductSignalQuotaStoreUnavailable:
+        admission = _fail_closed_detected_signal_admission(policy)
+
+    return (
+        project_detected_signal_entitlements(market_feeds, admission),
+        guest_identity,
+    )
+
+
 def _require_full_discovery(request: Request) -> None:
     _, policy = _request_entitlement_policy(request)
     try:
@@ -376,7 +446,7 @@ def _load_discovery_page_context(
     "/",
     response_class=HTMLResponse,
 )
-def app_home(request: Request) -> str:
+def app_home(request: Request) -> HTMLResponse:
     """Display Solana Discovery as the DexSato main app."""
     auth_view, policy = _request_entitlement_policy(request)
     market_feeds, presenter_context = _load_discovery_page_context(
@@ -386,22 +456,37 @@ def app_home(request: Request) -> str:
         market_feeds,
         policy,
     )
+    market_feeds, guest_identity = _apply_root_detected_signal_entitlements(
+        request,
+        auth_view,
+        policy,
+        market_feeds,
+    )
     discovery_feed = (
         load_solana_discovery_feed(view="rolling", page=1, page_size=25, query="")
         if policy.full_discovery
         else locked_discovery_feed("rolling")
     )
-    return render_solana_discovery_page(
-        discovery_feed,
-        trending=market_feeds["trending"],
-        top_traded=market_feeds["top_traded"],
-        organic_flow=market_feeds["organic_flow"],
-        recent=market_feeds["recent"],
-        presenter_context=presenter_context,
-        initial_market_tab="trending",
-        product_auth_available=auth_view.available,
-        product_principal=auth_view.principal,
+    response = HTMLResponse(
+        render_solana_discovery_page(
+            discovery_feed,
+            trending=market_feeds["trending"],
+            top_traded=market_feeds["top_traded"],
+            organic_flow=market_feeds["organic_flow"],
+            recent=market_feeds["recent"],
+            presenter_context=presenter_context,
+            initial_market_tab="trending",
+            product_auth_available=auth_view.available,
+            product_principal=auth_view.principal,
+        )
     )
+    if guest_identity is not None and guest_identity.cookie_required:
+        set_product_guest_cookie(
+            response,
+            request,
+            guest_id=guest_identity.guest_id,
+        )
+    return response
 
 
 # TEMP-HIDE-MAJOR-ASSETS-01 - keep the legacy handler but do not expose a route.
