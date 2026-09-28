@@ -177,6 +177,11 @@ from application.production_readiness import (
     validate_production_configuration,
 )
 from application.collector_scheduler import CollectorScheduler, collector_enabled
+from application.legacy_discovery_archive import (
+    ArchiveUnavailable,
+    render_history_index,
+    render_history_token,
+)
 from application.jupiter_swap_service import configure_jupiter_pending_store
 from application.jupiter_pending_store import JupiterPendingStoreUnavailable
 
@@ -401,6 +406,14 @@ def _require_full_discovery(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Pro access is required for Full Discovery.") from error
 
 
+def _require_active_discovery() -> None:
+    if not collector_enabled():
+        raise HTTPException(
+            status_code=410,
+            detail='Live Discovery is retired; historical pages remain available.',
+        )
+
+
 def _require_recent_24h(request: Request) -> None:
     _, policy = _request_entitlement_policy(request)
     try:
@@ -526,6 +539,14 @@ def solana_discovery(request: Request, view: str = "rolling", page: int = 1, q: 
             require_product_surface(policy, "archive")
     except ProductSurfaceAccessDenied as error:
         raise HTTPException(status_code=403, detail="Pro access is required for this Discovery view.") from error
+    if not collector_enabled():
+        try:
+            require_product_surface(policy, 'archive')
+            return render_history_index(page=page, query=q)
+        except ProductSurfaceAccessDenied as error:
+            raise HTTPException(status_code=403, detail='Pro access is required for the Discovery archive.') from error
+        except ArchiveUnavailable as error:
+            raise HTTPException(status_code=503, detail='Discovery history is temporarily unavailable.') from error
     market_feeds, presenter_context = _load_discovery_page_context(
         include_recent=policy.recent_24h,
     )
@@ -552,7 +573,15 @@ def solana_discovery(request: Request, view: str = "rolling", page: int = 1, q: 
     dependencies=[Depends(_require_full_discovery)],
 )
 def solana_discovery_token(token_address: str) -> str:
-    """Display one observed exact-token workspace and its controlled swap flow."""
+    """Display a live workspace or a read-only historical record."""
+    if not collector_enabled():
+        try:
+            historical = render_history_token(token_address)
+        except ArchiveUnavailable as error:
+            raise HTTPException(status_code=503, detail='Discovery history is temporarily unavailable.') from error
+        if historical is None:
+            raise HTTPException(status_code=404, detail='Historical discovery token is not available.')
+        return historical
     detail = load_solana_discovery_token(token_address)
     if detail is None:
         raise HTTPException(status_code=404, detail="Qualified discovery token is not available.")
@@ -839,13 +868,13 @@ def trending_token_transactions(token_address: str) -> dict[str, object]:
     return payload
 
 
-@app.get("/api/discovery/solana/engine", dependencies=[Depends(_require_full_discovery)])
+@app.get("/api/discovery/solana/engine", dependencies=[Depends(_require_full_discovery), Depends(_require_active_discovery)])
 def solana_discovery_engine() -> dict[str, object]:
     """Return the lightweight qualified-token feed used by Discovery Engine."""
     return load_solana_discovery_engine_feed(limit=25)
 
 # CHART_V22_LIVE_CANDLE
-@app.get("/api/discovery/solana/{token_address}/candles", dependencies=[Depends(_require_full_discovery)])
+@app.get("/api/discovery/solana/{token_address}/candles", dependencies=[Depends(_require_full_discovery), Depends(_require_active_discovery)])
 def solana_discovery_live_candles(
     token_address: str,
     timeframe: str = "5m",
@@ -869,7 +898,7 @@ def solana_discovery_live_candles(
 
 
 # TRANSACTIONS_FEED_V11_API_ROUTE
-@app.get("/api/discovery/solana/{token_address}/transactions", dependencies=[Depends(_require_full_discovery)])
+@app.get("/api/discovery/solana/{token_address}/transactions", dependencies=[Depends(_require_full_discovery), Depends(_require_active_discovery)])
 def solana_discovery_transactions(token_address: str) -> dict[str, object]:
     """Return verified recent exact-pool transactions for one qualified token."""
     try:
@@ -1705,7 +1734,7 @@ async def trending_jupiter_execute(
         raise HTTPException(status_code=503, detail="Jupiter swap execution is temporarily unavailable.") from error
 
 
-@app.get("/api/discovery/solana/{token_address}/jupiter-quote", dependencies=[Depends(_require_full_discovery)])
+@app.get("/api/discovery/solana/{token_address}/jupiter-quote", dependencies=[Depends(_require_full_discovery), Depends(_require_active_discovery)])
 def solana_discovery_jupiter_quote(
     token_address: str,
     amount_sol: str = "0.1",
@@ -1750,7 +1779,7 @@ async def _jupiter_swap_body(request: Request, permitted: set[str]) -> dict[str,
     return payload
 
 
-@app.get("/api/discovery/solana/{token_address}/wallet-balance", dependencies=[Depends(_require_full_discovery)])
+@app.get("/api/discovery/solana/{token_address}/wallet-balance", dependencies=[Depends(_require_full_discovery), Depends(_require_active_discovery)])
 async def solana_discovery_wallet_balance(
     token_address: str,
     wallet_address: str,
@@ -1766,7 +1795,7 @@ async def solana_discovery_wallet_balance(
         raise HTTPException(status_code=503, detail=str(error)) from error
 
 
-@app.post("/api/discovery/solana/{token_address}/jupiter-order", dependencies=[Depends(_require_full_discovery)])
+@app.post("/api/discovery/solana/{token_address}/jupiter-order", dependencies=[Depends(_require_full_discovery), Depends(_require_active_discovery)])
 async def solana_discovery_jupiter_order(
     token_address: str,
     request: Request,
@@ -1822,7 +1851,7 @@ async def solana_discovery_jupiter_order(
         raise HTTPException(status_code=503, detail=safe_jupiter_error_detail(error)) from error
 
 
-@app.post("/api/discovery/solana/{token_address}/jupiter-execute", dependencies=[Depends(_require_full_discovery)])
+@app.post("/api/discovery/solana/{token_address}/jupiter-execute", dependencies=[Depends(_require_full_discovery), Depends(_require_active_discovery)])
 async def solana_discovery_jupiter_execute(
     token_address: str,
     request: Request,
