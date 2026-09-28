@@ -1215,6 +1215,7 @@ def render_solana_discovery_page(
     recent: dict[str, Any] | None = None,
     presenter_context: dict[str, Any] | None = None,
     initial_market_tab: str = "discovery",
+    show_discovery_tab: bool = True,
     product_auth_available: bool = False,
     product_principal: ProductPrincipal | None = None,
     product_policy: ProductEntitlementPolicy | None = None,
@@ -3340,6 +3341,40 @@ def render_solana_discovery_page(
   })();
 </script>
 </script></body></html>"""
+    if not show_discovery_tab:
+        if initial_market_tab != "trending":
+            raise ValueError("A page without Discovery must open on Trending.")
+
+        tab_lines = [
+            line for line in page.splitlines(keepends=True)
+            if '<button id="dex-market-tab-discovery"' in line
+        ]
+        if len(tab_lines) != 1:
+            raise RuntimeError("Discovery tab markup changed.")
+        page = page.replace(tab_lines[0], "", 1)
+
+        panel_start = '      <section id="dex-market-panel-discovery"'
+        panel_end = '      </section>\n'
+        if page.count(panel_start) != 1:
+            raise RuntimeError("Discovery panel markup changed.")
+        start = page.index(panel_start)
+        end = page.index(panel_end, start) + len(panel_end)
+        page = page[:start] + page[end:]
+
+        page = page.replace(
+            '<title>DexSato · Solana Discovery Terminal</title>',
+            '<title>DexSato · Solana Markets</title>',
+            1,
+        ).replace(
+            'href="/discovery/solana" aria-current="page" aria-label="Solana"',
+            'href="/" aria-current="page" aria-label="Solana"',
+            1,
+        ).replace(
+            '<footer><span>Experimental discovery · evidence synthesis only · not financial advice.</span><span>__STATUS_MESSAGE__</span></footer>',
+            '<footer><span>Market evidence · not financial advice.</span></footer>',
+            1,
+        )
+
     return (
         page.replace("__STATUS_HEADING__", escape(status_heading))
         .replace("__STATUS_MESSAGE__", escape(status_message))

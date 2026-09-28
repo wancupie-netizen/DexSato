@@ -444,3 +444,17 @@ def test_discovery_ui_debt_cleanup_matches_current_market_table_without_removed_
     assert "Currently qualified" in html
     assert "Open Analysis &rarr;" in html
     assert "Page 1 of 1" in html
+
+def test_root_market_page_hides_discovery_but_keeps_recent():
+    html = render_solana_discovery_page(
+        initial_market_tab="trending",
+        show_discovery_tab=False,
+    )
+
+    assert 'data-market-tab="discovery"' not in html
+    assert 'id="dex-market-panel-discovery"' not in html
+    assert 'data-market-tab="recent">Recent</button>' in html
+    assert 'href="/" aria-current="page" aria-label="Solana"' in html
+    assert 'href="/discovery/solana" aria-current="page"' not in html
+    assert "DexSato · Solana Markets</title>" in html
+    assert "The collector remains separate" not in html

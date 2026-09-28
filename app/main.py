@@ -464,11 +464,8 @@ def app_home(request: Request) -> HTMLResponse:
         policy,
         market_feeds,
     )
-    discovery_feed = (
-        load_solana_discovery_feed(view="rolling", page=1, page_size=25, query="")
-        if policy.full_discovery
-        else locked_discovery_feed("rolling")
-    )
+    # SEP-02: the root market page does not read the collector archive.
+    discovery_feed = locked_discovery_feed("rolling")
     response = HTMLResponse(
         render_solana_discovery_page(
             discovery_feed,
@@ -478,6 +475,7 @@ def app_home(request: Request) -> HTMLResponse:
             recent=market_feeds["recent"],
             presenter_context=presenter_context,
             initial_market_tab="trending",
+            show_discovery_tab=False,
             product_auth_available=auth_view.available,
             product_principal=auth_view.principal,
             product_policy=policy,

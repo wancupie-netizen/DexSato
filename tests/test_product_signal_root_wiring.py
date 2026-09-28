@@ -226,3 +226,37 @@ def test_root_only_wires_detected_signal_quota_before_presenter():
     ) < home.index("render_solana_discovery_page(")
     assert "_apply_root_detected_signal_entitlements(" not in solana
     assert source.count("market_feeds = apply_market_feed_entitlements(") == 2
+
+def test_pro_root_does_not_read_collector_archive():
+    principal = ProductPrincipal(
+        authenticated=True,
+        user_id=USER_ID,
+        email_masked="u***@example.com",
+    )
+    with patch(
+        "app.main._request_entitlement_policy",
+        return_value=(ProductAuthView(True, principal), PRO_ENTITLEMENTS),
+    ), patch(
+        "app.main._load_discovery_page_context",
+        return_value=(_feeds(), {"ctx": True}),
+    ), patch(
+        "app.main.apply_market_feed_entitlements",
+        side_effect=lambda feeds, policy: feeds,
+    ), patch(
+        "app.main._apply_root_detected_signal_entitlements",
+        side_effect=lambda request, auth_view, policy, feeds: (feeds, None),
+    ), patch(
+        "app.main.load_solana_discovery_feed",
+        side_effect=AssertionError("Root must not read the collector archive"),
+    ), patch(
+        "app.main.locked_discovery_feed",
+        return_value={"locked": True},
+    ), patch(
+        "app.main.render_solana_discovery_page",
+        return_value="<html>root</html>",
+    ) as render:
+        response = app_main.app_home(_request())
+
+    assert response.status_code == 200
+    assert render.call_args.kwargs["show_discovery_tab"] is False
+    assert render.call_args.args[0] == {"locked": True}
