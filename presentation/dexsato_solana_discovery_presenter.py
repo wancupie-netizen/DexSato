@@ -881,7 +881,7 @@ def _render_live_signals_panel(
 
     return (
         '<div class="dex-live-signals-list" '
-        'aria-label="Six recent existing DexSato signals">'
+        'aria-label="Recent existing DexSato signals">'
         + "".join(rows_markup)
         + '</div>'
     )
@@ -3071,7 +3071,7 @@ def render_solana_discovery_page(
     <section class="dex-terminal-section dex-signals-panel" aria-label="Live signals">
       <div class="dex-section-label"><span>LIVE SIGNALS</span><i></i></div>
       <div class="dex-panel-shell">
-        <div class="dex-panel-head"><strong>6 signals in the last 2h</strong></div>
+        <div class="dex-panel-head"><strong>Signals detected in the last 2h</strong></div>
         __LIVE_SIGNALS_PANEL__
       </div>
     </section>
