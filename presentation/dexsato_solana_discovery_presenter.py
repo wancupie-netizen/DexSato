@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 
 from application.presenter_metrics_store import PresenterMetricsStore
 from application.product_identity_models import ProductPrincipal
+from application.product_entitlement_policy import ProductAccessTier, ProductEntitlementPolicy
 
 
 def _presentation_ttl_cache(ttl_seconds: float):
@@ -1191,6 +1192,7 @@ def render_solana_discovery_page(
     initial_market_tab: str = "discovery",
     product_auth_available: bool = False,
     product_principal: ProductPrincipal | None = None,
+    product_policy: ProductEntitlementPolicy | None = None,
 ) -> str:
     """Render qualified discovery evidence without implying token safety."""
     data = feed or {}
@@ -1205,6 +1207,15 @@ def render_solana_discovery_page(
         )
     else:
         product_account = '<a class="dex-side-item dex-product-login" href="/login">Sign In</a>'
+    if product_auth_available:
+        tier = (
+            'PRO' if isinstance(product_policy, ProductEntitlementPolicy)
+            and product_policy.tier is ProductAccessTier.PRO else 'PUBLIC'
+        )
+        product_account = (
+            f'<span class="dex-product-tier" aria-label="{tier.title()} access">{tier}</span>'
+            + product_account
+        )
     trending_is_initial = initial_market_tab == "trending"
     trending_panel = _render_trending_panel(trending)
     top_traded_panel = _render_top_traded_panel(top_traded)
@@ -2228,6 +2239,7 @@ def render_solana_discovery_page(
     .dex-utility-nav .dex-side-item:hover{color:var(--muted)}
     .dex-utility-nav .dex-product-login{color:var(--cyan);font-weight:700}
     .dex-product-account{display:block;width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font:500 8px "JetBrains Mono",monospace;text-align:center}
+    .dex-product-tier{display:block;padding:4px 6px;border:1px solid var(--line);border-radius:4px;color:var(--cyan);font:700 9px "JetBrains Mono",monospace;letter-spacing:.05em}
     .dex-utility-nav .dex-product-logout{color:var(--cyan);font-family:inherit;cursor:pointer}
     .dex-app-main{min-width:0}
     .dex-topbar{

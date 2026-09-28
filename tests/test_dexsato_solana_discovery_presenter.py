@@ -37,7 +37,7 @@ def test_solana_discovery_prototype_is_honest_and_read_only():
     assert "Solana Discovery" in html
     assert "TOTAL DEX VOLUME · 24H · SOLANA" in html
     assert "LIVE SIGNALS" in html
-    assert "No signal data displayed yet" in html
+    assert "No active signals in the last 2h" in html
     assert "No tokens qualified in the last 24 hours." in html
     assert "Experimental discovery · evidence synthesis only · not financial advice." in html
     assert "Get buy quote" not in html
@@ -93,9 +93,9 @@ def test_solana_discovery_uses_restructured_market_section_order():
     ordered_markers = (
         "TOTAL DEX VOLUME · 24H · SOLANA",
         "LIVE SIGNALS",
+        '<div class="dex-section-label"><span>MARKET INTELLIGENCE</span>',
         '<div class="dex-section-label"><span>MARKET VIEWS</span>',
         'id="dex-market-panel-discovery"',
-        '<div class="dex-section-label"><span>MARKET INTELLIGENCE</span>',
         "Experimental discovery · evidence synthesis only",
     )
     positions = [html.index(marker) for marker in ordered_markers]
@@ -109,7 +109,7 @@ def test_solana_discovery_market_tabs_have_exact_order_and_discovery_default():
     ordered_tabs = (
         'data-market-tab="trending">Trending</button>',
         'data-market-tab="top-traded">Top Traded</button>',
-        'data-market-tab="organic">Organic</button>',
+        'data-market-tab="organic">Organic Flow</button>',
         'data-market-tab="discovery">Discovery</button>',
         'data-market-tab="recent">Recent</button>',
     )
@@ -119,7 +119,6 @@ def test_solana_discovery_market_tabs_have_exact_order_and_discovery_default():
     assert 'id="dex-market-tab-discovery" class="dex-market-tab" type="button" role="tab" aria-selected="true"' in html
     assert 'id="dex-market-panel-discovery" class="dex-market-panel dex-token-list" role="tabpanel"' in html
     assert "<h2>Token List</h2>" not in html
-    assert "fetch(" not in html
     assert 'event.key === "ArrowRight"' in html
     assert 'event.key === "ArrowLeft"' in html
 

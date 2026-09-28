@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from application.product_identity_models import ProductPrincipal
+from application.product_entitlement_policy import PRO_ENTITLEMENTS, PUBLIC_ENTITLEMENTS
 from presentation.dexsato_solana_discovery_presenter import render_solana_discovery_page
 
 
@@ -46,3 +47,17 @@ def test_market_page_shows_masked_account_and_logout_without_raw_email():
     assert "user@example.com" not in html
     assert 'id="dex-product-logout"' in html
     assert 'fetch("/logout"' in html
+
+def test_market_page_tier_label_comes_from_server_policy():
+    user = ProductPrincipal(True, uuid4(), "u***@example.com")
+    public = render_solana_discovery_page(
+        presenter_context=_CONTEXT, product_auth_available=True,
+        product_principal=user, product_policy=PUBLIC_ENTITLEMENTS,
+    )
+    pro = render_solana_discovery_page(
+        presenter_context=_CONTEXT, product_auth_available=True,
+        product_principal=user, product_policy=PRO_ENTITLEMENTS,
+    )
+    assert 'aria-label="Public access">PUBLIC</span>' in public
+    assert 'aria-label="Pro access">PRO</span>' in pro
+    assert 'aria-label="Pro access">PRO</span>' not in public

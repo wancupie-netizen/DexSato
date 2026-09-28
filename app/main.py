@@ -480,6 +480,7 @@ def app_home(request: Request) -> HTMLResponse:
             initial_market_tab="trending",
             product_auth_available=auth_view.available,
             product_principal=auth_view.principal,
+            product_policy=policy,
         )
     )
     if guest_identity is not None and guest_identity.cookie_required:
@@ -542,6 +543,7 @@ def solana_discovery(request: Request, view: str = "rolling", page: int = 1, q: 
         presenter_context=presenter_context,
         product_auth_available=auth_view.available,
         product_principal=auth_view.principal,
+        product_policy=policy,
     )
 
 
