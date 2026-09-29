@@ -399,6 +399,7 @@ def app_home(request: Request) -> str:
         recent=market_feeds["recent"],
         presenter_context=presenter_context,
         initial_market_tab="trending",
+        show_discovery_tab=False,
         product_auth_available=auth_view.available,
         product_principal=auth_view.principal,
     )
