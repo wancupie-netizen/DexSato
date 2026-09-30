@@ -8,6 +8,7 @@ import logging
 import os
 import secrets
 import time
+import threading
 
 from fastapi import HTTPException, Request
 
@@ -65,11 +66,22 @@ def _safe_route(path: str) -> str:
         "/discovery/solana",
     }:
         return path
-    if len(segments) >= 4 and segments[:3] == ["api", "discovery", "solana"]:
-        suffix = "/" + "/".join(segments[4:]) if len(segments) > 4 else ""
-        return "/api/discovery/solana/:token" + suffix
+    views = {"trending", "top-traded", "organic-flow", "recent", "solana-universe"}
+    endpoints = {"candles", "transactions", "wallet-balance", "jupiter-quote", "jupiter-order", "jupiter-execute"}
     if len(segments) == 3 and segments[:2] == ["discovery", "solana"]:
         return "/discovery/solana/:token"
+    if path == "/api/discovery/solana/engine":
+        return path
+    if len(segments) == 5 and segments[:3] == ["api", "discovery", "solana"] and segments[4] in endpoints:
+        return "/api/discovery/solana/:token/" + segments[4]
+    if len(segments) == 3 and segments[0] == "market" and segments[1] in views:
+        return "/market/" + segments[1] + "/:token"
+    if len(segments) == 5 and segments[:2] == ["api", "market"] and segments[2] in views and segments[4] in endpoints:
+        return "/api/market/" + segments[2] + "/:token/" + segments[4]
+    if len(segments) == 2 and segments[0] == "market":
+        return "/market/:token"
+    if len(segments) == 4 and segments[:2] == ["api", "markets"] and segments[3] in {"chart", "quote"}:
+        return "/api/markets/:token/" + segments[3]
     if path in {"/content-control/login", "/content-control/generate", "/telegram/send"}:
         return path
     if path.startswith("/static/"):
@@ -77,15 +89,39 @@ def _safe_route(path: str) -> str:
     return "unclassified"
 
 
+def process_rss_mb() -> float | None:
+    """Current process RSS in MiB; telemetry failure never blocks a request."""
+    try:
+        with open("/proc/self/statm", encoding="ascii") as handle:
+            resident_pages = int(handle.read(256).split()[1])
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        if resident_pages < 0 or page_size <= 0:
+            return None
+        return round(resident_pages * page_size / (1024 * 1024), 3)
+    except (OSError, ValueError, IndexError, AttributeError):
+        return None
+
+
 class ProductionLoggingMiddleware:
-    """Emit one metadata-only JSON event per HTTP request and exception."""
+    """Bounded process-wide telemetry; RSS deltas are not route allocations."""
 
     def __init__(self, app: object) -> None:
         self.app = app
+        self._active_requests = 0
+        self._counter_lock = threading.Lock()
 
     @staticmethod
     def _emit(level: int, payload: dict[str, object]) -> None:
         _PRODUCTION_LOGGER.log(level, json.dumps(payload, separators=(",", ":"), sort_keys=True))
+
+    @staticmethod
+    def _collector_active(scope: dict[str, object]) -> bool | None:
+        application = scope.get("app")
+        state = getattr(application, "state", None)
+        scheduler = getattr(state, "collector_scheduler", None)
+        if scheduler is None:
+            return None
+        return bool(scheduler.collector_active)
 
     async def __call__(self, scope: dict[str, object], receive: object, send: object) -> None:
         if scope.get("type") != "http":
@@ -97,6 +133,13 @@ class ProductionLoggingMiddleware:
         method = str(scope.get("method") or "GET").upper()
         route = _safe_route(str(scope.get("path") or ""))
         status = 500
+        rss_start = process_rss_mb()
+        collector_start = self._collector_active(scope)
+        with self._counter_lock:
+            self._active_requests += 1
+            active_start = self._active_requests
+        exception_type = None
+        cancelled = False
 
         async def logged_send(message: dict[str, object]) -> None:
             nonlocal status
@@ -106,26 +149,18 @@ class ProductionLoggingMiddleware:
 
         try:
             await self.app(scope, receive, logged_send)
-        except Exception as error:
-            self._emit(
-                logging.ERROR,
-                {
-                    "duration_ms": round((time.monotonic() - started) * 1000, 2),
-                    "event": "http_exception",
-                    "exception_type": type(error).__name__,
-                    "method": method,
-                    "request_id": request_id,
-                    "route": route,
-                    "status": 500,
-                    "timestamp_unix_ms": int(time.time() * 1000),
-                },
-            )
+        except BaseException as error:
+            exception_type = type(error).__name__
+            cancelled = not isinstance(error, Exception)
+            if not cancelled:
+                status = 500
             raise
-
-        level = logging.ERROR if status >= 500 else logging.WARNING if status >= 400 else logging.INFO
-        self._emit(
-            level,
-            {
+        finally:
+            with self._counter_lock:
+                self._active_requests -= 1
+                active_end = self._active_requests
+            rss_end = process_rss_mb()
+            payload = {
                 "duration_ms": round((time.monotonic() - started) * 1000, 2),
                 "event": "http_request_rejected" if status in {400, 401, 403, 404, 413, 429} else "http_request",
                 "method": method,
@@ -133,8 +168,19 @@ class ProductionLoggingMiddleware:
                 "route": route,
                 "status": status,
                 "timestamp_unix_ms": int(time.time() * 1000),
-            },
-        )
+                "pid": os.getpid(),
+                "rss_mb_start": rss_start,
+                "rss_mb_end": rss_end,
+                "rss_mb_delta": round(rss_end - rss_start, 3) if rss_start is not None and rss_end is not None else None,
+                "active_requests_start": active_start,
+                "active_requests_end": active_end,
+                "collector_active_start": collector_start,
+                "collector_active_end": self._collector_active(scope),
+            }
+            if exception_type is not None:
+                payload.update(event="http_request_cancelled" if cancelled else "http_exception", exception_type=exception_type)
+            level = logging.ERROR if exception_type or status >= 500 else logging.WARNING if status >= 400 else logging.INFO
+            self._emit(level, payload)
 
 
 def _positive_int(name: str, default: int, *, maximum: int) -> int:

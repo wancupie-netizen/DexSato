@@ -121,6 +121,12 @@ class CollectorScheduler:
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
 
+    @property
+    def collector_active(self) -> bool:
+        """True only while the owned collector subprocess is still active."""
+        process = self._active_process
+        return process is not None and process.returncode is None
+
     def _emit(self, event: str, **metadata: object) -> None:
         payload = {
             "event": event,
