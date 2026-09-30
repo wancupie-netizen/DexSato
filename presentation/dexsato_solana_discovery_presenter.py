@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 from application.presenter_metrics_store import PresenterMetricsStore
 from application.product_identity_models import ProductPrincipal
 from application.product_entitlement_policy import ProductAccessTier, ProductEntitlementPolicy
+from application.solana_universe_registry import SOLANA_UNIVERSE
 
 
 def _presentation_ttl_cache(ttl_seconds: float):
@@ -629,6 +630,162 @@ def _render_organic_flow_panel(organic_flow: dict[str, Any] | None) -> str:
         '</div>'
         f'<div class="dex-trending-list">{row_markup}</div>'
         '</div>'
+    )
+
+
+def _solana_universe_signal_index(
+    *feeds: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Index already-loaded market rows by canonical mint without new I/O."""
+    indexed: dict[str, dict[str, Any]] = {}
+    fallback_rows: dict[str, dict[str, Any]] = {}
+    for feed in feeds:
+        if not isinstance(feed, dict):
+            continue
+        rows = feed.get("rows")
+        if not isinstance(rows, list):
+            continue
+        for raw in rows:
+            if not isinstance(raw, dict):
+                continue
+            mint = str(raw.get("token_address") or "").strip()
+            if not mint:
+                continue
+            fallback_rows.setdefault(mint, raw)
+            signal = raw.get("detected_signal")
+            if isinstance(signal, dict) and str(signal.get("primary_signal") or "").strip():
+                indexed.setdefault(mint, raw)
+    for mint, row in fallback_rows.items():
+        indexed.setdefault(mint, row)
+    return indexed
+
+
+def _solana_universe_detected_label(row: dict[str, Any]) -> str:
+    """Return a compact age only when the loaded row carries a real observation time."""
+    value = str(row.get("last_seen_at") or "").strip()
+    if not value:
+        return ""
+    candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        from datetime import datetime, timezone
+
+        observed = datetime.fromisoformat(candidate)
+        if observed.tzinfo is None:
+            observed = observed.replace(tzinfo=timezone.utc)
+        seconds = int(
+            (datetime.now(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds()
+        )
+    except (TypeError, ValueError):
+        return ""
+    if seconds < 0:
+        return ""
+    if seconds < 60:
+        return "DETECTED <1M AGO"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"DETECTED {minutes}M AGO"
+    hours = minutes // 60
+    if hours < 24:
+        return f"DETECTED {hours}H AGO"
+    return f"DETECTED {hours // 24}D AGO"
+
+
+def _solana_universe_card(
+    asset: dict[str, str],
+    observation_row: dict[str, Any] | None,
+) -> str:
+    """Render one fixed Core 20 card from already-loaded evidence only."""
+    mint = str(asset["mint"])
+    symbol = str(asset["symbol"])
+    name = str(asset["name"])
+    row = observation_row if isinstance(observation_row, dict) else {}
+    icon = str(row.get("icon") or row.get("image_url") or "").strip()
+
+    primary = ""
+    evidence: list[str] = []
+    direction = "neutral"
+    signal = row.get("detected_signal")
+    if isinstance(signal, dict):
+        primary = str(signal.get("primary_signal") or "").strip()
+        raw_evidence = signal.get("secondary_evidence")
+        if isinstance(raw_evidence, list):
+            evidence = [
+                str(item).strip()
+                for item in raw_evidence[:2]
+                if str(item).strip()
+            ]
+        raw_direction = str(signal.get("direction") or "neutral").strip().lower()
+        if raw_direction in {"bullish", "bearish", "mixed", "neutral"}:
+            direction = raw_direction
+
+    if primary:
+        observation = escape(primary)
+        evidence_markup = "".join(f"<li>{escape(item)}</li>" for item in evidence)
+        if not evidence_markup:
+            evidence_markup = "<li>Detected observation from current market view</li>"
+        state_class = {
+            "bullish": " is-strengthening",
+            "bearish": " is-weakening",
+            "mixed": " is-transition",
+        }.get(direction, "")
+        detected = _solana_universe_detected_label(row)
+        footer = (
+            f'<div class="dex-universe-footer"><span>{escape(detected)}</span></div>'
+            if detected
+            else '<div class="dex-universe-footer" aria-hidden="true"></div>'
+        )
+    else:
+        observation = "No notable signal"
+        evidence_markup = "<li>Current loaded market view has no detected observation</li>"
+        state_class = ""
+        footer = '<div class="dex-universe-footer" aria-hidden="true"></div>'
+
+    avatar = (
+        f'<img src="{escape(icon, quote=True)}" alt="{escape(symbol)} token logo" '
+        'loading="lazy" referrerpolicy="no-referrer">'
+        if icon.startswith("https://")
+        else f'<span>{escape(symbol[:2].upper())}</span>'
+    )
+    href = f'/market/solana-universe/{quote(mint, safe="")}'
+    return (
+        f'<a class="dex-universe-card{state_class}" href="{href}" '
+        f'data-universe-mint="{escape(mint, quote=True)}" title="{escape(name, quote=True)}">'
+        '<div class="dex-universe-card-head">'
+        f'<div class="dex-universe-avatar">{avatar}</div>'
+        '<div class="dex-universe-card-meta">'
+        f'<strong>{escape(symbol)} / SOL</strong>'
+        f'<div class="dex-universe-observation">{observation}</div>'
+        '</div></div>'
+        f'<ul>{evidence_markup}</ul>'
+        f'{footer}'
+        '</a>'
+    )
+
+
+def _render_solana_universe_panel(
+    trending: dict[str, Any] | None,
+    top_traded: dict[str, Any] | None,
+    organic_flow: dict[str, Any] | None,
+    recent: dict[str, Any] | None,
+) -> str:
+    """Render the locked Core 20 using only market feeds already loaded for the page."""
+    signal_index = _solana_universe_signal_index(
+        trending,
+        top_traded,
+        organic_flow,
+        recent,
+    )
+    cards = "".join(
+        _solana_universe_card(asset, signal_index.get(asset["mint"]))
+        for asset in SOLANA_UNIVERSE
+    )
+    return (
+        '<section class="dex-universe-panel" aria-label="Solana Universe Core 20">'
+        '<div class="dex-universe-head">'
+        '<strong>SOLANA UNIVERSE <span>CORE 20</span></strong>'
+        '</div>'
+        f'<div class="dex-universe-grid">{cards}</div>'
+        '</section>'
     )
 
 
@@ -1248,6 +1405,12 @@ def render_solana_discovery_page(
     organic_flow_panel = _render_organic_flow_panel(organic_flow)
     recent_panel = _render_recent_panel(
         recent, sign_in_available=product_auth_available and not principal.authenticated
+    )
+    solana_universe_panel = _render_solana_universe_panel(
+        trending,
+        top_traded,
+        organic_flow,
+        recent,
     )
     live_signals_panel = _render_live_signals_panel(
         trending,
@@ -3008,6 +3171,39 @@ def render_solana_discovery_page(
       outline:2px solid var(--cyan);
       outline-offset:2px;
     }
+    .dex-universe-panel{padding:16px 16px 20px;border-bottom:1px solid rgba(148,163,184,.12)}
+    .dex-universe-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+    .dex-universe-head strong{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.11em}
+    .dex-universe-head strong span{font-size:9px;color:#4CF4D6;border:1px solid rgba(76,244,214,.3);padding:3px 6px;border-radius:999px}
+    .dex-universe-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .dex-universe-card{position:relative;min-width:0;min-height:156px;display:flex;flex-direction:column;padding:16px 16px 13px;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:linear-gradient(145deg,rgba(12,18,27,.92),rgba(9,13,20,.78));color:inherit;text-decoration:none;overflow:hidden;transition:border-color .16s ease,background .16s ease,transform .16s ease,box-shadow .16s ease}
+    .dex-universe-card::after{content:"";position:absolute;right:-34px;bottom:-42px;width:112px;height:112px;border:1px solid rgba(148,163,184,.08);border-radius:50%;pointer-events:none}
+    .dex-universe-card:hover,.dex-universe-card:focus-visible{border-color:rgba(76,244,214,.46);background:linear-gradient(145deg,rgba(13,24,30,.94),rgba(9,16,21,.82));box-shadow:0 12px 28px rgba(0,0,0,.22);outline:none;transform:translateY(-2px)}
+    .dex-universe-card.is-strengthening{border-color:rgba(76,244,214,.34);background:linear-gradient(145deg,rgba(11,24,28,.94),rgba(9,18,22,.8))}
+    .dex-universe-card.is-transition{border-color:rgba(185,140,255,.34);background:linear-gradient(145deg,rgba(20,18,31,.94),rgba(13,13,22,.82))}
+    .dex-universe-card.is-weakening{border-color:rgba(255,92,122,.34);background:linear-gradient(145deg,rgba(28,17,23,.94),rgba(18,12,17,.82))}
+    .dex-universe-card.is-strengthening::after{border-color:rgba(76,244,214,.12)}
+    .dex-universe-card.is-transition::after{border-color:rgba(185,140,255,.12)}
+    .dex-universe-card.is-weakening::after{border-color:rgba(255,92,122,.12)}
+    .dex-universe-card-head{display:flex;align-items:center;gap:13px;min-width:0}
+    .dex-universe-card-meta{min-width:0;display:grid;gap:5px}
+    .dex-universe-card-head strong{display:block;font-size:13px;line-height:1.2;letter-spacing:.025em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .dex-universe-avatar{width:46px;height:46px;flex:0 0 46px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:rgba(148,163,184,.09);border:1px solid rgba(148,163,184,.18);font-size:11px;font-weight:800;color:#c4cedb;box-shadow:inset 0 0 0 3px rgba(8,11,16,.35)}
+    .dex-universe-avatar img{width:100%;height:100%;object-fit:cover}
+    .dex-universe-observation{font-size:11px;font-weight:750;line-height:1.35;color:#aeb9c9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .dex-universe-card.is-strengthening .dex-universe-observation{color:#4CF4D6}
+    .dex-universe-card.is-transition .dex-universe-observation{color:#B98CFF}
+    .dex-universe-card.is-weakening .dex-universe-observation{color:#FF5C7A}
+    .dex-universe-card ul{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px solid rgba(148,163,184,.13);display:grid;gap:7px;color:#7890ad;font-size:10px;line-height:1.35}
+    .dex-universe-card li{position:relative;padding-left:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .dex-universe-card li::before{content:"";position:absolute;left:0;top:.48em;width:4px;height:4px;border-radius:50%;background:#5b6d82;box-shadow:0 0 8px rgba(91,109,130,.24)}
+    .dex-universe-card.is-strengthening li::before{background:#4CF4D6;box-shadow:0 0 8px rgba(76,244,214,.55)}
+    .dex-universe-card.is-transition li::before{background:#B98CFF;box-shadow:0 0 8px rgba(185,140,255,.55)}
+    .dex-universe-card.is-weakening li::before{background:#FF5C7A;box-shadow:0 0 8px rgba(255,92,122,.5)}
+    .dex-universe-footer{position:relative;z-index:1;min-height:14px;margin-top:auto;padding-top:11px;color:#536176;font-size:8px;letter-spacing:.12em;text-transform:uppercase}
+    @media(max-width:980px){.dex-universe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:560px){.dex-universe-grid{grid-template-columns:1fr}.dex-universe-card{min-height:150px}.dex-universe-avatar{width:44px;height:44px;flex-basis:44px}}
+
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
     @media(max-width:760px){
       .dex-token-list .feed-head{align-items:stretch}
@@ -3134,6 +3330,7 @@ def render_solana_discovery_page(
 
   <section class="dex-terminal-section dex-market-categories" aria-label="Solana market categories">
     <div class="dex-section-label"><span>MARKET VIEWS</span><i></i></div>
+    __SOLANA_UNIVERSE_PANEL__
     <div class="dex-market-category-shell">
       <div class="dex-market-tabs" role="tablist" aria-label="Solana market categories" aria-orientation="horizontal">
         <button id="dex-market-tab-trending" class="dex-market-tab" type="button" role="tab" aria-selected="__TRENDING_SELECTED__" aria-controls="dex-market-panel-trending" tabindex="__TRENDING_TABINDEX__" data-market-tab="trending">Trending</button>
@@ -3384,6 +3581,7 @@ def render_solana_discovery_page(
         .replace("__UPDATED__", escape(updated))
         .replace("__STATUS_LABEL__", escape(status_label))
         .replace("__DISCOVERY_FEED__", discovery_feed)
+        .replace("__SOLANA_UNIVERSE_PANEL__", solana_universe_panel)
         .replace("__TRENDING_PANEL__", trending_panel)
         .replace("__TOP_TRADED_PANEL__", top_traded_panel)
         .replace("__ORGANIC_FLOW_PANEL__", organic_flow_panel)

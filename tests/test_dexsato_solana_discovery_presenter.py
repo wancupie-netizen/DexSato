@@ -458,3 +458,92 @@ def test_root_market_page_hides_discovery_but_keeps_recent():
     assert 'href="/discovery/solana" aria-current="page"' not in html
     assert "DexSato · Solana Markets</title>" in html
     assert "The collector remains separate" not in html
+
+
+def test_solana_universe_renders_all_core20_cards_without_extra_io_or_ranking():
+    universe = discovery_presenter.SOLANA_UNIVERSE
+    jup = universe[0]
+    bonk = universe[11]
+    trending = {
+        "rows": [
+            {
+                "token_address": jup["mint"],
+                "symbol": "JUP",
+                "name": "Jupiter",
+                "icon": "https://example.com/jup.png",
+                "detected_signal": {
+                    "primary_signal": "Buy pressure strengthening",
+                    "secondary_evidence": ["Volume expanding", "Buy pressure higher"],
+                    "direction": "bullish",
+                },
+            },
+            {
+                "token_address": bonk["mint"],
+                "symbol": "BONK",
+                "name": "Bonk",
+                "detected_signal": None,
+            },
+        ]
+    }
+
+    html = discovery_presenter._render_solana_universe_panel(
+        trending,
+        {"rows": []},
+        {"rows": []},
+        {"rows": []},
+    )
+
+    assert html.count('<a class="dex-universe-card') == 20
+    assert html.count('data-universe-mint="') == 20
+    assert "SOLANA UNIVERSE" in html
+    assert "CORE 20" in html
+    assert "20 assets" not in html
+    assert "Canonical assets" not in html
+    assert "Buy pressure strengthening" in html
+    assert "Volume expanding" in html
+    assert "Buy pressure higher" in html
+    assert "No notable signal" in html
+    assert "Current loaded market view has no detected observation" in html
+    assert "DETECTED" not in html
+    assert 'alt="JUP token logo"' in html
+    assert '<div class="dex-universe-card-meta">' in html
+    assert "JUP / SOL" in html
+    assert (
+        f'href="/market/solana-universe/{jup["mint"]}"'
+        in html
+    )
+    assert (
+        f'href="/market/solana-universe/{bonk["mint"]}"'
+        in html
+    )
+    assert html.index("JUP / SOL") < html.index("RAY / SOL")
+    assert html.index("RAY / SOL") < html.index("JTO / SOL")
+    assert "dex-universe-card is-strengthening" in html
+    assert "dex-universe-rank" not in html
+    assert "$" not in html
+
+
+def test_solana_universe_detected_label_requires_real_loaded_timestamp():
+    assert discovery_presenter._solana_universe_detected_label({}) == ""
+
+
+def test_solana_universe_is_directly_under_market_views_and_has_no_own_tabs():
+    html = render_solana_discovery_page(
+        trending={"rows": []},
+        top_traded={"rows": []},
+        organic_flow={"rows": []},
+        recent={"rows": []},
+    )
+
+    market_views = html.index("<span>MARKET VIEWS</span>")
+    universe = html.index('class="dex-universe-panel"', market_views)
+    existing_tabs = html.index('class="dex-market-tabs"', universe)
+
+    assert market_views < universe < existing_tabs
+    assert 'aria-label="Solana Universe Core 20"' in html
+    assert "data-universe-tab" not in html
+    assert "data-universe-page" not in html
+    assert "data-universe-rank" not in html
+    assert "grid-template-columns:repeat(4,minmax(0,1fr))" in html
+    assert "@media(max-width:980px){.dex-universe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}" in html
+    assert "@media(max-width:560px){.dex-universe-grid{grid-template-columns:1fr}" in html

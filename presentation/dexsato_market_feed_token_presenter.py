@@ -493,3 +493,125 @@ def render_trending_token_page(
     )
 
     return html
+def _solana_universe_source_context(detail: dict[str, Any]) -> str:
+    dex_id = escape(str(detail.get("dex_id") or "Unknown"))
+    liquidity = detail.get("liquidity_usd")
+    try:
+        liquidity_text = f"${float(liquidity):,.0f}"
+    except (TypeError, ValueError):
+        liquidity_text = "Unavailable"
+
+    return (
+        '<section class="card market-feed-context-v02c">'
+        '<h3>Solana Universe Context</h3>'
+        '<div class="metrics">'
+        '<div class="metric"><span>Source</span>'
+        '<b class="value" style="font-size:13px">Core 20 \u00b7 Canonical Mint</b></div>'
+        '<div class="metric"><span>Coverage</span>'
+        '<b class="value" style="font-size:13px">Curated Solana Universe</b></div>'
+        '<div class="metric"><span>Exact SOL pool</span>'
+        f'<b class="value" style="font-size:13px">{dex_id}</b></div>'
+        '<div class="metric"><span>Pool liquidity</span>'
+        f'<b class="value">{escape(liquidity_text)}</b></div>'
+        '</div>'
+        '</section>'
+    )
+
+
+def render_solana_universe_token_page(
+    detail: dict[str, Any],
+    *,
+    feed: dict[str, Any],
+) -> str:
+    """Reuse the stable Token Workspace shell for one canonical Core 20 asset."""
+    html = _render_market_token_shell(detail, feed)
+    token_address = escape(str(detail.get("token_address") or ""), quote=True)
+
+    html = html.replace(
+        f"/api/discovery/solana/{token_address}/candles",
+        f"/api/market/solana-universe/{token_address}/candles",
+    )
+    html = html.replace(
+        f"/api/discovery/solana/{token_address}/transactions",
+        f"/api/market/solana-universe/{token_address}/transactions",
+    )
+    html = html.replace(
+        'href="/discovery/solana/',
+        'href="/market/solana-universe/',
+    )
+
+    html = html.replace(
+        " Â· Solana Discovery</title>",
+        " Â· Solana Universe Workspace</title>",
+        1,
+    )
+    html = html.replace(
+        '<span class="eyebrow">Qualified exact-token workspace</span>',
+        '<span class="eyebrow">Solana Universe Â· Core 20 workspace</span>',
+        1,
+    )
+    html = html.replace(
+        "Review observed market activity, exact-pool identity and disclosed risk before taking any action.",
+        "Review canonical identity and current exact-pool market evidence for this Solana Universe asset.",
+        1,
+    )
+
+    # Universe membership is curated identity coverage, not Discovery qualification.
+    html = _remove_section(
+        html,
+        '<section class="qualification qualification-vp0d3',
+    )
+    html = _remove_section(
+        html,
+        '<section class="discovery-engine-v12',
+    )
+
+    # Reuse the production Jupiter execution UI while binding it to the
+    # separate Solana Universe route contract. Runtime Jupiter quote/order
+    # availability remains authoritative; Core 20 membership alone is not.
+    html = html.replace(
+        'data-jupiter-sandbox data-token-address=',
+        f'data-jupiter-sandbox data-api-base="/api/market/solana-universe/{token_address}" data-token-address=',
+        1,
+    )
+
+    html = html.replace(
+        " \u00b7 Solana Discovery</title>",
+        " \u00b7 Solana Universe Workspace</title>",
+        1,
+    )
+    html = html.replace(
+        " \u00c2\u00b7 Solana Discovery</title>",
+        " \u00b7 Solana Universe Workspace</title>",
+        1,
+    )
+    html = html.replace(
+        '<span class="eyebrow">Solana Universe \u00c2\u00b7 Core 20 workspace</span>',
+        '<span class="eyebrow">Solana Universe \u00b7 Core 20 workspace</span>',
+        1,
+    )
+    html = html.replace(
+        "Core 20 \u00c2\u00b7 Canonical Mint",
+        "Core 20 \u00b7 Canonical Mint",
+        1,
+    )
+    context = _solana_universe_source_context(detail)
+    html = html.replace(
+        '<section class="card market-snapshot-v26">',
+        context + '<section class="card market-snapshot-v26">',
+        1,
+    )
+
+    html = html.replace("<h2>Token List</h2>", "<h2>Solana Universe</h2>", 1)
+    html = html.replace(
+        '<span class="token-list-chain-v07a">SOLANA</span>',
+        '<span class="token-list-chain-v07a">CORE 20</span>',
+        1,
+    )
+    html = html.replace(
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Token list views">',
+        '<div class="token-list-tabs-v07a" role="tablist" aria-label="Solana Universe" hidden>',
+        1,
+    )
+
+    return html
